@@ -1,0 +1,69 @@
+package model
+
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
+	"fmt"
+)
+
+type SSOProvider string
+
+const (
+	SSOProviderX         SSOProvider = "x_oauth"
+	SSOProviderGitHub    SSOProvider = "github_oauth"
+	SSOProviderGitLab    SSOProvider = "gitlab_oauth"
+	SSOProviderGoogle    SSOProvider = "google_oauth"
+	SSOProviderFacebook  SSOProvider = "facebook_oauth"
+	SSOProviderMicrosoft SSOProvider = "microsoft_oauth"
+	SSOProviderLinkedIn  SSOProvider = "linkedin_oauth"
+	SSOProviderDiscord   SSOProvider = "discord_oauth"
+)
+
+func (p *SSOProvider) Scan(value interface{}) error {
+	*p = SSOProvider(value.(string))
+	return nil
+}
+
+func (p SSOProvider) Value() (driver.Value, error) {
+	return string(p), nil
+}
+
+type OauthCredentials struct {
+	ClientID     string
+	ClientSecret string
+	RedirectURI  string
+	Scopes       []string
+}
+
+func (o *OauthCredentials) Scan(value interface{}) error {
+	bytes, ok := value.([]byte)
+	if !ok {
+		return errors.New(fmt.Sprint("Failed to unmarshal JSONB value:", value))
+	}
+
+	result := OauthCredentials{}
+	err := json.Unmarshal(bytes, &result)
+	*o = OauthCredentials(result)
+	return err
+}
+
+func (o *OauthCredentials) Value() (driver.Value, error) {
+	return json.Marshal(o)
+}
+
+func (o *OauthCredentials) GormDataType() string {
+	return "json"
+}
+
+func (a *OauthCredentials) GormDBDataType() string {
+	return "jsonb"
+}
+
+type SSOConnection struct {
+	Model
+	DeploymentID         uint
+	Provider             SSOProvider
+	Enabled              bool
+	CustomCredentialsSet bool
+}
