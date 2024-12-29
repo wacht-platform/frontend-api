@@ -1,8 +1,6 @@
 package auth
 
 import (
-	"log"
-
 	"github.com/godruoyi/go-snowflake"
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/config"
@@ -327,7 +325,11 @@ func SSOCallback(c *fiber.Ctx) error {
 	}
 
 	if token.Valid() {
-		log.Println(token.AccessToken)
+		_, err := utils.ExchangeTokenForUser(token, atm.SSOProvider)
+
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Something went wrong")
+		}
 		// use the token to get the user profile
 	}
 

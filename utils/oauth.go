@@ -1,7 +1,10 @@
 package utils
 
 import (
+	"encoding/json"
+	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/ilabs/wacht-fe/config"
 	"github.com/ilabs/wacht-fe/model"
@@ -49,14 +52,113 @@ func GenerateVerificationUrl(ssoProvider model.SSOProvider, attempt model.SignIn
 	return url
 }
 
-func ExchangeTokenForUser(token *oauth2.Token, ssoProvider model.SSOProvider) (*model.User, error) {
+func ExchangeTokenForUser(token *oauth2.Token, ssoProvider model.SSOProvider) (*OAuthUser, error) {
 	switch ssoProvider {
 	case model.SSOProviderX:
 	case model.SSOProviderGitHub:
+		req, err := http.NewRequest("GET", "https://api.github.com/user", nil)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		var res map[string]interface{}
+
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			return nil, err
+		}
+
+		namesplit := strings.Split(res["name"].(string), " ")
+
+		firstName := namesplit[0]
+		var lastName string
+
+		if len(namesplit) > 1 {
+			lastName = namesplit[1]
+		}
+
+		req, err = http.NewRequest("GET", "https://api.github.com/user/emails", nil)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+		resp, err = http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		var emails []map[string]interface{}
+
+		if err := json.NewDecoder(resp.Body).Decode(&emails); err != nil {
+			return nil, err
+		}
+
+		for _, email := range emails {
+			if email["primary"].(bool) {
+				return &OAuthUser{
+					FirstName: firstName,
+					LastName:  lastName,
+					Email:     email["email"].(string),
+				}, nil
+			}
+		}
 	case model.SSOProviderGitLab:
 	case model.SSOProviderGoogle:
+		req, err := http.NewRequest("GET", "https://www.googleapis.com/oauth2/v3/userinfo", nil)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		var res map[string]interface{}
+
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			return nil, err
+		}
+		return &OAuthUser{
+			FirstName: res["given_name"].(string),
+			LastName:  res["family_name"].(string),
+			Email:     res["email"].(string),
+		}, nil
 	case model.SSOProviderFacebook:
 	case model.SSOProviderMicrosoft:
+		req, err := http.NewRequest("GET", "https://graph.microsoft.com/v1.0/me", nil)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		var res map[string]interface{}
+
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			return nil, err
+		}
+
+		return &OAuthUser{
+			FirstName: res["givenName"].(string),
+			LastName:  res["surname"].(string),
+			Email:     res["mail"].(string),
+		}, nil
 	case model.SSOProviderLinkedIn:
 	case model.SSOProviderDiscord:
 	}
