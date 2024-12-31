@@ -18,6 +18,7 @@ type OAuthUser struct {
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 	Email     string `json:"email"`
+	ImageUrl  string `json:"image_url"`
 }
 
 func GenerateVerificationUrl(ssoProvider model.SSOProvider, attempt model.SignInAttempt) string {

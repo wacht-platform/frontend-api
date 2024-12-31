@@ -1,11 +1,13 @@
 package database
 
 import (
+	"log"
 	"os"
 
 	"github.com/ilabs/wacht-fe/model"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var Connection *gorm.DB
@@ -15,6 +17,9 @@ func Connect() error {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		SkipDefaultTransaction: true,
 		// PrepareStmt:            true,
+		Logger: logger.New(log.Default(), logger.Config{
+			LogLevel: logger.Info,
+		}),
 	})
 	if err != nil {
 		return err
@@ -36,5 +41,7 @@ func Migrate() error {
 		&model.UserEmailAddress{},
 		&model.SSOConnection{},
 		&model.SignInAttempt{},
+		&model.SocialConnection{},
+		&model.SignIn{},
 	)
 }

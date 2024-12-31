@@ -26,6 +26,7 @@ func (s SignInMethod) Value() (driver.Value, error) {
 
 type SignInAttempt struct {
 	Model
+	Email                              string             `json:"email"`
 	SessionID                          uint               `json:"session_id"`
 	Method                             SignInMethod       `json:"method"`
 	SSOProvider                        SSOProvider        `json:"sso_provider"`
@@ -36,6 +37,7 @@ type SignInAttempt struct {
 	UserID                             uint               `json:"user_id"`
 	LastActiveOrgID                    uint               `json:"last_active_org_id"`
 	CurrenStep                         CurrentSessionStep `json:"current_step"`
+	Completed                          bool               `json:"completed"`
 }
 
 func NewSignInAttempt(method SignInMethod) *SignInAttempt {

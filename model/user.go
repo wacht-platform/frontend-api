@@ -2,19 +2,20 @@ package model
 
 import (
 	"database/sql/driver"
+	"time"
 )
 
 type VerificationStrategy string
 
 const (
-	Otp      VerificationStrategy = "otp"
-	Google   VerificationStrategy = "google"
-	Github   VerificationStrategy = "github"
-	Facebook VerificationStrategy = "facebook"
+	Otp            VerificationStrategy = "otp"
+	OauthGoogle    VerificationStrategy = "oath_google"
+	OauthGithub    VerificationStrategy = "oath_github"
+	OauthMicrosoft VerificationStrategy = "oauth_microsoft"
 )
 
 func (o *VerificationStrategy) Scan(value interface{}) error {
-	*o = VerificationStrategy(value.([]byte))
+	*o = VerificationStrategy(value.(string))
 	return nil
 }
 
@@ -38,11 +39,13 @@ type OauthConnection struct {
 type UserEmailAddress struct {
 	Model
 	UserID               uint
-	Email                string
+	User                 User
+	Email                string `gorm:"index:idx_user_email_address_email"`
 	IsPrimary            bool
 	Verified             bool
-	VerifiedAt           string
+	VerifiedAt           time.Time
 	VerificationStrategy VerificationStrategy
+	SocialConnection     SocialConnection
 }
 
 type SchemaVersion string
@@ -73,6 +76,8 @@ type User struct {
 	Disabled            bool
 	SecondFactorPolicy  SecondFactorPolicy
 	UserEmailAddresses  []UserEmailAddress
+	SocialConnections   []SocialConnection
+	SignIns             []SignIn
 	LastActiveOrgID     uint
-	DeplymentId         uint
+	DeploymentID        uint
 }

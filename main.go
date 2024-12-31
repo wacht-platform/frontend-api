@@ -17,10 +17,10 @@ func main() {
 		log.Fatal("Error connecting to database: ", err)
 	}
 
-	err = database.Migrate()
-	if err != nil {
-		log.Fatal("Error migrating database: ", err)
-	}
+	// err = database.Migrate()
+	// if err != nil {
+	// 	log.Fatal("Error migrating database: ", err)
+	// }
 
 	app := fiber.New()
 	router.SetupAppRoutes(app)

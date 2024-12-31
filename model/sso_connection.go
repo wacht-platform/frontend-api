@@ -29,6 +29,20 @@ func (p SSOProvider) Value() (driver.Value, error) {
 	return string(p), nil
 }
 
+func (p SSOProvider) VerificationStrategy() VerificationStrategy {
+	switch p {
+	case SSOProviderX:
+		return Otp
+	case SSOProviderGitHub:
+		return OauthGithub
+	case SSOProviderGoogle:
+		return OauthGoogle
+	case SSOProviderMicrosoft:
+		return OauthMicrosoft
+	}
+	return ""
+}
+
 type OauthCredentials struct {
 	ClientID     string
 	ClientSecret string

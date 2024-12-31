@@ -19,6 +19,7 @@ const (
 type Session struct {
 	Model
 	SignInAttempts []SignInAttempt `json:"sign_in_attempts"`
+	ActiveSignIns  []SignIn        `json:"active_sign_ins"`
 }
 
 func NewSession() *Session {

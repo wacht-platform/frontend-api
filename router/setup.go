@@ -2,6 +2,7 @@ package router
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/ilabs/wacht-fe/handler/auth"
 	"github.com/ilabs/wacht-fe/middleware"
@@ -10,14 +11,15 @@ import (
 func SetupAppRoutes(app *fiber.App) {
 	app.Use(middleware.SetDeploymentMiddleware)
 	app.Use(recover.New())
+	app.Use(cors.New(cors.ConfigDefault))
 	auth := app.Group("/auth")
 
 	setupAuthRoutes(auth)
 }
 
 func setupAuthRoutes(router fiber.Router) {
-	router.Post("/sign-in", auth.SignIn)
-	router.Post("/sign-up", auth.SignUp)
+	router.Post("/signin", auth.SignIn)
+	router.Post("/signup", auth.SignUp)
 	router.Get("/methods", auth.AuthMethods)
 	router.Post("/sso", auth.InitSSO)
 	router.Get("/sso-callback", auth.SSOCallback)
