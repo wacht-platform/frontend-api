@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"time"
+
 	"github.com/godruoyi/go-snowflake"
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/config"
@@ -15,12 +17,17 @@ import (
 	"gorm.io/gorm"
 )
 
-func createSession(method model.SignInMethod, completed bool, step model.CurrentSessionStep, tx *gorm.DB, userID uint) (*model.Session, *model.SignInAttempt, error) {
+func signJWT(userID uint, sessionID uint, exp time.Duration) (string, error) {
+	return "", nil
+}
+
+func createSession(method model.SignInMethod, email string, completed bool, step model.CurrentSessionStep, tx *gorm.DB, userID uint) (*model.Session, *model.SignInAttempt, error) {
 	session := model.NewSession()
 	attempt := model.NewSignInAttempt(method)
 	attempt.Method = method
 	attempt.CurrenStep = step
 	attempt.Completed = completed
+	attempt.Email = email
 
 	if err := tx.Create(&session).Error; err != nil {
 		return nil, nil, err
@@ -28,8 +35,10 @@ func createSession(method model.SignInMethod, completed bool, step model.Current
 
 	attempt.SessionID = session.ID
 
+	var signIn model.SignIn
+
 	if completed && userID != 0 {
-		signIn := model.SignIn{
+		signIn = model.SignIn{
 			Model:     model.Model{ID: uint(snowflake.ID())},
 			SessionID: session.ID,
 			UserID:    userID,
@@ -44,6 +53,8 @@ func createSession(method model.SignInMethod, completed bool, step model.Current
 	}
 
 	session.SignInAttempts = append(session.SignInAttempts, *attempt)
+	session.SignIns = append(session.SignIns, signIn)
+	session.ActiveSignInID = signIn.ID
 	return session, attempt, nil
 }
 
@@ -55,21 +66,23 @@ func SignIn(c *fiber.Ctx) error {
 
 	d := handler.GetDeployment(c)
 
-	var u model.User
-	if err := database.Connection.Where(&model.User{UserEmailAddresses: []model.UserEmailAddress{{Email: b.Email}}}).First(&u).Error; err != nil {
+	var email model.UserEmailAddress
+	if res := database.Connection.Where(&model.UserEmailAddress{Email: b.Email}).Joins("User").First(&email); res.RowsAffected == 0 {
 		return handler.SendNotFound(c, nil, "User not found")
+	} else if res.Error != nil {
+		return handler.SendInternalServerError(c, res.Error, "Something went wrong")
 	}
 
-	if u.Disabled {
+	if email.User.Disabled {
 		return handler.SendForbidden(c, nil, "User is disabled")
 	}
 
 	secondFactorEnforced := d.AuthSettings.SecondFactorPolicy == model.SecondFactorPolicyEnforced ||
-		u.SecondFactorPolicy == model.SecondFactorPolicyEnforced
+		email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced
 
 	authenticated := false
 	if b.Password != "" {
-		match, err := utils.ComparePassword(u.Password, b.Password)
+		match, err := utils.ComparePassword(email.User.Password, b.Password)
 		if err != nil {
 			return handler.SendInternalServerError(c, nil, "Error comparing password")
 		}
@@ -99,14 +112,14 @@ func SignIn(c *fiber.Ctx) error {
 
 	err := database.Connection.Transaction(func(tx *gorm.DB) error {
 		var err error
-		session, attempt, err = createSession(model.SignInMethodPlain, completed, step, tx, u.ID)
+		session, attempt, err = createSession(model.SignInMethodPlain, b.Email, completed, step, tx, email.User.ID)
 		if err != nil {
 			return err
 		}
 
 		attempt.FirstMethodAuthenticated = authenticated
 		attempt.SecondMethodAuthenticationRequired = secondFactorEnforced
-		attempt.LastActiveOrgID = u.LastActiveOrgID
+		attempt.LastActiveOrgID = email.User.LastActiveOrgID
 		return tx.Save(attempt).Error
 	})
 
@@ -188,6 +201,7 @@ func SignUp(c *fiber.Ctx) error {
 		completed := !d.AuthSettings.VerificationPolicy.Email
 		_, _, err = createSession(
 			model.SignInMethodPlain,
+			b.Email,
 			completed,
 			model.SessionStepVerifyEmailOTP,
 			tx,
@@ -240,7 +254,7 @@ func InitSSO(c *fiber.Ctx) error {
 
 	err := database.Connection.Transaction(func(tx *gorm.DB) error {
 		var err error
-		result, attempt, err = createSession(model.SignInMethodSSO, false, "", tx, 0)
+		result, attempt, err = createSession(model.SignInMethodSSO, "", false, "", tx, 0)
 		if err != nil {
 			return err
 		}

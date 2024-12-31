@@ -12,7 +12,7 @@ import (
 func main() {
 	config.Env()
 
-	err := database.Connect()
+	err := database.InitConnection()
 	if err != nil {
 		log.Fatal("Error connecting to database: ", err)
 	}
