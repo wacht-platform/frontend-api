@@ -1,6 +1,10 @@
 package auth
 
 import (
+	"crypto/x509"
+	"encoding/pem"
+	"fmt"
+	"log"
 	"time"
 
 	"github.com/godruoyi/go-snowflake"
@@ -10,6 +14,8 @@ import (
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/utils"
+	"github.com/lestrrat-go/jwx/v3/jwa"
+	"github.com/lestrrat-go/jwx/v3/jwt"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
 	"golang.org/x/oauth2/google"
@@ -17,8 +23,29 @@ import (
 	"gorm.io/gorm"
 )
 
-func signJWT(userID uint, sessionID uint, exp time.Duration) (string, error) {
-	return "", nil
+func signJWT(sessionID uint, iss string, exp time.Time, keypair model.DeploymentKeyPair) (string, error) {
+	tok, err := jwt.NewBuilder().
+		Issuer(fmt.Sprintf("https://%s", iss)).
+		Expiration(exp).
+		IssuedAt(time.Now()).
+		NotBefore(time.Now()).
+		Claim("sess", sessionID).
+		Build()
+
+	privateKeyBlock, _ := pem.Decode([]byte(keypair.PrivateKey))
+	privateKey, err := x509.ParsePKCS1PrivateKey(privateKeyBlock.Bytes)
+
+	if err != nil {
+		log.Fatal("Error parsing private key: ", err)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.RS256(), privateKey))
+
+	return string(signed), err
 }
 
 func createSession(method model.SignInMethod, email string, completed bool, step model.CurrentSessionStep, tx *gorm.DB, userID uint) (*model.Session, *model.SignInAttempt, error) {
@@ -126,6 +153,27 @@ func SignIn(c *fiber.Ctx) error {
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Something went wrong")
 	}
+
+	var keypair model.DeploymentKeyPair
+
+	if err := database.Connection.Where("deployment_id = ?", d.ID).First(&keypair).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Something went wrong")
+	}
+
+	token, err := signJWT(session.ID, d.Host, time.Now().Add(time.Minute*5), keypair)
+
+	if err != nil {
+		println(err.Error())
+		return handler.SendInternalServerError(c, err, "Something went wrong")
+	}
+
+	c.Cookie(&fiber.Cookie{
+		Name:     "_session",
+		Domain:   "wacht.tech",
+		Value:    token,
+		Path:     "/",
+		HTTPOnly: true,
+	})
 
 	return handler.SendSuccess(c, session)
 }
