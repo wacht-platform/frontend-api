@@ -168,11 +168,12 @@ func SignIn(c *fiber.Ctx) error {
 	}
 
 	c.Cookie(&fiber.Cookie{
-		Name:     "_session",
-		Domain:   fmt.Sprintf(".%s", d.Host),
+		Name:     "__session",
+		Domain:   d.Host,
 		Value:    token,
 		Path:     "/",
 		HTTPOnly: true,
+		Secure:   true,
 	})
 
 	return handler.SendSuccess(c, session)
