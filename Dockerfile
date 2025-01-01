@@ -9,4 +9,4 @@ FROM alpine:latest AS runner
 WORKDIR /app
 COPY --from=builder /app/api-server .
 EXPOSE 3000
-ENTRYPOINT ["./frontend-api"]
+ENTRYPOINT ["./api-server"]
