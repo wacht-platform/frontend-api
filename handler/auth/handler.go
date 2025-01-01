@@ -169,7 +169,7 @@ func SignIn(c *fiber.Ctx) error {
 
 	c.Cookie(&fiber.Cookie{
 		Name:     "_session",
-		Domain:   "wacht.tech",
+		Domain:   d.Host,
 		Value:    token,
 		Path:     "/",
 		HTTPOnly: true,
