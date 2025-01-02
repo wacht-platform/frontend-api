@@ -16,6 +16,9 @@ import (
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwt"
+
+	"github.com/pquerna/otp"
+	"github.com/pquerna/otp/totp"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
 	"golang.org/x/oauth2/google"
@@ -31,6 +34,9 @@ func signJWT(sessionID uint, iss string, exp time.Time, keypair model.Deployment
 		NotBefore(time.Now()).
 		Claim("sess", sessionID).
 		Build()
+	if err != nil {
+		return "", err
+	}
 
 	privateKeyBlock, _ := pem.Decode([]byte(keypair.PrivateKey))
 	privateKey, err := x509.ParsePKCS1PrivateKey(privateKeyBlock.Bytes)
@@ -224,6 +230,13 @@ func SignUp(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Error hashing password")
 	}
 
+	issuer := "Vishal"
+	otpSecret, err := GenerateTOTP(uint(snowflake.ID()), issuer)
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Error generating TOTP")
+	}
+	fmt.Println("Generated OTP for user (for testing):", otpSecret)
+
 	u := model.User{
 		Model:               model.Model{ID: uint(snowflake.ID())},
 		FirstName:           b.FirstName,
@@ -240,6 +253,7 @@ func SignUp(c *fiber.Ctx) error {
 		SchemaVersion:      model.SchemaVersionV1,
 		SecondFactorPolicy: d.AuthSettings.SecondFactorPolicy,
 		DeploymentID:       d.ID,
+		TOTPSecret:         otpSecret,
 	}
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
@@ -444,3 +458,91 @@ func SSOCallback(c *fiber.Ctx) error {
 
 	return handler.SendSuccess(c, fiber.Map{})
 }
+
+func GenerateTOTP(userID uint, issuer string) (string, error) {
+	var user model.User
+	err := database.Connection.First(&user, userID).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			key, genErr := totp.Generate(totp.GenerateOpts{
+				Issuer:      issuer,
+				AccountName: "vishal.kumar@intellinesia.com",
+				Period:      90,
+				Digits:      otp.DigitsSix,
+				Algorithm:   otp.AlgorithmSHA1,
+			})
+			if genErr != nil {
+				return "", genErr
+			}
+
+			newUser := model.User{
+				Model:     model.Model{
+					ID: userID,
+				},
+				TOTPSecret: key.Secret(),
+			}
+			saveErr := database.Connection.Save(&newUser).Error
+			if saveErr != nil {
+				return "", saveErr
+			}
+			return key.Secret(), nil
+		}
+		return "", err
+	}
+	
+	return "", fmt.Errorf("user already exists, TOTP not generated")
+}
+
+
+func VerifyTOTP(userID uint, code string) (bool, error) {
+	var user model.User
+	if err := database.Connection.First(&user, userID).Error; err != nil {
+		return false, err
+	}
+
+	if user.TOTPSecret == "" {
+		return false, fmt.Errorf("TOTP secret not set for user")
+	}
+
+	valid, err := totp.ValidateCustom(code, user.TOTPSecret, time.Now(), totp.ValidateOpts{
+		Period:    90,
+		Skew:      1,
+		Digits:    otp.DigitsSix,
+		Algorithm: otp.AlgorithmSHA1,
+	})
+	if err != nil {
+		return false, err
+	}
+	return valid, nil
+}
+
+func SendOTP(c *fiber.Ctx) error {
+	var request struct {
+		UserID uint   `json:"user_id"`
+		Code   string `json:"code"`
+	}
+
+	if err := c.BodyParser(&request); err != nil {
+		return handler.SendBadRequest(c, err, "Invalid request body")
+	}
+
+	valid, err := VerifyTOTP(request.UserID, request.Code)
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Error verifying OTP")
+	}
+
+	if !valid {
+		return handler.SendBadRequest(c, nil, "Invalid OTP")
+	}
+
+	var user model.User
+	if err := database.Connection.First(&user, request.UserID).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "User not found")
+	}
+
+	return handler.SendSuccess(c, "OTP verified successfully")
+}
+
+
+
+

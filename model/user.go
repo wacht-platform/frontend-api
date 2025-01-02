@@ -80,4 +80,5 @@ type User struct {
 	SignIns             []SignIn
 	LastActiveOrgID     uint
 	DeploymentID        uint
+	TOTPSecret					string
 }
