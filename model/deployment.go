@@ -1,14 +1,41 @@
 package model
 
+import "database/sql/driver"
+
+type DeploymentMode string
+
+const (
+	DeploymentModeProduction DeploymentMode = "production"
+	DeploymentModeStaging    DeploymentMode = "staging"
+)
+
+func (m *DeploymentMode) Scan(value any) error {
+	*m = DeploymentMode(value.(string))
+	return nil
+}
+
+func (m *DeploymentMode) Value() (driver.Value, error) {
+	return string(*m), nil
+}
+
+func (m DeploymentMode) GormDataType() string {
+	return "text"
+}
+
+func (m DeploymentMode) GormDBDataType() string {
+	return "text"
+}
+
 type Deployment struct {
 	Model
-	MaintenanceMode bool
-	Host            string
-	PublishableKey  string
-	Secret          string
-	OrgSettings     OrgSettings
-	AuthSettings    AuthSettings
-	SSOConnections  []SSOConnection
-	ProjectID       uint
-	KepPair         DeploymentKeyPair
+	MaintenanceMode bool              `json:"maintenance_mode"`
+	Host            string            `json:"host"`
+	PublishableKey  string            `json:"publishable_key"`
+	Secret          string            `json:"-"`
+	OrgSettings     OrgSettings       `json:"org_settings"`
+	AuthSettings    AuthSettings      `json:"auth_settings"`
+	SSOConnections  []SSOConnection   `json:"sso_connections"`
+	ProjectID       uint              `json:"project_id"`
+	Mode            DeploymentMode    `json:"mode"`
+	KepPair         DeploymentKeyPair `json:"-"`
 }

@@ -17,13 +17,13 @@ func main() {
 		log.Fatal("Error connecting to database: ", err)
 	}
 
-	// err = database.Migrate()
+	// err = database.AutoMigratePg()
 	// if err != nil {
 	// 	log.Fatal("Error migrating database: ", err)
 	// }
 
 	app := fiber.New()
-	router.SetupAppRoutes(app)
+	router.Setup(app)
 
 	log.Fatal(app.Listen(":3000"))
 }

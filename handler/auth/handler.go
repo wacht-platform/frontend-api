@@ -167,14 +167,24 @@ func SignIn(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Something went wrong")
 	}
 
-	c.Cookie(&fiber.Cookie{
-		Name:     "__session",
-		Domain:   d.Host,
-		Value:    token,
-		Path:     "/",
-		HTTPOnly: true,
-		Secure:   true,
-	})
+	if d.Mode == model.DeploymentModeStaging {
+		c.Cookie(&fiber.Cookie{
+			Name:    "__session",
+			Value:   token,
+			Path:    "/",
+			Expires: time.Now().Add(time.Hour * 24),
+		})
+	} else {
+		c.Cookie(&fiber.Cookie{
+			Name:     "__session",
+			Domain:   d.Host,
+			Path:     "/",
+			Value:    token,
+			HTTPOnly: true,
+			Secure:   true,
+			Expires:  time.Now().Add(time.Hour * 24),
+		})
+	}
 
 	return handler.SendSuccess(c, session)
 }

@@ -76,8 +76,9 @@ func (a *OauthCredentials) GormDBDataType() string {
 
 type SSOConnection struct {
 	Model
-	DeploymentID         uint
-	Provider             SSOProvider
-	Enabled              bool
-	CustomCredentialsSet bool
+	DeploymentID         uint        `json:"deployment_id"`
+	Provider             SSOProvider `json:"provider"`
+	Enabled              bool        `json:"enabled"`
+	UserDefinedScopes    []string    `gorm:"type:text[]" json:"user_defined_scopes"`
+	CustomCredentialsSet bool        `json:"custom_credentials_set"`
 }

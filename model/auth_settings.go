@@ -172,21 +172,21 @@ func (a *AuthFactorsEnabled) GormDBDataType() string {
 
 type AuthSettings struct {
 	Model
-	EmailAddress           IndividualAuthSettings
-	PhoneNumber            IndividualAuthSettings
-	Username               IndividualAuthSettings
-	FirstName              IndividualAuthSettings
-	LastName               IndividualAuthSettings
-	Password               IndividualAuthSettings
-	BackupCode             IndividualAuthSettings
-	Web3Wallet             IndividualAuthSettings
-	PasswordPolicy         IndividualAuthSettings
-	AuthFactorsEnabled     AuthFactorsEnabled
-	VerificationPolicy     VerificationPolicy
-	SecondFactorPolicy     SecondFactorPolicy
-	FirstFactor            FirstFactor
-	SecondFactor           SecondFactor
-	AlternateFirstFactors  []FirstFactor  `gorm:"type:text[]"`
-	AlternateSecondFactors []SecondFactor `gorm:"type:text[]"`
-	DeploymentID           uint
+	EmailAddress           IndividualAuthSettings `json:"email_address"`
+	PhoneNumber            IndividualAuthSettings `json:"phone_number"`
+	Username               IndividualAuthSettings `json:"username"`
+	FirstName              IndividualAuthSettings `json:"first_name"`
+	LastName               IndividualAuthSettings `json:"last_name"`
+	Password               IndividualAuthSettings `json:"password"`
+	BackupCode             IndividualAuthSettings `json:"backup_code"`
+	Web3Wallet             IndividualAuthSettings `json:"web3_wallet"`
+	PasswordPolicy         IndividualAuthSettings `json:"password_policy"`
+	AuthFactorsEnabled     AuthFactorsEnabled     `json:"auth_factors_enabled"`
+	VerificationPolicy     VerificationPolicy     `json:"verification_policy"`
+	SecondFactorPolicy     SecondFactorPolicy     `json:"second_factor_policy"`
+	FirstFactor            FirstFactor            `json:"first_factor"`
+	SecondFactor           SecondFactor           `json:"second_factor"`
+	AlternateFirstFactors  []FirstFactor          `gorm:"type:text[]" json:"alternate_first_factors"`
+	AlternateSecondFactors []SecondFactor         `gorm:"type:text[]" json:"alternate_second_factors"`
+	DeploymentID           uint                   `json:"deployment_id"`
 }
