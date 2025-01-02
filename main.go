@@ -17,8 +17,7 @@ func main() {
 		log.Fatal("Error connecting to database: ", err)
 	}
 
-	// err = database.AutoMigratePg()
-	// if err != nil {
+	// if err = database.AutoMigratePg(); err != nil {
 	// 	log.Fatal("Error migrating database: ", err)
 	// }
 

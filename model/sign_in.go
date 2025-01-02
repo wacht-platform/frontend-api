@@ -7,7 +7,8 @@ import (
 type SignIn struct {
 	Model
 	SessionID uint   `json:"session_id"`
-	UserID    uint   `json:"user_id"`
+	UserID    uint   `json:"-"`
+	User      User   `json:"user"`
 	Expired   bool   `json:"expired"`
 	ExpiredAt string `json:"expired_at"`
 }

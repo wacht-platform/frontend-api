@@ -39,3 +39,7 @@ type Deployment struct {
 	Mode            DeploymentMode    `json:"mode"`
 	KepPair         DeploymentKeyPair `json:"-"`
 }
+
+func (d *Deployment) IsProduction() bool {
+	return d.Mode == DeploymentModeProduction
+}

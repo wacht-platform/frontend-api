@@ -8,5 +8,5 @@ import (
 func GetDeployment(c *fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 
-	return c.JSON(deployment)
+	return handler.SendSuccess(c, deployment)
 }

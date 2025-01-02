@@ -20,7 +20,8 @@ type Session struct {
 	Model
 	SignInAttempts []SignInAttempt `json:"sign_in_attempts"`
 	SignIns        []SignIn        `json:"sign_ins"`
-	ActiveSignInID uint            `json:"active_sign_in_id"`
+	ActiveSignInID uint            `json:"-"`
+	ActiveSignIn   SignIn          `json:"active_sign_in"`
 }
 
 func NewSession() *Session {

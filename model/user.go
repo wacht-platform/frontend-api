@@ -3,6 +3,8 @@ package model
 import (
 	"database/sql/driver"
 	"time"
+
+	"gorm.io/datatypes"
 )
 
 type VerificationStrategy string
@@ -29,11 +31,6 @@ func (ct VerificationStrategy) GormDataType() string {
 
 func (ct VerificationStrategy) GormDBDataType() string {
 	return "text"
-}
-
-type OauthConnection struct {
-	Model
-	provider string
 }
 
 type UserEmailAddress struct {
@@ -66,18 +63,20 @@ func (s SchemaVersion) Value() (driver.Value, error) {
 
 type User struct {
 	Model
-	FirstName           string
-	LastName            string
-	Username            string
-	Password            string
-	PrimaryEmailAddress string
-	PhoneNumber         string
-	SchemaVersion       SchemaVersion
-	Disabled            bool
-	SecondFactorPolicy  SecondFactorPolicy
-	UserEmailAddresses  []UserEmailAddress
-	SocialConnections   []SocialConnection
-	SignIns             []SignIn
-	LastActiveOrgID     uint
-	DeploymentID        uint
+	FirstName           string             `json:"first_name"`
+	LastName            string             `json:"last_name"`
+	Username            string             `json:"username"`
+	Password            string             `json:"password"`
+	PrimaryEmailAddress string             `json:"primary_email_address"`
+	PhoneNumber         string             `json:"phone_number"`
+	SchemaVersion       SchemaVersion      `json:"schema_version"`
+	Disabled            bool               `json:"disabled"`
+	SecondFactorPolicy  SecondFactorPolicy `json:"second_factor_policy"`
+	UserEmailAddresses  []UserEmailAddress `json:"user_email_addresses"`
+	SocialConnections   []SocialConnection `json:"social_connections"`
+	SignIns             []SignIn           `json:"sign_ins"`
+	LastActiveOrgID     uint               `json:"last_active_org_id"`
+	DeploymentID        uint               `json:"deployment_id"`
+	PublicMetadata      datatypes.JSONMap  `json:"public_metadata"`
+	PrivateMetadata     datatypes.JSONMap  `json:"-"`
 }
