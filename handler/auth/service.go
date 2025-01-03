@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"errors"
+
 	"github.com/godruoyi/go-snowflake"
 	"github.com/ilabs/wacht-fe/config"
 	"github.com/ilabs/wacht-fe/database"
@@ -177,6 +179,12 @@ func (s *AuthService) CheckEmailExists(email string) bool {
 	return count > 0
 }
 
+func (s *AuthService) CheckUsernameExists(username string) bool {
+	var count int64
+	s.db.Model(&model.User{}).Where("username = ?", username).Count(&count)
+	return count > 0
+}
+
 func getOAuthConfig(provider model.SSOProvider) *oauth2.Config {
 	cred := config.GetDefaultOAuthCredentials(string(provider))
 	conf := &oauth2.Config{
@@ -196,4 +204,13 @@ func getOAuthConfig(provider model.SSOProvider) *oauth2.Config {
 	}
 
 	return conf
+}
+
+func (s *AuthService) CheckIdentifierAvailability(identifier string, identifierType string) (bool, error) {
+	if identifierType == "email" {
+		return s.CheckEmailExists(identifier), nil
+	} else if identifierType == "username" {
+		return s.CheckUsernameExists(identifier), nil
+	}
+	return false, errors.New("invalid identifier type")
 }

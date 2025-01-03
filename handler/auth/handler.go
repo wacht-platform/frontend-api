@@ -247,3 +247,16 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 
 	return handler.SendSuccess(c, session)
 }
+
+func (h *Handler) CheckIdentifierAvailability(c *fiber.Ctx) error {
+	identifier := c.Query("identifier")
+	identifierType := c.Query("type")
+	exists, err := h.service.CheckIdentifierAvailability(identifier, identifierType)
+
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Something went wrong")
+	}
+	return handler.SendSuccess(c, fiber.Map{
+		"exists": exists,
+	})
+}

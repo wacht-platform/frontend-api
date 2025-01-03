@@ -25,9 +25,11 @@ func GetSession(c *fiber.Ctx) *model.Session {
 		session = getSessionAndSetToCache(sessionID)
 	}
 
-	println("session", session)
-
 	return session
+}
+
+func RemoveSessionFromCache(id uint) {
+	database.Cache.Del(context.Background(), fmt.Sprintf("session:%d", id))
 }
 
 func getSessionFromCache(id uint) (*model.Session, error) {

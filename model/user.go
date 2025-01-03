@@ -73,6 +73,7 @@ type User struct {
 	Disabled            bool                `json:"disabled"`
 	SecondFactorPolicy  SecondFactorPolicy  `json:"second_factor_policy"`
 	UserEmailAddresses  []*UserEmailAddress `json:"user_email_addresses"`
+	UserPhoneNumbers    []*UserPhoneNumber  `json:"user_phone_numbers"`
 	SocialConnections   []*SocialConnection `json:"social_connections,omitempty"`
 	SignIns             []*SignIn           `json:"-"`
 	LastActiveOrgID     uint                `json:"last_active_org_id"`

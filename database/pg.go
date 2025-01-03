@@ -43,5 +43,6 @@ func AutoMigratePg() error {
 		&model.SignIn{},
 		&model.DeploymentKeyPair{},
 		&model.RotatingToken{},
+		&model.UserPhoneNumber{},
 	)
 }

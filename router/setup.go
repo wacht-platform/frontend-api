@@ -5,6 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/ilabs/wacht-fe/handler/auth"
 	"github.com/ilabs/wacht-fe/handler/deployment"
 	"github.com/ilabs/wacht-fe/handler/session"
@@ -28,7 +29,7 @@ func setupRoutes(app *fiber.App) {
 }
 
 func setupMiddleware(app *fiber.App) {
-	// app.Use(recover.New())
+	app.Use(recover.New())
 	app.Use(cors.New(corsSettings()))
 	app.Use(middleware.SetDeploymentMiddleware)
 	app.Use(middleware.SetSessionMiddleware)
@@ -54,6 +55,7 @@ func setupAuthRoutes(router fiber.Router) {
 	router.Get("/methods", authHandler.AuthMethods)
 	router.Post("/sso", authHandler.InitSSO)
 	router.Get("/sso-callback", authHandler.SSOCallback)
+	router.Get("/identifier-availability", authHandler.CheckIdentifierAvailability)
 }
 
 func setupDeploymentRoutes(router fiber.Router) {
@@ -64,6 +66,6 @@ func setupSessionRoutes(router fiber.Router) {
 	sessionHandler := session.NewHandler()
 
 	router.Get("/", sessionHandler.GetCurrentSession)
-	router.Delete("/", sessionHandler.DeleteSession)
 	router.Post("/switch-sign-in", sessionHandler.SwitchActiveSignIn)
+	router.Post("/sign-out", sessionHandler.SignOut)
 }
