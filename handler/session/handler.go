@@ -1,6 +1,8 @@
 package session
 
 import (
+	"strconv"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
@@ -18,7 +20,18 @@ func (h *Handler) GetCurrentSession(c *fiber.Ctx) error {
 
 	session := new(model.Session)
 
-	database.Connection.Preload("ActiveSignIn").Preload("SignIns").Where("id = ?", sessionID).First(session)
+	err := database.Connection.Preload("ActiveSignIn").
+		Preload("ActiveSignIn.User").
+		Preload("ActiveSignIn.User.UserEmailAddresses").
+		Preload("ActiveSignIn.User.UserEmailAddresses.SocialConnection").
+		Preload("SignIns").
+		Preload("SignIns.User").
+		Where("id = ?", sessionID).
+		First(session).Error
+
+	if err != nil {
+		return handler.SendNotFound(c, nil, "Session not found")
+	}
 
 	return c.JSON(session)
 }
@@ -31,17 +44,17 @@ func (h *Handler) DeleteSession(c *fiber.Ctx) error {
 
 func (h *Handler) SwitchActiveSignIn(c *fiber.Ctx) error {
 	session := c.Locals("session").(*model.Session)
-	var body struct {
-		SignInID uint `json:"sign_in_id"`
-	}
 
-	if err := c.BodyParser(&body); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
+	signInId, err := strconv.ParseUint(c.Query("sign_in_id"), 10, 64)
+
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "Invalid sign in ID")
 	}
 
 	validSignIn := false
 	for _, signIn := range session.SignIns {
-		if signIn.ID == body.SignInID {
+		if signIn.ID == uint(signInId) {
+			session.ActiveSignIn = signIn
 			validSignIn = true
 			break
 		}
@@ -51,7 +64,8 @@ func (h *Handler) SwitchActiveSignIn(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid sign in ID")
 	}
 
-	session.ActiveSignInID = body.SignInID
+	session.ActiveSignInID = uint(signInId)
+	database.Connection.Save(session)
 
-	return c.SendStatus(fiber.StatusOK)
+	return handler.SendSuccess(c, session)
 }

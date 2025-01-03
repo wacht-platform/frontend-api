@@ -40,11 +40,13 @@ func (s *AuthService) ValidateUserStatus(user *model.UserEmailAddress) error {
 	return nil
 }
 
-func (s *AuthService) DetermineAuthenticationStep(authenticated bool, secondFactorEnforced bool, authSettings model.AuthSettings) (model.CurrentSessionStep, bool) {
+func (s *AuthService) DetermineAuthenticationStep(verified, authenticated, secondFactorEnforced bool, authSettings model.AuthSettings) (model.CurrentSessionStep, bool) {
 	var step model.CurrentSessionStep
 	completed := false
 
-	if !authenticated {
+	if !verified {
+		step = model.SessionStepVerifyEmail
+	} else if !authenticated {
 		if authSettings.FirstFactor == model.FirstFactorEmailPassword {
 			step = model.SessionStepVerifyPassword
 		} else if authSettings.FirstFactor == model.FirstFactorEmailOTP {
@@ -103,7 +105,7 @@ func (s *AuthService) CreateUser(b *SignUpRequest, hashedPassword string, deploy
 		Password:            hashedPassword,
 		PhoneNumber:         b.PhoneNumber,
 		PrimaryEmailAddress: b.Email,
-		UserEmailAddresses: []model.UserEmailAddress{{
+		UserEmailAddresses: []*model.UserEmailAddress{{
 			Model:     model.Model{ID: uint(snowflake.ID())},
 			Email:     b.Email,
 			IsPrimary: true,
@@ -130,7 +132,7 @@ func (s *AuthService) HandleExistingUser(tx *gorm.DB, email *model.UserEmailAddr
 	var connection model.SocialConnection
 	for _, sc := range email.User.SocialConnections {
 		if sc.Provider == attempt.SSOProvider && sc.EmailAdress == email.Email {
-			connection = sc
+			connection = *sc
 			break
 		}
 	}

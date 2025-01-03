@@ -22,6 +22,7 @@ func NewHandler() *Handler {
 
 func (h *Handler) SignIn(c *fiber.Ctx) error {
 	b, verr := handler.Validate[SignInRequest](c)
+
 	if verr != nil {
 		return handler.SendBadRequest(c, verr, "Bad request body")
 	}
@@ -56,7 +57,7 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 		authenticated = true
 	}
 
-	step, completed := h.service.DetermineAuthenticationStep(authenticated, secondFactorEnforced, d.AuthSettings)
+	step, completed := h.service.DetermineAuthenticationStep(email.Verified, authenticated, secondFactorEnforced, d.AuthSettings)
 	attempt := h.service.CreateSignInAttempt(b.Email, session.ID, authenticated, secondFactorEnforced, step, completed, email.User.LastActiveOrgID)
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
@@ -64,17 +65,18 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 			return err
 		}
 
-		if completed && email.User.ID != 0 {
+		if completed {
 			signIn := model.NewSignIn(session.ID, email.User.ID)
 			if err := tx.Create(signIn).Error; err != nil {
 				return err
 			}
-			session.SignIns = append(session.SignIns, *signIn)
+			session.SignIns = append(session.SignIns, signIn)
 			session.ActiveSignInID = signIn.ID
 		}
 
-		session.SignInAttempts = append(session.SignInAttempts, *attempt)
-		return nil
+		session.SignInAttempts = append(session.SignInAttempts, attempt)
+
+		return tx.Save(session).Error
 	})
 
 	if err != nil {
@@ -119,7 +121,7 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 			return err
 		}
 
-		session.SignInAttempts = append(session.SignInAttempts, *attempt)
+		session.SignInAttempts = append(session.SignInAttempts, attempt)
 		return nil
 	})
 
@@ -151,7 +153,7 @@ func (h *Handler) InitSSO(c *fiber.Ctx) error {
 		if err := tx.Create(attempt).Error; err != nil {
 			return err
 		}
-		session.SignInAttempts = append(session.SignInAttempts, *attempt)
+		session.SignInAttempts = append(session.SignInAttempts, attempt)
 		return nil
 	})
 
@@ -235,7 +237,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			return err
 		}
 
-		session.SignIns = append(session.SignIns, *signIn)
+		session.SignIns = append(session.SignIns, signIn)
 		return nil
 	})
 

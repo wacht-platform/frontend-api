@@ -23,7 +23,7 @@ func setupRoutes(app *fiber.App) {
 	deployment := app.Group("/deployment")
 	setupDeploymentRoutes(deployment)
 
-	sessions := app.Group("/sessions")
+	sessions := app.Group("/session")
 	setupSessionRoutes(sessions)
 }
 
@@ -63,7 +63,7 @@ func setupDeploymentRoutes(router fiber.Router) {
 func setupSessionRoutes(router fiber.Router) {
 	sessionHandler := session.NewHandler()
 
-	router.Get("/current", sessionHandler.GetCurrentSession)
+	router.Get("/", sessionHandler.GetCurrentSession)
 	router.Delete("/", sessionHandler.DeleteSession)
-	router.Post("/switch", sessionHandler.SwitchActiveSignIn)
+	router.Post("/switch-sign-in", sessionHandler.SwitchActiveSignIn)
 }

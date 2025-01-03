@@ -35,14 +35,14 @@ func (ct VerificationStrategy) GormDBDataType() string {
 
 type UserEmailAddress struct {
 	Model
-	UserID               uint
-	User                 User
-	Email                string `gorm:"index:idx_user_email_address_email"`
-	IsPrimary            bool
-	Verified             bool
-	VerifiedAt           time.Time
-	VerificationStrategy VerificationStrategy
-	SocialConnection     SocialConnection
+	UserID               uint                 `json:"-"`
+	User                 User                 `json:"-"`
+	Email                string               `gorm:"index:idx_user_email_address_email" json:"email"`
+	IsPrimary            bool                 `json:"is_primary"`
+	Verified             bool                 `json:"verified"`
+	VerifiedAt           time.Time            `json:"verified_at"`
+	VerificationStrategy VerificationStrategy `json:"verification_strategy"`
+	SocialConnection     *SocialConnection    `json:"social_connection,omitempty"`
 }
 
 type SchemaVersion string
@@ -63,20 +63,20 @@ func (s SchemaVersion) Value() (driver.Value, error) {
 
 type User struct {
 	Model
-	FirstName           string             `json:"first_name"`
-	LastName            string             `json:"last_name"`
-	Username            string             `json:"username"`
-	Password            string             `json:"password"`
-	PrimaryEmailAddress string             `json:"primary_email_address"`
-	PhoneNumber         string             `json:"phone_number"`
-	SchemaVersion       SchemaVersion      `json:"schema_version"`
-	Disabled            bool               `json:"disabled"`
-	SecondFactorPolicy  SecondFactorPolicy `json:"second_factor_policy"`
-	UserEmailAddresses  []UserEmailAddress `json:"user_email_addresses"`
-	SocialConnections   []SocialConnection `json:"social_connections"`
-	SignIns             []SignIn           `json:"sign_ins"`
-	LastActiveOrgID     uint               `json:"last_active_org_id"`
-	DeploymentID        uint               `json:"deployment_id"`
-	PublicMetadata      datatypes.JSONMap  `json:"public_metadata"`
-	PrivateMetadata     datatypes.JSONMap  `json:"-"`
+	FirstName           string              `json:"first_name"`
+	LastName            string              `json:"last_name"`
+	Username            string              `json:"username"`
+	Password            string              `json:"-"`
+	PrimaryEmailAddress string              `json:"primary_email_address"`
+	PhoneNumber         string              `json:"phone_number"`
+	SchemaVersion       SchemaVersion       `json:"schema_version"`
+	Disabled            bool                `json:"disabled"`
+	SecondFactorPolicy  SecondFactorPolicy  `json:"second_factor_policy"`
+	UserEmailAddresses  []*UserEmailAddress `json:"user_email_addresses"`
+	SocialConnections   []*SocialConnection `json:"social_connections,omitempty"`
+	SignIns             []*SignIn           `json:"-"`
+	LastActiveOrgID     uint                `json:"last_active_org_id"`
+	DeploymentID        uint                `json:"deployment_id"`
+	PublicMetadata      datatypes.JSONMap   `json:"public_metadata"`
+	PrivateMetadata     datatypes.JSONMap   `json:"-"`
 }

@@ -74,7 +74,11 @@ func handleExistingSession(c *fiber.Ctx, deployment model.Deployment, sessionTok
 		return refreshSession(c, token)
 	}
 
-	sessionID, _, _ := extractTokenClaims(token)
+	sessionID, _, err := extractTokenClaims(token)
+	if err != nil {
+		return handler.SendUnauthorized(c, err, "Invalid session")
+	}
+
 	c.Locals("session", sessionID)
 
 	return c.Next()
@@ -130,7 +134,7 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token) error {
 }
 
 func extractTokenClaims(token jwt.Token) (uint, uint, error) {
-	var sessionID, rotatingTokenID uint
+	var sessionID, rotatingTokenID float64
 
 	if err := token.Get("sess", &sessionID); err != nil {
 		return 0, 0, err
@@ -140,7 +144,7 @@ func extractTokenClaims(token jwt.Token) (uint, uint, error) {
 		return 0, 0, err
 	}
 
-	return sessionID, rotatingTokenID, nil
+	return uint(sessionID), uint(rotatingTokenID), nil
 }
 
 func validateRotatingToken(sessionID uint, rotatingTokenID uint) (model.RotatingToken, error) {
