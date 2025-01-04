@@ -67,3 +67,20 @@ func VerifyJWT(j string, keypair model.DeploymentKeyPair, iss string) (jwt.Token
 
 	return token, nil
 }
+
+func ParseJWT(j string, keypair model.DeploymentKeyPair, iss string) (jwt.Token, error) {
+	publicKeyBlock, _ := pem.Decode([]byte(keypair.PublicKey))
+	publicKey, err := x509.ParsePKCS1PublicKey(publicKeyBlock.Bytes)
+
+	if err != nil {
+		return nil, err
+	}
+
+	token, err := jwt.ParseInsecure([]byte(j), jwt.WithKey(jwa.RS256(), publicKey), jwt.WithIssuer(fmt.Sprintf("https://%s", iss)))
+
+	if err != nil {
+		return nil, err
+	}
+
+	return token, nil
+}

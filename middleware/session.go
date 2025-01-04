@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -65,13 +66,15 @@ func handleNewSession(c *fiber.Ctx, deployment model.Deployment) error {
 
 func handleExistingSession(c *fiber.Ctx, deployment model.Deployment, sessionToken string) error {
 	token, err := utils.VerifyJWT(sessionToken, deployment.KepPair, deployment.Host)
-	if err != nil {
-		return handler.SendUnauthorized(c, err, "Invalid session")
-	}
 
-	exp, _ := token.Expiration()
-	if exp.Before(time.Now()) {
+	if errors.Is(err, jwt.TokenExpiredError()) {
+		token, err = utils.ParseJWT(sessionToken, deployment.KepPair, deployment.Host)
+		if err != nil {
+			return handler.SendUnauthorized(c, err, "Invalid session")
+		}
 		return refreshSession(c, token)
+	} else if err != nil {
+		return handler.SendUnauthorized(c, err, "Invalid session")
 	}
 
 	sessionID, _, err := extractTokenClaims(token)
