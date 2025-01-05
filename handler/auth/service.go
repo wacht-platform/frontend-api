@@ -72,7 +72,6 @@ func (s *AuthService) CreateSignInAttempt(email string, sessionID uint, authenti
 	attempt.SessionID = sessionID
 	attempt.FirstMethodAuthenticated = authenticated
 	attempt.SecondMethodAuthenticationRequired = secondFactorEnforced
-	attempt.LastActiveOrgID = lastActiveOrgID
 	return attempt
 }
 

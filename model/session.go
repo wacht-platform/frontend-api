@@ -14,6 +14,7 @@ const (
 	SessionStepVerifyPhone         CurrentSessionStep = "verify_phone"
 	SessionStepVerifyPhoneOTP      CurrentSessionStep = "verify_phone_otp"
 	SessionStepVerifyAuthenticator CurrentSessionStep = "verify_authenticator"
+	AddSecondFactor                CurrentSessionStep = "add_second_factor"
 )
 
 type Session struct {

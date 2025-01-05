@@ -34,8 +34,6 @@ type SignInAttempt struct {
 	FirstMethodAuthenticated           bool               `json:"first_method_authenticated"`
 	SecondMethodAuthenticated          bool               `json:"second_method_authenticated"`
 	SecondMethodAuthenticationRequired bool               `json:"second_method_authentication_required"`
-	UserID                             uint               `json:"user_id"`
-	LastActiveOrgID                    uint               `json:"last_active_org_id"`
 	CurrenStep                         CurrentSessionStep `json:"current_step"`
 	Completed                          bool               `json:"completed"`
 }

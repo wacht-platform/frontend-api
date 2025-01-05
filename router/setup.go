@@ -51,7 +51,6 @@ func setupAuthRoutes(router fiber.Router) {
 
 	router.Post("/signin", authHandler.SignIn)
 	router.Post("/signup", authHandler.SignUp)
-	router.Get("/methods", authHandler.AuthMethods)
 	router.Post("/sso", authHandler.InitSSO)
 	router.Get("/sso-callback", authHandler.SSOCallback)
 	router.Get("/identifier-availability", authHandler.CheckIdentifierAvailability)
