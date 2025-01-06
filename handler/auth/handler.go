@@ -16,11 +16,14 @@ import (
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwt"
+	"github.com/pquerna/otp/totp"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
 	"golang.org/x/oauth2/google"
 	"golang.org/x/oauth2/microsoft"
 	"gorm.io/gorm"
+
+	"net/smtp"
 )
 
 func signJWT(sessionID uint, iss string, exp time.Time, keypair model.DeploymentKeyPair) (string, error) {
@@ -31,6 +34,9 @@ func signJWT(sessionID uint, iss string, exp time.Time, keypair model.Deployment
 		NotBefore(time.Now()).
 		Claim("sess", sessionID).
 		Build()
+	if err != nil {
+		return "", err
+	}
 
 	privateKeyBlock, _ := pem.Decode([]byte(keypair.PrivateKey))
 	privateKey, err := x509.ParsePKCS1PrivateKey(privateKeyBlock.Bytes)
@@ -167,24 +173,14 @@ func SignIn(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Something went wrong")
 	}
 
-	if d.Mode == model.DeploymentModeStaging {
-		c.Cookie(&fiber.Cookie{
-			Name:    "__session",
-			Value:   token,
-			Path:    "/",
-			Expires: time.Now().Add(time.Hour * 24),
-		})
-	} else {
-		c.Cookie(&fiber.Cookie{
-			Name:     "__session",
-			Domain:   d.Host,
-			Path:     "/",
-			Value:    token,
-			HTTPOnly: true,
-			Secure:   true,
-			Expires:  time.Now().Add(time.Hour * 24),
-		})
-	}
+	c.Cookie(&fiber.Cookie{
+		Name:     "__session",
+		Domain:   d.Host,
+		Value:    token,
+		Path:     "/",
+		HTTPOnly: true,
+		Secure:   true,
+	})
 
 	return handler.SendSuccess(c, session)
 }
@@ -234,6 +230,15 @@ func SignUp(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Error hashing password")
 	}
 
+	totpKey, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      "Wacht",
+		AccountName: b.Email,
+	})
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Error generating TOTP secret")
+	}
+	totpSecret := totpKey.Secret()
+
 	u := model.User{
 		Model:               model.Model{ID: uint(snowflake.ID())},
 		FirstName:           b.FirstName,
@@ -247,6 +252,7 @@ func SignUp(c *fiber.Ctx) error {
 			Email:     b.Email,
 			IsPrimary: true,
 		}},
+		TOTPSecret:         totpSecret,
 		SchemaVersion:      model.SchemaVersionV1,
 		SecondFactorPolicy: d.AuthSettings.SecondFactorPolicy,
 		DeploymentID:       d.ID,
@@ -273,8 +279,20 @@ func SignUp(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Something went wrong")
 	}
 
+	passcode, err := totp.GenerateCode(u.TOTPSecret, time.Now())
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Error generating passcode")
+	}
+
+	fmt.Printf("Generated Passcode for %s: %s\n", u.PrimaryEmailAddress, passcode)
+
+	if err := SendOTP(u.PrimaryEmailAddress , passcode); err != nil {
+		return handler.SendInternalServerError(c, err, "Error sending OTP email")
+	}
+
 	return handler.SendSuccess(c, u)
 }
+
 
 func AuthMethods(c *fiber.Ctx) error {
 	d := handler.GetDeployment(c)
@@ -454,3 +472,60 @@ func SSOCallback(c *fiber.Ctx) error {
 
 	return handler.SendSuccess(c, fiber.Map{})
 }
+
+func SendOTP(email string, otp string) error {
+  smtpHost := "email-smtp.ap-south-1.amazonaws.com"
+	smtpPort := "587"
+	username := "AKIAXYKJVFAQR4XQ3PGA"
+	password := "BJTY7M850mnFoKPvhzxFJpBPhpQxfvaXGv4MY7GWdWuw"
+
+  auth := smtp.PlainAuth("", username, password, smtpHost)
+
+  htmlBody := fmt.Sprintf(`
+  <div style="font-family: Helvetica, Arial, sans-serif; max-width: 90%%; margin: auto; line-height: 1.6; color: #333; padding: 20px; box-sizing: border-box;">
+    <div style="margin: auto; padding: 20px; background: #f9f9f9; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);">
+      <div style="border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
+        <a href="#" style="font-size: 1.5em; color: #000; text-decoration: none; font-weight: bold;">Intellinesia</a>
+      </div>
+      <p style="font-size: 1.2em; margin-bottom: 10px;">Hi,</p>
+      <p style="margin-bottom: 20px;">Thank you for choosing Wacht. Use the following OTP to complete your Sign Up procedures. OTP is valid for 5 minutes:</p>
+      <h2 style="background: #000; color: #fff; padding: 10px 20px; border-radius: 5px; display: inline-block; margin: 0 auto;">%s</h2>
+      <p style="font-size: 1em; margin-top: 20px;">Regards,<br><strong>Wacht</strong></p>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+      <div style="text-align: right; color: #aaa; font-size: 0.9em; line-height: 1.4;">
+        <p style="margin: 0;">Intellinesia LTD</p>
+        <p style="margin: 0;">Kolkata</p>
+        <p style="margin: 0;">India</p>
+      </div>
+    </div>
+  </div>
+  `, otp)
+
+  subject := "Subject: Your OTP Code\r\n"
+	contentType := "MIME-Version: 1.0\r\nContent-Type: text/html; charset=\"UTF-8\"\r\n\r\n"
+	msg := []byte(subject + contentType + htmlBody)
+
+
+  smtpServer := fmt.Sprintf("%s:%s", smtpHost, smtpPort)
+	err := smtp.SendMail(smtpServer, auth, username, []string{email}, msg)
+	if err != nil {
+		return fmt.Errorf("failed to send email to %s: %w", email, err)
+	}
+
+  return nil
+}
+
+
+//Verify OTP
+func VerifyOTP(secret, passcode string) (bool, error) {
+	valid := totp.Validate(passcode, secret)
+	if !valid {
+		return false, fiber.NewError(fiber.StatusBadRequest, "Invalid passcode")
+	}
+	return true, nil
+}
+
+
+
+
+
