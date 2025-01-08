@@ -97,24 +97,36 @@ func (s *AuthService) ValidateSignUpRequest(b *SignUpRequest, d model.Deployment
 	return nil
 }
 
-func (s *AuthService) CreateUser(b *SignUpRequest, hashedPassword string, deploymentID uint, secondFactorPolicy model.SecondFactorPolicy) model.User {
-	return model.User{
-		Model:               model.Model{ID: uint(snowflake.ID())},
-		FirstName:           b.FirstName,
-		LastName:            b.LastName,
-		Username:            b.Username,
-		Password:            hashedPassword,
-		PhoneNumber:         b.PhoneNumber,
-		PrimaryEmailAddress: b.Email,
+func (s *AuthService) CreateUser(b *SignUpRequest, hashedPassword string, deploymentID uint, secondFactorPolicy model.SecondFactorPolicy, otpSecret string) model.User {
+	emailID := uint(snowflake.ID())
+	u := model.User{
+		Model:                 model.Model{ID: uint(snowflake.ID())},
+		FirstName:             b.FirstName,
+		LastName:              b.LastName,
+		Username:              b.Username,
+		Password:              hashedPassword,
+		PrimaryEmailAddressID: emailID,
 		UserEmailAddresses: []*model.UserEmailAddress{{
-			Model:     model.Model{ID: uint(snowflake.ID())},
+			Model:     model.Model{ID: emailID},
 			Email:     b.Email,
 			IsPrimary: true,
 		}},
 		SchemaVersion:      model.SchemaVersionV1,
 		SecondFactorPolicy: secondFactorPolicy,
 		DeploymentID:       deploymentID,
+		OtpSecret:          otpSecret,
 	}
+
+	if b.PhoneNumber != "" {
+		phoneNumberID := uint(snowflake.ID())
+		u.UserPhoneNumbers = append(u.UserPhoneNumbers, &model.UserPhoneNumber{
+			Model:       model.Model{ID: phoneNumberID},
+			PhoneNumber: b.PhoneNumber,
+			Verified:    false,
+		})
+	}
+
+	return u
 }
 
 func (s *AuthService) CreateSocialConnection(userID uint, emailID uint, provider model.SSOProvider, email string, token *oauth2.Token) model.SocialConnection {

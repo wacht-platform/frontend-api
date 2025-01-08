@@ -7,7 +7,9 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/ilabs/wacht-fe/handler/auth"
 	"github.com/ilabs/wacht-fe/handler/deployment"
+	"github.com/ilabs/wacht-fe/handler/organization"
 	"github.com/ilabs/wacht-fe/handler/session"
+	"github.com/ilabs/wacht-fe/handler/workspace"
 	"github.com/ilabs/wacht-fe/middleware"
 )
 
@@ -25,6 +27,12 @@ func setupRoutes(app *fiber.App) {
 
 	sessions := app.Group("/session")
 	setupSessionRoutes(sessions)
+
+	organizations := app.Group("/organizations")
+	setupOrganizationRoutes(organizations)
+
+	workspaces := app.Group("/workspaces")
+	setupWorkspaceRoutes(workspaces)
 }
 
 func setupMiddleware(app *fiber.App) {
@@ -54,6 +62,8 @@ func setupAuthRoutes(router fiber.Router) {
 	router.Post("/sso", authHandler.InitSSO)
 	router.Get("/sso-callback", authHandler.SSOCallback)
 	router.Get("/identifier-availability", authHandler.CheckIdentifierAvailability)
+	router.Post("/prepare-verification", authHandler.PrepareVerification)
+	router.Post("/verify-otp", authHandler.VerifyOTP)
 }
 
 func setupDeploymentRoutes(router fiber.Router) {
@@ -66,4 +76,26 @@ func setupSessionRoutes(router fiber.Router) {
 	router.Get("/", sessionHandler.GetCurrentSession)
 	router.Post("/switch-sign-in", sessionHandler.SwitchActiveSignIn)
 	router.Post("/sign-out", sessionHandler.SignOut)
+}
+
+func setupOrganizationRoutes(router fiber.Router) {
+	orgHandler := organization.NewHandler()
+
+	router.Post("/", orgHandler.CreateOrganization)
+	router.Get("/:id", orgHandler.GetOrganization)
+	router.Put("/:id", orgHandler.UpdateOrganization)
+	router.Delete("/:id", orgHandler.DeleteOrganization)
+	router.Post("/:id/members", orgHandler.InviteMember)
+	router.Delete("/:id/members/:memberId", orgHandler.RemoveMember)
+}
+
+func setupWorkspaceRoutes(router fiber.Router) {
+	workspaceHandler := workspace.NewHandler()
+
+	router.Post("/", workspaceHandler.CreateWorkspace)
+	router.Get("/:id", workspaceHandler.GetWorkspace)
+	router.Put("/:id", workspaceHandler.UpdateWorkspace)
+	router.Delete("/:id", workspaceHandler.DeleteWorkspace)
+	router.Post("/:id/members", workspaceHandler.InviteMember)
+	router.Delete("/:id/members/:memberId", workspaceHandler.RemoveMember)
 }

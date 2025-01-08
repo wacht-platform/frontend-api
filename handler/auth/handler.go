@@ -7,6 +7,7 @@ import (
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/utils"
+	"github.com/pquerna/otp/totp"
 	"gorm.io/gorm"
 )
 
@@ -108,7 +109,15 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Error hashing password")
 	}
 
-	u := h.service.CreateUser(b, hashedPassword, d.ID, d.AuthSettings.SecondFactorPolicy)
+	otpSecret, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      d.Project.Name,
+		AccountName: b.Email,
+	})
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Error generating OTP secret")
+	}
+
+	u := h.service.CreateUser(b, hashedPassword, d.ID, d.AuthSettings.SecondFactorPolicy, otpSecret.Secret())
 	completed := !d.AuthSettings.VerificationPolicy.Email
 	attempt := h.service.CreateSignInAttempt(b.Email, session.ID, false, false, model.SessionStepVerifyEmailOTP, completed, 0)
 
@@ -129,7 +138,7 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Something went wrong")
 	}
 
-	return handler.SendSuccess(c, u)
+	return handler.SendSuccess(c, session)
 }
 
 func (h *Handler) AuthMethods(c *fiber.Ctx) error {
@@ -203,12 +212,21 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			return h.service.HandleExistingUser(tx, &email, token, &attempt, deployment.AuthSettings)
 		}
 
+		otpSecret, err := totp.Generate(totp.GenerateOpts{
+			Issuer:      deployment.Project.Name,
+			AccountName: user.Email,
+		})
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Error generating OTP secret")
+		}
+
 		u := model.User{
-			Model:               model.Model{ID: uint(snowflake.ID())},
-			PrimaryEmailAddress: user.Email,
-			SchemaVersion:       model.SchemaVersionV1,
-			SecondFactorPolicy:  deployment.AuthSettings.SecondFactorPolicy,
-			DeploymentID:        deployment.ID,
+			Model:                 model.Model{ID: uint(snowflake.ID())},
+			SchemaVersion:         model.SchemaVersionV1,
+			SecondFactorPolicy:    deployment.AuthSettings.SecondFactorPolicy,
+			DeploymentID:          deployment.ID,
+			OtpSecret:             otpSecret.Secret(),
+			PrimaryEmailAddressID: uint(snowflake.ID()),
 		}
 
 		if err := tx.Create(&u).Error; err != nil {
@@ -216,7 +234,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		}
 
 		email := model.UserEmailAddress{
-			Model:     model.Model{ID: uint(snowflake.ID())},
+			Model:     model.Model{ID: u.PrimaryEmailAddressID},
 			Email:     user.Email,
 			IsPrimary: true,
 			UserID:    u.ID,
@@ -259,4 +277,12 @@ func (h *Handler) CheckIdentifierAvailability(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, fiber.Map{
 		"exists": exists,
 	})
+}
+
+func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
+	return handler.SendSuccess[any](c, nil)
+}
+
+func (h *Handler) VerifyOTP(c *fiber.Ctx) error {
+	return handler.SendSuccess[any](c, nil)
 }
