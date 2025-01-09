@@ -81,5 +81,4 @@ type User struct {
 	LastActiveOrgID     uint
 	DeploymentID        uint
 	TOTPSecret					string
-	// Verified 						bool
 }

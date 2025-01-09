@@ -41,7 +41,7 @@ func setupAuthRoutes(router fiber.Router) {
 	router.Get("/methods", auth.AuthMethods)
 	router.Post("/sso", auth.InitSSO)
 	router.Get("/sso-callback", auth.SSOCallback)
-	// router.Post("/otp-verify", auth.VerifyOTP)
+	router.Post("/otp-verify", auth.VerifyOTP)
 }
 
 func setupDeploymentRoutes(router fiber.Router) {

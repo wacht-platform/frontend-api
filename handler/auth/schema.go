@@ -15,3 +15,8 @@ type SignUpRequest struct {
 	Email       string `form:"email"`
 	Password    string `form:"password"`
 }
+
+type VerifyOTPRequest struct {
+	Email string `form:"email"`
+	Passcode string `form:"passcode"`	
+}

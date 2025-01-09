@@ -516,16 +516,41 @@ func SendOTP(email string, otp string) error {
 }
 
 
-//Verify OTP
-func VerifyOTP(secret, passcode string) (bool, error) {
-	valid := totp.Validate(passcode, secret)
-	if !valid {
-		return false, fiber.NewError(fiber.StatusBadRequest, "Invalid passcode")
+// func VerifyOTP(secret, passcode string) (bool, error) {
+// 	valid := totp.Validate(passcode, secret)
+// 	if !valid {
+// 		return false, fiber.NewError(fiber.StatusBadRequest, "Invalid passcode")
+// 	}
+// 	return true, nil
+// }
+
+func VerifyOTP(c *fiber.Ctx) error {
+	b, verr := handler.Validate[VerifyOTPRequest](c)
+	if verr != nil {
+			return handler.SendBadRequest(c, verr, "Bad request body")
 	}
-	return true, nil
+
+	var email model.UserEmailAddress
+	if err := database.Connection.Where("email = ?", b.Email).First(&email).Error; err != nil {
+			return handler.SendNotFound(c, nil, "Email not found")
+	}
+
+	valid := totp.Validate(b.Passcode, email.User.TOTPSecret)
+	if !valid {
+			return handler.SendBadRequest(c, nil, "Invalid passcode")
+	}
+
+	email.Verified = true
+	email.VerifiedAt = time.Now()
+
+	if err := database.Connection.Save(&email).Error; err != nil {
+			return handler.SendInternalServerError(c, err, "Error updating verification status")
+	}
+
+	return handler.SendSuccess(c, fiber.Map{
+			"message": "Email verified successfully",
+		})
 }
-
-
 
 
 
