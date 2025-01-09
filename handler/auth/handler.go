@@ -1,6 +1,11 @@
 package auth
 
 import (
+	"fmt"
+	"log"
+	"net/smtp"
+	"time"
+
 	"github.com/godruoyi/go-snowflake"
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/database"
@@ -9,7 +14,6 @@ import (
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/pquerna/otp/totp"
 	"gorm.io/gorm"
-	"time"
 )
 
 type Handler struct {
@@ -110,22 +114,17 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Error hashing password")
 	}
 
-	// totpKey, err := totp.Generate(totp.GenerateOpts{
-	// 	Issuer:      "Wacht",
-	// 	AccountName: b.Email,
-	// })
-	// if err != nil {
-	// 	return handler.SendInternalServerError(c, err, "Error generating TOTP secret")
-	// }
-	// totpSecret := totpKey.Secret()
-
 	otpSecret, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      d.Project.Name,
+		Issuer:      "Intellinesia",
 		AccountName: b.Email,
 	})
+
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Error generating OTP secret")
 	}
+
+	totpSecret := otpSecret.Secret()
+	log.Printf("OTP Secret: %s", totpSecret)
 
 	u := h.service.CreateUser(b, hashedPassword, d.ID, d.AuthSettings.SecondFactorPolicy, otpSecret.Secret())
 	completed := !d.AuthSettings.VerificationPolicy.Email
@@ -148,9 +147,30 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Something went wrong")
 	}
 
+	passcode, err := totp.GenerateCode(u.OtpSecret, time.Now())
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Error generating passcode")
+	}
+
+	var primaryEmailAddress string
+  if len(u.UserEmailAddresses) > 0 {
+	for _, email := range u.UserEmailAddresses {
+		if email.ID == u.PrimaryEmailAddressID {
+			primaryEmailAddress = email.Email
+			break
+		}
+	}
+ } else {
+	primaryEmailAddress = ""
+ }
+
+	fmt.Printf("Generated Passcode for %s: %s\n", primaryEmailAddress, passcode)
+
+	if err := SendOTP(primaryEmailAddress , passcode); err != nil {
+		return handler.SendInternalServerError(c, err, "Error sending OTP email")
+	}
 	return handler.SendSuccess(c, session)
 }
-
 
 func (h *Handler) AuthMethods(c *fiber.Ctx) error {
 	d := handler.GetDeployment(c)
@@ -292,6 +312,49 @@ func (h *Handler) CheckIdentifierAvailability(c *fiber.Ctx) error {
 
 func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 	return handler.SendSuccess[any](c, nil)
+}
+
+//Send OTP handler
+func SendOTP(email string, otp string) error {
+  smtpHost := "email-smtp.ap-south-1.amazonaws.com"
+	smtpPort := "587"
+	username := "AKIAXYKJVFAQ24RZJHNI"
+	password := "BAJNuLC5XsikqeyxIWq0NqSDFoR02Hq4USzcS24QEjTM"
+
+  auth := smtp.PlainAuth("", username, password, smtpHost)
+
+  htmlBody := fmt.Sprintf(`
+  <div style="font-family: Helvetica, Arial, sans-serif; max-width: 90%%; margin: auto; line-height: 1.6; color: #333; padding: 20px; box-sizing: border-box;">
+    <div style="margin: auto; padding: 20px; background: #f9f9f9; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);">
+      <div style="border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
+        <a href="#" style="font-size: 1.5em; color: #000; text-decoration: none; font-weight: bold;">Intellinesia</a>
+      </div>
+      <p style="font-size: 1.2em; margin-bottom: 10px;">Hi,</p>
+      <p style="margin-bottom: 20px;">Thank you for choosing Wacht. Use the following OTP to complete your Sign Up procedures. OTP is valid for 5 minutes:</p>
+      <h2 style="background: #000; color: #fff; padding: 10px 20px; border-radius: 5px; display: inline-block; margin: 0 auto;">%s</h2>
+      <p style="font-size: 1em; margin-top: 20px;">Regards,<br><strong>Wacht</strong></p>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+      <div style="text-align: right; color: #aaa; font-size: 0.9em; line-height: 1.4;">
+        <p style="margin: 0;">Intellinesia LTD</p>
+        <p style="margin: 0;">Kolkata</p>
+        <p style="margin: 0;">India</p>
+      </div>
+    </div>
+  </div>
+  `, otp)
+
+	subject := "Subject: Your OTP Code\r\n"
+	contentType := "MIME-Version: 1.0\r\nContent-Type: text/html; charset=\"UTF-8\"\r\n\r\n"
+	msg := []byte(subject + contentType + htmlBody)
+
+
+  smtpServer := fmt.Sprintf("%s:%s", smtpHost, smtpPort)
+	err := smtp.SendMail(smtpServer, auth, username, []string{email}, msg)
+	if err != nil {
+		return fmt.Errorf("failed to send email to %s: %w", email, err)
+	}
+
+  return nil
 }
 
 //Verify OTP handler
