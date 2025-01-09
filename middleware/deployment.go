@@ -8,8 +8,8 @@ import (
 
 func SetDeploymentMiddleware(c *fiber.Ctx) error {
 	host := c.Hostname()
-	var deployment model.Deployment
-	err := database.Connection.Where("host = ?", host).Joins("OrgSettings").Joins("AuthSettings").Preload("SSOConnections").First(&deployment).Error
+	deployment := new(model.Deployment)
+	err := database.Connection.Where("host = ?", host).Joins("OrgSettings").Joins("AuthSettings").Joins("KepPair").Preload("SSOConnections").First(&deployment).Error
 
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{
@@ -17,7 +17,7 @@ func SetDeploymentMiddleware(c *fiber.Ctx) error {
 		})
 	}
 
-	c.Locals("deployment", deployment)
+	c.Locals("deployment", *deployment)
 
 	return c.Next()
 }

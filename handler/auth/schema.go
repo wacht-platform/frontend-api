@@ -1,5 +1,8 @@
 package auth
 
+import "github.com/ilabs/wacht-fe/model"
+
+// SignInRequest represents the sign in request payload
 type SignInRequest struct {
 	Username string `form:"username"`
 	Email    string `form:"email"`
@@ -7,6 +10,7 @@ type SignInRequest struct {
 	Password string `form:"password"`
 }
 
+// SignUpRequest represents the sign up request payload
 type SignUpRequest struct {
 	FirstName   string `form:"firstName"`
 	LastName    string `form:"lastName"`
@@ -16,7 +20,23 @@ type SignUpRequest struct {
 	Password    string `form:"password"`
 }
 
+// SSOCallbackResponse represents the SSO callback response
+type SSOCallbackResponse struct {
+	Session model.Session `json:"session"`
+}
+
+// AuthMethodsResponse represents the auth methods response
+type AuthMethodsResponse struct {
+	AuthSettings model.AuthSettings `json:"auth_settings"`
+}
+
+// InitSSOResponse represents the SSO initialization response
+type InitSSOResponse struct {
+	OAuthURL string        `json:"oauth_url"`
+	Session  model.Session `json:"session"`
+}
+
 type VerifyOTPRequest struct {
-	Email string `form:"email"`
-	Passcode string `form:"passcode"`	
+	Email string `json:"email"`
+	Passcode string `json:"otp"`
 }

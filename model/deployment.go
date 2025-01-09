@@ -36,6 +36,11 @@ type Deployment struct {
 	AuthSettings    AuthSettings      `json:"auth_settings"`
 	SSOConnections  []SSOConnection   `json:"sso_connections"`
 	ProjectID       uint              `json:"project_id"`
+	Project         Project           `json:"-"`
 	Mode            DeploymentMode    `json:"mode"`
 	KepPair         DeploymentKeyPair `json:"-"`
+}
+
+func (d *Deployment) IsProduction() bool {
+	return d.Mode == DeploymentModeProduction
 }
