@@ -167,6 +167,7 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 	fmt.Printf("Generated Passcode for %s: %s\n", primaryEmailAddress, passcode)
 
 	if err := SendOTP(primaryEmailAddress , passcode); err != nil {
+		log.Println("Error sending OTP email: ", err)
 		return handler.SendInternalServerError(c, err, "Error sending OTP email")
 	}
 	return handler.SendSuccess(c, session)
@@ -316,10 +317,11 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 
 //Send OTP handler
 func SendOTP(email string, otp string) error {
-  smtpHost := "email-smtp.ap-south-1.amazonaws.com"
+  smtpHost :=  "smtp.zeptomail.in"
 	smtpPort := "587"
-	username := "AKIAXYKJVFAQ24RZJHNI"
-	password := "BAJNuLC5XsikqeyxIWq0NqSDFoR02Hq4USzcS24QEjTM"
+	username := "emailapikey"
+	password := "PHtE6r1cR7rsgmEsoEMI4vPsRMWlZ41/r75kK1EWstkUA6NRGE0H+dt9kmPkoxopA6NGEvKZyNlgsrLK5rmDIT7qMjtEWWqyqK3sx/VYSPOZsbq6x00VtFoedELVU4TodNJj0Czfs97bNA=="
+	from := "marketing@wacht.tech"
 
   auth := smtp.PlainAuth("", username, password, smtpHost)
 
@@ -349,7 +351,7 @@ func SendOTP(email string, otp string) error {
 
 
   smtpServer := fmt.Sprintf("%s:%s", smtpHost, smtpPort)
-	err := smtp.SendMail(smtpServer, auth, username, []string{email}, msg)
+	err := smtp.SendMail(smtpServer, auth, from, []string{email}, msg)
 	if err != nil {
 		return fmt.Errorf("failed to send email to %s: %w", email, err)
 	}
