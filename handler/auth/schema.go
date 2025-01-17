@@ -1,6 +1,8 @@
 package auth
 
-import "github.com/ilabs/wacht-fe/model"
+import (
+	"github.com/ilabs/wacht-fe/model"
+)
 
 // SignInRequest represents the sign in request payload
 type SignInRequest struct {
@@ -39,4 +41,13 @@ type InitSSOResponse struct {
 type VerifyOTPRequest struct {
 	Email string `json:"email"`
 	Passcode string `json:"otp"`
+}
+
+type PrepareVerificationRequest struct {
+	Email string `json:"email"`
+}
+
+type ResetPasswordRequest struct {
+	Email string `json:"email"`
+	Password string `json:"password"`
 }

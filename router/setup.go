@@ -40,6 +40,7 @@ func setupMiddleware(app *fiber.App) {
 	app.Use(cors.New(corsSettings()))
 	app.Use(middleware.SetDeploymentMiddleware)
 	app.Use(middleware.SetSessionMiddleware)
+	app.Use(middleware.RateLimiter)
 }
 
 func corsSettings() cors.Config {
@@ -64,6 +65,8 @@ func setupAuthRoutes(router fiber.Router) {
 	router.Get("/identifier-availability", authHandler.CheckIdentifierAvailability)
 	router.Post("/prepare-verification", authHandler.PrepareVerification)
 	router.Post("/verify-otp", authHandler.VerifyOTP)
+	router.Post("/prepare-reset-password", authHandler.PreparePasswordReset)
+	router.Post("/reset-password", authHandler.ResetPassword)
 }
 
 func setupDeploymentRoutes(router fiber.Router) {
