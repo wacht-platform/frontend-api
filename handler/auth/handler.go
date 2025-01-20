@@ -48,7 +48,6 @@ func validatePassword(password string) error {
 	return nil
 }
 
-
 func (h *Handler) SignIn(c *fiber.Ctx) error {
 	b, verr := handler.Validate[SignInRequest](c)
 
@@ -88,6 +87,21 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 
 	step, completed := h.service.DetermineAuthenticationStep(email.Verified, authenticated, secondFactorEnforced, d.AuthSettings)
 	attempt := h.service.CreateSignInAttempt(b.Email, session.ID, authenticated, secondFactorEnforced, step, completed, email.User.LastActiveOrgID)
+
+	if authenticated && secondFactorEnforced && d.AuthSettings.SecondFactor == model.SecondFactorEmailOTP {
+		passcode, err := totp.GenerateCode(email.User.OtpSecret, time.Now())
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Error generating OTP")
+		}
+
+		primaryEmailAddress := email.Email
+		if err := SendOTP(primaryEmailAddress, passcode); err != nil {
+			log.Println("Error sending OTP email: ", err)
+			return handler.SendInternalServerError(c, err, "Error sending OTP email")
+		}
+		
+		log.Printf("Generated Passcode for %s: %s\n", primaryEmailAddress, passcode)
+	}
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(attempt).Error; err != nil {
