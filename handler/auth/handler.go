@@ -18,6 +18,7 @@ import (
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/pquerna/otp/totp"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -411,6 +412,40 @@ func SendOTP(email string, otp string) error {
   return nil
 }
 
+//Generate Backup
+func generateBackupCodes(userID uint, db *gorm.DB) ([]string, error) {
+	const backupCodeCount = 2
+
+	var user model.User
+	if err := db.Where("id = ?", userID).First(&user).Error; err != nil {
+		return nil, fmt.Errorf("failed to find user with ID %d: %w", userID, err)
+	}
+
+	if len(user.BackupCodes) > 0 {
+		return nil, fmt.Errorf("backup codes already exist for user ID %d", userID)
+	}
+
+	var rawCodes []string
+	var hashedCodes []string
+	for i := 0; i < backupCodeCount; i++ {
+		rawCode := fmt.Sprintf("%d", snowflake.ID())
+		rawCodes = append(rawCodes, rawCode)
+
+		hashedCode, err := bcrypt.GenerateFromPassword([]byte(rawCode), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, fmt.Errorf("failed to hash backup code: %w", err)
+		}
+		hashedCodes = append(hashedCodes, string(hashedCode))
+	}
+
+	user.BackupCodes = hashedCodes
+	if err := db.Save(&user).Error; err != nil {
+		return nil, fmt.Errorf("failed to save backup codes for user ID %d: %w", userID, err)
+	}
+
+	return rawCodes, nil
+}
+
 //Verify OTP handler
 func (h *Handler) VerifyOTP(c *fiber.Ctx) error {
 	b, verr := handler.Validate[VerifyOTPRequest](c)
@@ -530,9 +565,15 @@ func (h *Handler) SetupAuthenticator(c *fiber.Ctx) error {
 	}
 	png.Encode(&buf, img)
 
+	backupCodes, err := generateBackupCodes(email.User.ID, database.Connection)
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Error generating backup codes")
+	}
+
 	return c.JSON(fiber.Map{
 		"message":       "Scan the QR code with your authenticator app to complete setup",
 		"qr_code_image": base64.StdEncoding.EncodeToString(buf.Bytes()),
+		"backup_codes":  backupCodes,
 	})
 }
 
