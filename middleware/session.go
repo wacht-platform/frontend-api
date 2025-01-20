@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
@@ -161,4 +162,24 @@ func validateRotatingToken(sessionID uint, rotatingTokenID uint) (model.Rotating
 	}
 
 	return rotatingToken, nil
+}
+
+//Fixed Window Rate Limiting for the API endpoints to prevent abuse of the service by a single user or IP address (7 requests per 10 seconds).
+func RateLimiter() fiber.Handler {
+
+	// storage :=  redis.New(redis.Config{
+		
+	// })
+
+	return limiter.New(limiter.Config{
+		Max:         7,                            
+		Expiration:  10 * time.Second,
+		KeyGenerator: func(c *fiber.Ctx) string { 
+			return c.IP()
+		},
+		LimitReached: func(c *fiber.Ctx) error { 
+			return fiber.NewError(fiber.StatusTooManyRequests, "Too many requests, please try again later.")
+		},
+		//  Storage: storage,
+	})
 }
