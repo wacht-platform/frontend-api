@@ -1,8 +1,11 @@
 package auth
 
 import (
+	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"image/png"
 	"log"
 	"net/smtp"
 	"regexp"
@@ -73,6 +76,10 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 	secondFactorEnforced := d.AuthSettings.SecondFactorPolicy == model.SecondFactorPolicyEnforced ||
 		email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced
 
+		if (d.AuthSettings.SecondFactor == model.SecondFactorEmailOTP || d.AuthSettings.SecondFactor == model.SecondFactorAuthenticator) && !email.Verified {
+			return handler.SendForbidden(c, nil, "Second factor verification required before sign-in.")
+		}
+
 	authenticated := false
 	if b.Password != "" {
 		match, err := h.service.VerifyPassword(email.User.Password, b.Password)
@@ -99,7 +106,7 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 			log.Println("Error sending OTP email: ", err)
 			return handler.SendInternalServerError(c, err, "Error sending OTP email")
 		}
-		
+
 		log.Printf("Generated Passcode for %s: %s\n", primaryEmailAddress, passcode)
 	}
 
@@ -486,6 +493,46 @@ func (h *Handler) PreparePasswordReset(c *fiber.Ctx) error {
 
 	return handler.SendSuccess(c, fiber.Map{
 		"message": "Passcode sent successfully",
+	})
+}
+
+//Setup Authenticator handler
+func (h *Handler) SetupAuthenticator(c *fiber.Ctx) error {
+	b, verr := handler.Validate[SetupAuthenticatorRequest](c)
+	if verr != nil {
+		return handler.SendBadRequest(c, verr, "Bad request body")
+	}
+
+	var email model.UserEmailAddress
+	if err := database.Connection.Where("email = ?", b.Email).First(&email).Error; err != nil {
+		return handler.SendNotFound(c, nil, "Email not found")
+	}
+
+	secret := email.User.OtpSecret
+	
+	if secret == "" {
+		return handler.SendBadRequest(c, nil, "OTP secret not found. Please make sure the authenticator is set up.")
+	}
+
+	otpKey, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      "Intellinesia",
+		AccountName: b.Email,
+		Secret:      []byte(secret),
+	})
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Error generating OTP key")
+	}
+
+	var buf bytes.Buffer
+	img, err := otpKey.Image(200, 200)
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Error generating QR code")
+	}
+	png.Encode(&buf, img)
+
+	return c.JSON(fiber.Map{
+		"message":       "Scan the QR code with your authenticator app to complete setup",
+		"qr_code_image": base64.StdEncoding.EncodeToString(buf.Bytes()),
 	})
 }
 

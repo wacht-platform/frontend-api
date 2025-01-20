@@ -51,3 +51,7 @@ type ResetPasswordRequest struct {
 	Email string `json:"email"`
 	Password string `json:"password"`
 }
+
+type SetupAuthenticatorRequest struct {
+	Email string `json:"email"`
+}
