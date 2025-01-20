@@ -63,7 +63,7 @@ func setupAuthRoutes(router fiber.Router) {
 	router.Post("/sso", authHandler.InitSSO)
 	router.Get("/sso-callback", authHandler.SSOCallback)
 	router.Get("/identifier-availability", authHandler.CheckIdentifierAvailability)
-	router.Get("/prepare-authentication", authHandler.PrepareAuthentication)
+	router.Get("/prepare-authentication", authHandler.SetupAuthenticator)
 	router.Post("/prepare-verification", authHandler.PrepareVerification)
 	router.Post("/verify-otp", authHandler.VerifyOTP)
 	router.Post("/prepare-reset-password", authHandler.PreparePasswordReset)
