@@ -2,13 +2,18 @@ package auth
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"image/png"
+	"io"
 	"log"
+	"net/http"
 	"net/smtp"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/godruoyi/go-snowflake"
@@ -30,6 +35,45 @@ func NewHandler() *Handler {
 	return &Handler{
 		service: NewAuthService(),
 	}
+}
+
+//function to check pawned password
+func pawnedPassword(password string) (bool, error) {
+	hasher := sha1.New()
+	hasher.Write([]byte(password))
+	hash := hex.EncodeToString(hasher.Sum(nil))
+
+	prefix := strings.ToUpper(hash[:5])
+	suffix := strings.ToUpper(hash[5:])
+
+	url := fmt.Sprintf("https://api.pwnedpasswords.com/range/%s", prefix)
+	resp, err := http.Get(url)
+	if err != nil {
+		return false, fmt.Errorf("failed to query HIBP API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false, errors.New("unexpected response from HIBP API")
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, fmt.Errorf("failed to read HIBP API response: %w", err)
+	}
+
+	hashes := strings.Split(string(body), "\n")
+	for _, line := range hashes {
+		parts := strings.Split(line, ":")
+		if len(parts) != 2 {
+			continue
+		}
+		if parts[0] == suffix {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 //function for validate password

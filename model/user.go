@@ -14,6 +14,10 @@ const (
 	OauthGoogle    VerificationStrategy = "oath_google"
 	OauthGithub    VerificationStrategy = "oath_github"
 	OauthMicrosoft VerificationStrategy = "oauth_microsoft"
+	OauthFacebook  VerificationStrategy = "oauth_facebook"
+	OauthLinkedIn  VerificationStrategy = "oauth_linkedin"
+	OauthDiscord   VerificationStrategy = "oauth_discord"
+	OauthApple     VerificationStrategy = "oauth_apple"	
 )
 
 func (o *VerificationStrategy) Scan(value interface{}) error {

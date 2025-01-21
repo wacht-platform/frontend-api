@@ -21,6 +21,36 @@ var ssoConfig = map[string]model.OauthCredentials{
 		RedirectURI:  "http://localhost:5173/auth/sso/github/callback",
 		Scopes:       []string{"user"},
 	},
+	"facebook_oauth": {
+		ClientID:     "",
+		ClientSecret: "",
+		RedirectURI:  "http://localhost:5173/auth/sso/facebook/callback",
+		Scopes:       []string{"email"},
+	},
+	"twitter_oauth": {
+		ClientID:     "",
+		ClientSecret: "",
+		RedirectURI:  "http://localhost:5173/auth/sso/twitter/callback",
+		Scopes:       []string{"email"},
+	},
+	"apple_oauth": {
+		ClientID:     "",
+		ClientSecret: "",
+		RedirectURI:  "http://localhost:5173/auth/sso/apple/callback",
+		Scopes:       []string{"email"},
+	},
+	"linkedin_oauth": {
+		ClientID:     "",
+		ClientSecret: "",
+		RedirectURI:  "http://localhost:5173/auth/sso/linkedin/callback",
+		Scopes:       []string{"r_liteprofile", "r_emailaddress"},
+	},
+	"discord_oauth": {
+		ClientID:     "",
+		ClientSecret: "",
+		RedirectURI:  "http://localhost:5173/auth/sso/discord/callback",
+		Scopes:       []string{"identify", "email"},
+	},
 }
 
 func GetDefaultOAuthCredentials(name string) model.OauthCredentials {
