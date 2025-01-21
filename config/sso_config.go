@@ -21,6 +21,12 @@ var ssoConfig = map[string]model.OauthCredentials{
 		RedirectURI:  "http://localhost:5173/auth/sso/github/callback",
 		Scopes:       []string{"user"},
 	},
+	"x_oauth": {
+		ClientID:     "UUxlLVNrYk1mV0JaQ0xBWk00bVo6MTpjaQ",
+		ClientSecret: "bZ8ElbpQ2raCEoAhP39USo_5ccHnl0TLtTARI4I16e5q8CYq0m",
+		RedirectURI:  "http://localhost:3000",
+		Scopes:       []string{"users.read", "offline.access"},
+	},
 }
 
 func GetDefaultOAuthCredentials(name string) model.OauthCredentials {

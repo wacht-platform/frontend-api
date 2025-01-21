@@ -35,6 +35,11 @@ func GenerateVerificationUrl(ssoProvider model.SSOProvider, attempt model.SignIn
 
 	switch ssoProvider {
 	case model.SSOProviderX:
+		conf.Endpoint = oauth2.Endpoint{
+			AuthURL:  "https://x.com/i/oauth2/authorize",
+			TokenURL: "https://x.com/i/oauth2/token",
+		}
+		url = conf.AuthCodeURL(strconv.FormatUint(uint64(attempt.ID), 10))
 	case model.SSOProviderGitHub:
 		conf.Endpoint = github.Endpoint
 		url = conf.AuthCodeURL(strconv.FormatUint(uint64(attempt.ID), 10))
@@ -46,6 +51,7 @@ func GenerateVerificationUrl(ssoProvider model.SSOProvider, attempt model.SignIn
 	case model.SSOProviderMicrosoft:
 		conf.Endpoint = microsoft.AzureADEndpoint("")
 		url = conf.AuthCodeURL(strconv.FormatUint(uint64(attempt.ID), 10))
+
 	case model.SSOProviderLinkedIn:
 	case model.SSOProviderDiscord:
 	}
