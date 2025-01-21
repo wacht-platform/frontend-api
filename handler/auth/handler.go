@@ -1,8 +1,11 @@
 package auth
 
 import (
+	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"image/png"
 	"log"
 	"net/smtp"
 	"regexp"
@@ -15,6 +18,7 @@ import (
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/pquerna/otp/totp"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -48,7 +52,6 @@ func validatePassword(password string) error {
 	return nil
 }
 
-
 func (h *Handler) SignIn(c *fiber.Ctx) error {
 	b, verr := handler.Validate[SignInRequest](c)
 
@@ -74,6 +77,10 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 	secondFactorEnforced := d.AuthSettings.SecondFactorPolicy == model.SecondFactorPolicyEnforced ||
 		email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced
 
+		if (d.AuthSettings.SecondFactor == model.SecondFactorEmailOTP || d.AuthSettings.SecondFactor == model.SecondFactorAuthenticator) && !email.Verified {
+			return handler.SendForbidden(c, nil, "Second factor verification required before sign-in.")
+		}
+
 	authenticated := false
 	if b.Password != "" {
 		match, err := h.service.VerifyPassword(email.User.Password, b.Password)
@@ -88,6 +95,21 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 
 	step, completed := h.service.DetermineAuthenticationStep(email.Verified, authenticated, secondFactorEnforced, d.AuthSettings)
 	attempt := h.service.CreateSignInAttempt(b.Email, session.ID, authenticated, secondFactorEnforced, step, completed, email.User.LastActiveOrgID)
+
+	if authenticated && secondFactorEnforced && d.AuthSettings.SecondFactor == model.SecondFactorEmailOTP {
+		passcode, err := totp.GenerateCode(email.User.OtpSecret, time.Now())
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Error generating OTP")
+		}
+
+		primaryEmailAddress := email.Email
+		if err := SendOTP(primaryEmailAddress, passcode); err != nil {
+			log.Println("Error sending OTP email: ", err)
+			return handler.SendInternalServerError(c, err, "Error sending OTP email")
+		}
+
+		log.Printf("Generated Passcode for %s: %s\n", primaryEmailAddress, passcode)
+	}
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(attempt).Error; err != nil {
@@ -390,6 +412,40 @@ func SendOTP(email string, otp string) error {
   return nil
 }
 
+//Generate Backup
+func generateBackupCodes(userID uint, db *gorm.DB) ([]string, error) {
+	const backupCodeCount = 2
+
+	var user model.User
+	if err := db.Where("id = ?", userID).First(&user).Error; err != nil {
+		return nil, fmt.Errorf("failed to find user with ID %d: %w", userID, err)
+	}
+
+	if len(user.BackupCodes) > 0 {
+		return nil, fmt.Errorf("backup codes already exist for user ID %d", userID)
+	}
+
+	var rawCodes []string
+	var hashedCodes []string
+	for i := 0; i < backupCodeCount; i++ {
+		rawCode := fmt.Sprintf("%d", snowflake.ID())
+		rawCodes = append(rawCodes, rawCode)
+
+		hashedCode, err := bcrypt.GenerateFromPassword([]byte(rawCode), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, fmt.Errorf("failed to hash backup code: %w", err)
+		}
+		hashedCodes = append(hashedCodes, string(hashedCode))
+	}
+
+	user.BackupCodes = hashedCodes
+	if err := db.Save(&user).Error; err != nil {
+		return nil, fmt.Errorf("failed to save backup codes for user ID %d: %w", userID, err)
+	}
+
+	return rawCodes, nil
+}
+
 //Verify OTP handler
 func (h *Handler) VerifyOTP(c *fiber.Ctx) error {
 	b, verr := handler.Validate[VerifyOTPRequest](c)
@@ -472,6 +528,52 @@ func (h *Handler) PreparePasswordReset(c *fiber.Ctx) error {
 
 	return handler.SendSuccess(c, fiber.Map{
 		"message": "Passcode sent successfully",
+	})
+}
+
+//Setup Authenticator handler
+func (h *Handler) SetupAuthenticator(c *fiber.Ctx) error {
+	b, verr := handler.Validate[SetupAuthenticatorRequest](c)
+	if verr != nil {
+		return handler.SendBadRequest(c, verr, "Bad request body")
+	}
+
+	var email model.UserEmailAddress
+	if err := database.Connection.Where("email = ?", b.Email).First(&email).Error; err != nil {
+		return handler.SendNotFound(c, nil, "Email not found")
+	}
+
+	secret := email.User.OtpSecret
+	
+	if secret == "" {
+		return handler.SendBadRequest(c, nil, "OTP secret not found. Please make sure the authenticator is set up.")
+	}
+
+	otpKey, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      "Intellinesia",
+		AccountName: b.Email,
+		Secret:      []byte(secret),
+	})
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Error generating OTP key")
+	}
+
+	var buf bytes.Buffer
+	img, err := otpKey.Image(200, 200)
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Error generating QR code")
+	}
+	png.Encode(&buf, img)
+
+	backupCodes, err := generateBackupCodes(email.User.ID, database.Connection)
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Error generating backup codes")
+	}
+
+	return c.JSON(fiber.Map{
+		"message":       "Scan the QR code with your authenticator app to complete setup",
+		"qr_code_image": base64.StdEncoding.EncodeToString(buf.Bytes()),
+		"backup_codes":  backupCodes,
 	})
 }
 

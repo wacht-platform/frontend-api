@@ -81,4 +81,5 @@ type User struct {
 	PublicMetadata        datatypes.JSONMap   `json:"public_metadata"`
 	PrivateMetadata       datatypes.JSONMap   `json:"-"`
 	OtpSecret             string              `json:"otp_secret"`
+	BackupCodes           []string            `json:"backup_codes"`
 }
