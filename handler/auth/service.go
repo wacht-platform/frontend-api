@@ -9,14 +9,31 @@ import (
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/utils"
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/facebook"
 	"golang.org/x/oauth2/github"
 	"golang.org/x/oauth2/google"
+	"golang.org/x/oauth2/linkedin"
 	"golang.org/x/oauth2/microsoft"
 	"gorm.io/gorm"
 )
 
 type AuthService struct {
 	db *gorm.DB
+}
+
+var appleOAuthEndpoint = oauth2.Endpoint{
+	AuthURL:  "https://appleid.apple.com/auth/authorize",
+	TokenURL: "https://appleid.apple.com/auth/token",
+}
+
+var discordOAuthEndpoint = oauth2.Endpoint{
+	AuthURL:  "https://discord.com/api/oauth2/authorize",
+	TokenURL: "https://discord.com/api/oauth2/token",
+}
+
+var twitterOAuthEndpoint = oauth2.Endpoint{
+	AuthURL:  "https://api.twitter.com/oauth/authenticate",
+	TokenURL: "https://api.twitter.com/oauth/access_token",
 }
 
 func NewAuthService() *AuthService {
@@ -212,6 +229,16 @@ func getOAuthConfig(provider model.SSOProvider) *oauth2.Config {
 		conf.Endpoint = google.Endpoint
 	case model.SSOProviderMicrosoft:
 		conf.Endpoint = microsoft.AzureADEndpoint("")
+	case model.SSOProviderFacebook:
+		conf.Endpoint = facebook.Endpoint
+	case model.SSOProviderLinkedIn:
+		conf.Endpoint = linkedin.Endpoint
+	case model.SSOProviderX:
+		conf.Endpoint = twitterOAuthEndpoint
+	case model.SSOProviderApple:
+		conf.Endpoint = appleOAuthEndpoint	
+	case model.SSOProviderDiscord:
+		conf.Endpoint = discordOAuthEndpoint
 	}
 
 	return conf

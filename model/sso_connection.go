@@ -18,6 +18,7 @@ const (
 	SSOProviderMicrosoft SSOProvider = "microsoft_oauth"
 	SSOProviderLinkedIn  SSOProvider = "linkedin_oauth"
 	SSOProviderDiscord   SSOProvider = "discord_oauth"
+	SSOProviderApple		 SSOProvider = "apple_oauth"
 )
 
 func (p *SSOProvider) Scan(value interface{}) error {
@@ -39,6 +40,14 @@ func (p SSOProvider) VerificationStrategy() VerificationStrategy {
 		return OauthGoogle
 	case SSOProviderMicrosoft:
 		return OauthMicrosoft
+	case SSOProviderFacebook:
+		return OauthFacebook
+	case SSOProviderLinkedIn:
+		return OauthLinkedIn
+	case SSOProviderDiscord:
+		return OauthDiscord
+	case SSOProviderApple:
+		return OauthApple
 	}
 	return ""
 }
