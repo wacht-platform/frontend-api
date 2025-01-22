@@ -27,7 +27,7 @@ func setupMiddleware(app *fiber.App) {
 	app.Use(cors.New(corsSettings()))
 	app.Use(middleware.SetDeploymentMiddleware)
 	app.Use(middleware.SetSessionMiddleware)
-	app.Use(middleware.RateLimiter)
+	// app.Use(middleware.RateLimiter)
 }
 
 func corsSettings() cors.Config {

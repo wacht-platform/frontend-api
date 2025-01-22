@@ -17,7 +17,7 @@ const (
 	OauthFacebook  VerificationStrategy = "oauth_facebook"
 	OauthLinkedIn  VerificationStrategy = "oauth_linkedin"
 	OauthDiscord   VerificationStrategy = "oauth_discord"
-	OauthApple     VerificationStrategy = "oauth_apple"	
+	OauthApple     VerificationStrategy = "oauth_apple"
 )
 
 func (o *VerificationStrategy) Scan(value interface{}) error {
@@ -85,5 +85,5 @@ type User struct {
 	PublicMetadata        datatypes.JSONMap   `json:"public_metadata"`
 	PrivateMetadata       datatypes.JSONMap   `json:"-"`
 	OtpSecret             string              `json:"otp_secret"`
-	BackupCodes           []string            `json:"backup_codes"`
+	BackupCodes           []string            `json:"backup_codes" gorm:"type:text[]"`
 }
