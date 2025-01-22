@@ -21,21 +21,6 @@ type AuthService struct {
 	db *gorm.DB
 }
 
-var appleOAuthEndpoint = oauth2.Endpoint{
-	AuthURL:  "https://appleid.apple.com/auth/authorize",
-	TokenURL: "https://appleid.apple.com/auth/token",
-}
-
-var discordOAuthEndpoint = oauth2.Endpoint{
-	AuthURL:  "https://discord.com/api/oauth2/authorize",
-	TokenURL: "https://discord.com/api/oauth2/token",
-}
-
-var twitterOAuthEndpoint = oauth2.Endpoint{
-	AuthURL:  "https://api.twitter.com/oauth/authenticate",
-	TokenURL: "https://api.twitter.com/oauth/access_token",
-}
-
 func NewAuthService() *AuthService {
 	return &AuthService{
 		db: database.Connection,
@@ -234,11 +219,11 @@ func getOAuthConfig(provider model.SSOProvider) *oauth2.Config {
 	case model.SSOProviderLinkedIn:
 		conf.Endpoint = linkedin.Endpoint
 	case model.SSOProviderX:
-		conf.Endpoint = twitterOAuthEndpoint
+		conf.Endpoint = config.XOAuthEndpoint
 	case model.SSOProviderApple:
-		conf.Endpoint = appleOAuthEndpoint	
+		conf.Endpoint = config.AppleOAuthEndpoint
 	case model.SSOProviderDiscord:
-		conf.Endpoint = discordOAuthEndpoint
+		conf.Endpoint = config.DiscordOAuthEndpoint
 	}
 
 	return conf

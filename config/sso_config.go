@@ -33,12 +33,6 @@ var ssoConfig = map[string]model.OauthCredentials{
 		RedirectURI:  "http://localhost:5173/auth/sso/facebook/callback",
 		Scopes:       []string{"email"},
 	},
-	"twitter_oauth": {
-		ClientID:     "",
-		ClientSecret: "",
-		RedirectURI:  "http://localhost:5173/auth/sso/twitter/callback",
-		Scopes:       []string{"email"},
-	},
 	"apple_oauth": {
 		ClientID:     "",
 		ClientSecret: "",
@@ -46,14 +40,14 @@ var ssoConfig = map[string]model.OauthCredentials{
 		Scopes:       []string{"email"},
 	},
 	"linkedin_oauth": {
-		ClientID:     "",
-		ClientSecret: "",
+		ClientID:     "8651nmdfmhpe2t",
+		ClientSecret: "WPL_AP1.ETzRzphkhkd2ktBw.JAyoqg==",
 		RedirectURI:  "http://localhost:5173/auth/sso/linkedin/callback",
 		Scopes:       []string{"r_liteprofile", "r_emailaddress"},
 	},
 	"discord_oauth": {
-		ClientID:     "",
-		ClientSecret: "",
+		ClientID:     "1331241079223095296",
+		ClientSecret: "K_5WMYdEgmd--ZQz6UlIlVrvOecWKQdk",
 		RedirectURI:  "http://localhost:5173/auth/sso/discord/callback",
 		Scopes:       []string{"identify", "email"},
 	},

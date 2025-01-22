@@ -37,7 +37,6 @@ func NewHandler() *Handler {
 	}
 }
 
-//function to check pawned password
 func pawnedPassword(password string) (bool, error) {
 	hasher := sha1.New()
 	hasher.Write([]byte(password))
@@ -76,7 +75,6 @@ func pawnedPassword(password string) (bool, error) {
 	return false, nil
 }
 
-//function for validate password
 func validatePassword(password string) error {
 	var ErrInvalidPassword = errors.New("password must be 6-125 characters long, contain at least one number, and one symbol")
 
@@ -121,9 +119,9 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 	secondFactorEnforced := d.AuthSettings.SecondFactorPolicy == model.SecondFactorPolicyEnforced ||
 		email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced
 
-		if (d.AuthSettings.SecondFactor == model.SecondFactorEmailOTP || d.AuthSettings.SecondFactor == model.SecondFactorAuthenticator) && !email.Verified {
-			return handler.SendForbidden(c, nil, "Second factor verification required before sign-in.")
-		}
+	if (d.AuthSettings.SecondFactor == model.SecondFactorEmailOTP || d.AuthSettings.SecondFactor == model.SecondFactorAuthenticator) && !email.Verified {
+		return handler.SendForbidden(c, nil, "Second factor verification required before sign-in.")
+	}
 
 	authenticated := false
 	if b.Password != "" {
@@ -412,17 +410,16 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 	return handler.SendSuccess[any](c, nil)
 }
 
-//Send OTP handler
 func SendOTP(email string, otp string) error {
-  smtpHost :=  "smtp.zeptomail.in"
+	smtpHost := "smtp.zeptomail.in"
 	smtpPort := "587"
 	username := "emailapikey"
 	password := "PHtE6r1cR7rsgmEsoEMI4vPsRMWlZ41/r75kK1EWstkUA6NRGE0H+dt9kmPkoxopA6NGEvKZyNlgsrLK5rmDIT7qMjtEWWqyqK3sx/VYSPOZsbq6x00VtFoedELVU4TodNJj0Czfs97bNA=="
 	from := "marketing@wacht.tech"
 
-  auth := smtp.PlainAuth("", username, password, smtpHost)
+	auth := smtp.PlainAuth("", username, password, smtpHost)
 
-  htmlBody := fmt.Sprintf(`
+	htmlBody := fmt.Sprintf(`
   <div style="font-family: Helvetica, Arial, sans-serif; max-width: 90%%; margin: auto; line-height: 1.6; color: #333; padding: 20px; box-sizing: border-box;">
     <div style="margin: auto; padding: 20px; background: #f9f9f9; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);">
       <div style="border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
@@ -446,17 +443,15 @@ func SendOTP(email string, otp string) error {
 	contentType := "MIME-Version: 1.0\r\nContent-Type: text/html; charset=\"UTF-8\"\r\n\r\n"
 	msg := []byte(subject + contentType + htmlBody)
 
-
-  smtpServer := fmt.Sprintf("%s:%s", smtpHost, smtpPort)
+	smtpServer := fmt.Sprintf("%s:%s", smtpHost, smtpPort)
 	err := smtp.SendMail(smtpServer, auth, from, []string{email}, msg)
 	if err != nil {
 		return fmt.Errorf("failed to send email to %s: %w", email, err)
 	}
 
-  return nil
+	return nil
 }
 
-//Generate Backup
 func generateBackupCodes(userID uint, db *gorm.DB) ([]string, error) {
 	const backupCodeCount = 2
 
@@ -490,36 +485,34 @@ func generateBackupCodes(userID uint, db *gorm.DB) ([]string, error) {
 	return rawCodes, nil
 }
 
-//Verify OTP handler
 func (h *Handler) VerifyOTP(c *fiber.Ctx) error {
 	b, verr := handler.Validate[VerifyOTPRequest](c)
 	if verr != nil {
-			return handler.SendBadRequest(c, verr, "Bad request body")
+		return handler.SendBadRequest(c, verr, "Bad request body")
 	}
 
 	var email model.UserEmailAddress
 	if err := database.Connection.Where("email = ?", b.Email).First(&email).Error; err != nil {
-			return handler.SendNotFound(c, nil, "Email not found")
+		return handler.SendNotFound(c, nil, "Email not found")
 	}
 
 	valid := totp.Validate(b.Passcode, email.User.OtpSecret)
 	if !valid {
-			return handler.SendBadRequest(c, nil, "Invalid passcode")
+		return handler.SendBadRequest(c, nil, "Invalid passcode")
 	}
 
 	email.Verified = true
 	email.VerifiedAt = time.Now()
 
 	if err := database.Connection.Save(&email).Error; err != nil {
-			return handler.SendInternalServerError(c, err, "Error updating verification status")
+		return handler.SendInternalServerError(c, err, "Error updating verification status")
 	}
 
 	return handler.SendSuccess(c, fiber.Map{
-			"message": "Email verified successfully",
-		})
+		"message": "Email verified successfully",
+	})
 }
 
-//Initiate Password Reset handler
 func (h *Handler) PreparePasswordReset(c *fiber.Ctx) error {
 	b, verr := handler.Validate[PrepareVerificationRequest](c)
 	if verr != nil {
@@ -557,12 +550,12 @@ func (h *Handler) PreparePasswordReset(c *fiber.Ctx) error {
 
 	session := handler.GetSession(c)
 	attempt := h.service.CreateSignInAttempt(
-		b.Email, 
-		session.ID, 
-		false, 
-		false, 
-		model.SessionStepPasswordResetInitiation, 
-		false, 
+		b.Email,
+		session.ID,
+		false,
+		false,
+		model.SessionStepPasswordResetInitiation,
+		false,
 		0,
 	)
 
@@ -575,7 +568,6 @@ func (h *Handler) PreparePasswordReset(c *fiber.Ctx) error {
 	})
 }
 
-//Setup Authenticator handler
 func (h *Handler) SetupAuthenticator(c *fiber.Ctx) error {
 	b, verr := handler.Validate[SetupAuthenticatorRequest](c)
 	if verr != nil {
@@ -588,7 +580,7 @@ func (h *Handler) SetupAuthenticator(c *fiber.Ctx) error {
 	}
 
 	secret := email.User.OtpSecret
-	
+
 	if secret == "" {
 		return handler.SendBadRequest(c, nil, "OTP secret not found. Please make sure the authenticator is set up.")
 	}
@@ -621,7 +613,7 @@ func (h *Handler) SetupAuthenticator(c *fiber.Ctx) error {
 	})
 }
 
-//Reset Password handler
+// Reset Password handler
 func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 	b, verr := handler.Validate[ResetPasswordRequest](c)
 	if verr != nil {
@@ -661,7 +653,6 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 	if err := database.Connection.Create(attempt).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Error logging password reset attempt")
 	}
-
 
 	return handler.SendSuccess(c, fiber.Map{
 		"message": "Password updated successfully",
