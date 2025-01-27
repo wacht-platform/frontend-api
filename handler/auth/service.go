@@ -1,7 +1,15 @@
 package auth
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/smtp"
+	"regexp"
+	"strings"
 
 	"github.com/godruoyi/go-snowflake"
 	"github.com/ilabs/wacht-fe/config"
@@ -50,12 +58,8 @@ func (s *AuthService) DetermineAuthenticationStep(verified, authenticated, secon
 
 	if !verified {
 		step = model.SessionStepVerifyEmail
-	} else if !authenticated {
-		if authSettings.FirstFactor == model.FirstFactorEmailPassword {
-			step = model.SessionStepVerifyPassword
-		} else if authSettings.FirstFactor == model.FirstFactorEmailOTP {
-			step = model.SessionStepVerifyEmailOTP
-		}
+	} else if !authenticated && authSettings.FirstFactor == model.FirstFactorEmailOTP {
+		step = model.SessionStepVerifyEmailOTP
 	} else if secondFactorEnforced {
 		step = model.SessionStepVerifySecondFactor
 	} else {
@@ -65,12 +69,22 @@ func (s *AuthService) DetermineAuthenticationStep(verified, authenticated, secon
 	return step, completed
 }
 
-func (s *AuthService) CreateSignInAttempt(email string, sessionID uint, authenticated bool, secondFactorEnforced bool, step model.CurrentSessionStep, completed bool, lastActiveOrgID uint) *model.SignInAttempt {
-	attempt := model.NewSignInAttempt(model.SignInMethodPlain)
-	attempt.Method = model.SignInMethodPlain
-	attempt.CurrenStep = step
+func (s *AuthService) CreateSignInAttempt(
+	userID uint,
+	identifierID uint,
+	sessionID uint,
+	method model.SignInMethod,
+	authenticated bool,
+	secondFactorEnforced bool,
+	step model.CurrentSessionStep,
+	completed bool,
+	lastActiveOrgID uint,
+) *model.SignInAttempt {
+	attempt := model.NewSignInAttempt(method)
+	attempt.CurrentStep = step
+	attempt.IdentifierID = identifierID
 	attempt.Completed = completed
-	attempt.Email = email
+	attempt.UserID = userID
 	attempt.SessionID = sessionID
 	attempt.FirstMethodAuthenticated = authenticated
 	attempt.SecondMethodAuthenticationRequired = secondFactorEnforced
@@ -162,7 +176,7 @@ func (s *AuthService) HandleExistingUser(tx *gorm.DB, email *model.UserEmailAddr
 		attempt.FirstMethodAuthenticated = true
 		attempt.SecondMethodAuthenticationRequired = deploymentSettings.SecondFactorPolicy == model.SecondFactorPolicyEnforced
 		if attempt.SecondMethodAuthenticationRequired {
-			attempt.CurrenStep = model.SessionStepVerifySecondFactor
+			attempt.CurrentStep = model.SessionStepVerifySecondFactor
 		} else {
 			attempt.Completed = true
 		}
@@ -236,4 +250,111 @@ func (s *AuthService) CheckIdentifierAvailability(identifier string, identifierT
 		return s.CheckUsernameExists(identifier), nil
 	}
 	return false, errors.New("invalid identifier type")
+}
+
+func (s *AuthService) GetSignInAttempt(signInAttempt uint) (model.SignInAttempt, error) {
+	var attempt model.SignInAttempt
+	if err := s.db.Where("id = ?", signInAttempt).First(&attempt).Error; err != nil {
+		return model.SignInAttempt{}, err
+	}
+	return attempt, nil
+}
+
+func (s *AuthService) PawnedPassword(password string) (bool, error) {
+	hasher := sha1.New()
+	hasher.Write([]byte(password))
+	hash := hex.EncodeToString(hasher.Sum(nil))
+
+	prefix := strings.ToUpper(hash[:5])
+	suffix := strings.ToUpper(hash[5:])
+
+	url := fmt.Sprintf("https://api.pwnedpasswords.com/range/%s", prefix)
+	resp, err := http.Get(url)
+	if err != nil {
+		return false, fmt.Errorf("failed to query HIBP API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false, errors.New("unexpected response from HIBP API")
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, fmt.Errorf("failed to read HIBP API response: %w", err)
+	}
+
+	hashes := strings.Split(string(body), "\n")
+	for _, line := range hashes {
+		parts := strings.Split(line, ":")
+		if len(parts) != 2 {
+			continue
+		}
+		if parts[0] == suffix {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (s *AuthService) ValidatePassword(password string) error {
+	ErrInvalidPassword := errors.New("password must be 6-125 characters long, contain at least one number, and one symbol")
+
+	if len(password) < 6 || len(password) > 125 {
+		return ErrInvalidPassword
+	}
+
+	hasNumber := regexp.MustCompile(`[0-9]`).MatchString(password)
+	if !hasNumber {
+		return ErrInvalidPassword
+	}
+
+	hasSymbol := regexp.MustCompile(`[!@#$%^&*(),.?":{}|<>]`).MatchString(password)
+	if !hasSymbol {
+		return ErrInvalidPassword
+	}
+	return nil
+}
+
+func (s *AuthService) SendEmailOTPVerification(email string, otp string) error {
+	smtpHost := "smtp.zeptomail.in"
+	smtpPort := "587"
+	username := "emailapikey"
+	password := "PHtE6r1cR7rsgmEsoEMI4vPsRMWlZ41/r75kK1EWstkUA6NRGE0H+dt9kmPkoxopA6NGEvKZyNlgsrLK5rmDIT7qMjtEWWqyqK3sx/VYSPOZsbq6x00VtFoedELVU4TodNJj0Czfs97bNA=="
+	from := "marketing@wacht.tech"
+
+	auth := smtp.PlainAuth("", username, password, smtpHost)
+
+	htmlBody := fmt.Sprintf(`
+  <div style="font-family: Helvetica, Arial, sans-serif; max-width: 90%%; margin: auto; line-height: 1.6; color: #333; padding: 20px; box-sizing: border-box;">
+    <div style="margin: auto; padding: 20px; background: #f9f9f9; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);">
+      <div style="border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
+        <a href="#" style="font-size: 1.5em; color: #000; text-decoration: none; font-weight: bold;">Intellinesia</a>
+      </div>
+      <p style="font-size: 1.2em; margin-bottom: 10px;">Hi,</p>
+      <p style="margin-bottom: 20px;">Thank you for choosing Wacht. Use the following OTP to complete your Sign Up procedures. OTP is valid for 5 minutes:</p>
+      <h2 style="background: #000; color: #fff; padding: 10px 20px; border-radius: 5px; display: inline-block; margin: 0 auto;">%s</h2>
+      <p style="font-size: 1em; margin-top: 20px;">Regards,<br><strong>Wacht</strong></p>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+      <div style="text-align: right; color: #aaa; font-size: 0.9em; line-height: 1.4;">
+        <p style="margin: 0;">Intellinesia LTD</p>
+        <p style="margin: 0;">Kolkata</p>
+        <p style="margin: 0;">India</p>
+      </div>
+    </div>
+  </div>
+  `, otp)
+
+	subject := "Subject: Your OTP Code\r\n"
+	contentType := "MIME-Version: 1.0\r\nContent-Type: text/html; charset=\"UTF-8\"\r\n\r\n"
+	msg := []byte(subject + contentType + htmlBody)
+
+	smtpServer := fmt.Sprintf("%s:%s", smtpHost, smtpPort)
+	err := smtp.SendMail(smtpServer, auth, from, []string{email}, msg)
+	if err != nil {
+		return fmt.Errorf("failed to send email to %s: %w", email, err)
+	}
+
+	return nil
 }

@@ -93,7 +93,6 @@ func (h *Handler) CreateOrganization(c *fiber.Ctx) error {
 		}
 		return nil
 	})
-
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to create organization")
 	}
@@ -285,7 +284,6 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 		}
 		return nil
 	})
-
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to add member")
 	}

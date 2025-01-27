@@ -4,7 +4,6 @@ import (
 	"fmt"
 )
 
-// AuthError represents an authentication error
 type AuthError struct {
 	Code    string
 	Message string
@@ -14,7 +13,6 @@ func (e AuthError) Error() string {
 	return e.Message
 }
 
-// Error codes
 const (
 	ErrCodeUserNotFound       = "USER_NOT_FOUND"
 	ErrCodeUserDisabled       = "USER_DISABLED"
@@ -28,22 +26,14 @@ const (
 )
 
 var (
-	// ErrUserNotFound is returned when a user cannot be found
-	ErrUserNotFound = AuthError{Code: ErrCodeUserNotFound, Message: "user not found"}
-	// ErrUserDisabled is returned when a user account is disabled
-	ErrUserDisabled = AuthError{Code: ErrCodeUserDisabled, Message: "user is disabled"}
-	// ErrInvalidCredentials is returned when provided credentials are invalid
+	ErrUserNotFound       = AuthError{Code: ErrCodeUserNotFound, Message: "user not found"}
+	ErrUserDisabled       = AuthError{Code: ErrCodeUserDisabled, Message: "user is disabled"}
 	ErrInvalidCredentials = AuthError{Code: ErrCodeInvalidCredentials, Message: "invalid credentials"}
-	// ErrEmailExists is returned when trying to create a user with an existing email
-	ErrEmailExists = AuthError{Code: ErrCodeEmailExists, Message: "email address already exists"}
-	// ErrProviderRequired is returned when SSO provider is not specified
-	ErrProviderRequired = AuthError{Code: ErrCodeProviderRequired, Message: "provider is required"}
-	// ErrCodeRequired is returned when OAuth code is missing
-	ErrCodeRequired = AuthError{Code: ErrCodeCodeRequired, Message: "code is required"}
-	// ErrInvalidState is returned when OAuth state is invalid
-	ErrInvalidState = AuthError{Code: ErrCodeInvalidState, Message: "invalid state"}
-	// ErrInvalidCode is returned when OAuth code is invalid
-	ErrInvalidCode = AuthError{Code: ErrCodeInvalidCode, Message: "invalid code"}
+	ErrEmailExists        = AuthError{Code: ErrCodeEmailExists, Message: "email address already exists"}
+	ErrProviderRequired   = AuthError{Code: ErrCodeProviderRequired, Message: "provider is required"}
+	ErrCodeRequired       = AuthError{Code: ErrCodeCodeRequired, Message: "code is required"}
+	ErrInvalidState       = AuthError{Code: ErrCodeInvalidState, Message: "invalid state"}
+	ErrInvalidCode        = AuthError{Code: ErrCodeInvalidCode, Message: "invalid code"}
 )
 
 // ErrRequiredField creates an error for a required field

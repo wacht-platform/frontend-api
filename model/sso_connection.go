@@ -18,7 +18,7 @@ const (
 	SSOProviderMicrosoft SSOProvider = "microsoft_oauth"
 	SSOProviderLinkedIn  SSOProvider = "linkedin_oauth"
 	SSOProviderDiscord   SSOProvider = "discord_oauth"
-	SSOProviderApple		 SSOProvider = "apple_oauth"
+	SSOProviderApple     SSOProvider = "apple_oauth"
 )
 
 func (p *SSOProvider) Scan(value interface{}) error {

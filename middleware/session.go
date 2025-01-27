@@ -53,7 +53,6 @@ func handleNewSession(c *fiber.Ctx, deployment model.Deployment) error {
 
 		return err
 	})
-
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to create a new session")
 	}
@@ -125,7 +124,6 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token) error {
 
 		return err
 	})
-
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to refresh session")
 	}
@@ -164,20 +162,19 @@ func validateRotatingToken(sessionID uint, rotatingTokenID uint) (model.Rotating
 	return rotatingToken, nil
 }
 
-//Fixed Window Rate Limiting for the API endpoints to prevent abuse of the service by a single user or IP address (7 requests per 10 seconds).
+// Fixed Window Rate Limiting for the API endpoints to prevent abuse of the service by a single user or IP address (7 requests per 10 seconds).
 func RateLimiter() fiber.Handler {
-
 	// storage :=  redis.New(redis.Config{
-		
+
 	// })
 
 	return limiter.New(limiter.Config{
-		Max:         7,                            
-		Expiration:  10 * time.Second,
-		KeyGenerator: func(c *fiber.Ctx) string { 
+		Max:        7,
+		Expiration: 10 * time.Second,
+		KeyGenerator: func(c *fiber.Ctx) string {
 			return c.IP()
 		},
-		LimitReached: func(c *fiber.Ctx) error { 
+		LimitReached: func(c *fiber.Ctx) error {
 			return fiber.NewError(fiber.StatusTooManyRequests, "Too many requests, please try again later.")
 		},
 		//  Storage: storage,

@@ -2,18 +2,10 @@ package auth
 
 import (
 	"bytes"
-	"crypto/sha1"
 	"encoding/base64"
-	"encoding/hex"
-	"errors"
 	"fmt"
 	"image/png"
-	"io"
 	"log"
-	"net/http"
-	"net/smtp"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/godruoyi/go-snowflake"
@@ -35,63 +27,6 @@ func NewHandler() *Handler {
 	return &Handler{
 		service: NewAuthService(),
 	}
-}
-
-func pawnedPassword(password string) (bool, error) {
-	hasher := sha1.New()
-	hasher.Write([]byte(password))
-	hash := hex.EncodeToString(hasher.Sum(nil))
-
-	prefix := strings.ToUpper(hash[:5])
-	suffix := strings.ToUpper(hash[5:])
-
-	url := fmt.Sprintf("https://api.pwnedpasswords.com/range/%s", prefix)
-	resp, err := http.Get(url)
-	if err != nil {
-		return false, fmt.Errorf("failed to query HIBP API: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return false, errors.New("unexpected response from HIBP API")
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return false, fmt.Errorf("failed to read HIBP API response: %w", err)
-	}
-
-	hashes := strings.Split(string(body), "\n")
-	for _, line := range hashes {
-		parts := strings.Split(line, ":")
-		if len(parts) != 2 {
-			continue
-		}
-		if parts[0] == suffix {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
-func validatePassword(password string) error {
-	var ErrInvalidPassword = errors.New("password must be 6-125 characters long, contain at least one number, and one symbol")
-
-	if len(password) < 6 || len(password) > 125 {
-		return ErrInvalidPassword
-	}
-
-	hasNumber := regexp.MustCompile(`[0-9]`).MatchString(password)
-	if !hasNumber {
-		return ErrInvalidPassword
-	}
-
-	hasSymbol := regexp.MustCompile(`[!@#$%^&*(),.?":{}|<>]`).MatchString(password)
-	if !hasSymbol {
-		return ErrInvalidPassword
-	}
-	return nil
 }
 
 func (h *Handler) SignIn(c *fiber.Ctx) error {
@@ -116,10 +51,14 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 		return handler.SendForbidden(c, nil, err.Error())
 	}
 
-	secondFactorEnforced := d.AuthSettings.SecondFactorPolicy == model.SecondFactorPolicyEnforced ||
-		email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced
+	secondFactorEnforced :=
+		d.AuthSettings.SecondFactorPolicy == model.SecondFactorPolicyEnforced ||
+			email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced
 
-	if (d.AuthSettings.SecondFactor == model.SecondFactorEmailOTP || d.AuthSettings.SecondFactor == model.SecondFactorAuthenticator) && !email.Verified {
+	if (d.AuthSettings.SecondFactor == model.SecondFactorEmailOTP ||
+		d.AuthSettings.SecondFactor == model.SecondFactorAuthenticator ||
+		email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced) &&
+		!email.Verified {
 		return handler.SendForbidden(c, nil, "Second factor verification required before sign-in.")
 	}
 
@@ -129,29 +68,34 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 		if err != nil {
 			return handler.SendInternalServerError(c, err, "Error comparing password")
 		}
+
 		if !match {
 			return handler.SendUnauthorized(c, nil, ErrInvalidCredentials.Error())
 		}
 		authenticated = true
 	}
 
-	step, completed := h.service.DetermineAuthenticationStep(email.Verified, authenticated, secondFactorEnforced, d.AuthSettings)
-	attempt := h.service.CreateSignInAttempt(b.Email, session.ID, authenticated, secondFactorEnforced, step, completed, email.User.LastActiveOrgID)
+	step, completed := h.service.DetermineAuthenticationStep(
+		email.Verified,
+		authenticated,
+		secondFactorEnforced,
+		d.AuthSettings,
+	)
 
-	if authenticated && secondFactorEnforced && d.AuthSettings.SecondFactor == model.SecondFactorEmailOTP {
-		passcode, err := totp.GenerateCode(email.User.OtpSecret, time.Now())
-		if err != nil {
-			return handler.SendInternalServerError(c, err, "Error generating OTP")
-		}
+	log.Printf("Step: %s, Completed: %t", step, completed)
+	completed = true
 
-		primaryEmailAddress := email.Email
-		if err := SendOTP(primaryEmailAddress, passcode); err != nil {
-			log.Println("Error sending OTP email: ", err)
-			return handler.SendInternalServerError(c, err, "Error sending OTP email")
-		}
-
-		log.Printf("Generated Passcode for %s: %s\n", primaryEmailAddress, passcode)
-	}
+	attempt := h.service.CreateSignInAttempt(
+		email.UserID,
+		email.ID,
+		session.ID,
+		model.SignInMethodPlainEmail,
+		authenticated,
+		secondFactorEnforced,
+		step,
+		completed,
+		email.User.LastActiveOrgID,
+	)
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(attempt).Error; err != nil {
@@ -171,7 +115,6 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 
 		return tx.Save(session).Error
 	})
-
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Something went wrong")
 	}
@@ -185,7 +128,7 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, verr, "Bad request body")
 	}
 
-	if err := validatePassword(b.Password); err != nil {
+	if err := h.service.ValidatePassword(b.Password); err != nil {
 		return handler.SendBadRequest(c, nil, err.Error())
 	}
 
@@ -209,7 +152,6 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 		Issuer:      "Intellinesia",
 		AccountName: b.Email,
 	})
-
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Error generating OTP secret")
 	}
@@ -219,8 +161,25 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 
 	completed := !d.AuthSettings.VerificationPolicy.Email
 
-	u := h.service.CreateUser(b, hashedPassword, d.ID, d.AuthSettings.SecondFactorPolicy, otpSecret.Secret())
-	attempt := h.service.CreateSignInAttempt(b.Email, session.ID, false, false, model.SessionStepVerifyEmailOTP, completed, 0)
+	u := h.service.CreateUser(
+		b,
+		hashedPassword,
+		d.ID,
+		d.AuthSettings.SecondFactorPolicy,
+		otpSecret.Secret(),
+	)
+
+	attempt := h.service.CreateSignInAttempt(
+		u.ID,
+		session.ID,
+		u.PrimaryEmailAddressID,
+		model.SignInMethodPlainEmail,
+		false,
+		false,
+		model.SessionStepVerifyEmailOTP,
+		completed,
+		0,
+	)
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&u).Error; err != nil {
@@ -234,35 +193,8 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 		session.SignInAttempts = append(session.SignInAttempts, attempt)
 		return nil
 	})
-
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Something went wrong")
-	}
-
-	if completed {
-		passcode, err := totp.GenerateCode(u.OtpSecret, time.Now())
-		if err != nil {
-			return handler.SendInternalServerError(c, err, "Error generating passcode")
-		}
-
-		var primaryEmailAddress string
-		if len(u.UserEmailAddresses) > 0 {
-			for _, email := range u.UserEmailAddresses {
-				if email.ID == u.PrimaryEmailAddressID {
-					primaryEmailAddress = email.Email
-					break
-				}
-			}
-		} else {
-			primaryEmailAddress = ""
-		}
-
-		fmt.Printf("Generated Passcode for %s: %s\n", primaryEmailAddress, passcode)
-
-		if err := SendOTP(primaryEmailAddress, passcode); err != nil {
-			log.Println("Error sending OTP email: ", err)
-			return handler.SendInternalServerError(c, err, "Error sending OTP email")
-		}
 	}
 
 	return handler.SendSuccess(c, session)
@@ -292,7 +224,6 @@ func (h *Handler) InitSSO(c *fiber.Ctx) error {
 		session.SignInAttempts = append(session.SignInAttempts, attempt)
 		return nil
 	})
-
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Something went wrong")
 	}
@@ -330,9 +261,11 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 	}
 
 	var email model.UserEmailAddress
-	exists := database.Connection.Joins("User", database.Connection.Where(&model.User{DeploymentID: deployment.ID})).
-		Preload("User.SocialConnections").Where("email = ?", user.Email).
-		First(&email).RowsAffected > 0
+	exists := database.Connection.Joins(
+		"User",
+		database.Connection.Where(&model.User{DeploymentID: deployment.ID}),
+	).Preload("User.SocialConnections").
+		Where("email = ?", user.Email).First(&email).RowsAffected > 0
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
 		if exists {
@@ -385,7 +318,6 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		session.SignIns = append(session.SignIns, signIn)
 		return nil
 	})
-
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Something went wrong")
 	}
@@ -397,7 +329,6 @@ func (h *Handler) CheckIdentifierAvailability(c *fiber.Ctx) error {
 	identifier := c.Query("identifier")
 	identifierType := c.Query("type")
 	exists, err := h.service.CheckIdentifierAvailability(identifier, identifierType)
-
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Something went wrong")
 	}
@@ -407,49 +338,40 @@ func (h *Handler) CheckIdentifierAvailability(c *fiber.Ctx) error {
 }
 
 func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
-	return handler.SendSuccess[any](c, nil)
-}
+	signInAttempt := c.QueryInt("sign_in_attempt")
+	strategy := c.Query("strategy")
 
-func SendOTP(email string, otp string) error {
-	smtpHost := "smtp.zeptomail.in"
-	smtpPort := "587"
-	username := "emailapikey"
-	password := "PHtE6r1cR7rsgmEsoEMI4vPsRMWlZ41/r75kK1EWstkUA6NRGE0H+dt9kmPkoxopA6NGEvKZyNlgsrLK5rmDIT7qMjtEWWqyqK3sx/VYSPOZsbq6x00VtFoedELVU4TodNJj0Czfs97bNA=="
-	from := "marketing@wacht.tech"
-
-	auth := smtp.PlainAuth("", username, password, smtpHost)
-
-	htmlBody := fmt.Sprintf(`
-  <div style="font-family: Helvetica, Arial, sans-serif; max-width: 90%%; margin: auto; line-height: 1.6; color: #333; padding: 20px; box-sizing: border-box;">
-    <div style="margin: auto; padding: 20px; background: #f9f9f9; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);">
-      <div style="border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
-        <a href="#" style="font-size: 1.5em; color: #000; text-decoration: none; font-weight: bold;">Intellinesia</a>
-      </div>
-      <p style="font-size: 1.2em; margin-bottom: 10px;">Hi,</p>
-      <p style="margin-bottom: 20px;">Thank you for choosing Wacht. Use the following OTP to complete your Sign Up procedures. OTP is valid for 5 minutes:</p>
-      <h2 style="background: #000; color: #fff; padding: 10px 20px; border-radius: 5px; display: inline-block; margin: 0 auto;">%s</h2>
-      <p style="font-size: 1em; margin-top: 20px;">Regards,<br><strong>Wacht</strong></p>
-      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-      <div style="text-align: right; color: #aaa; font-size: 0.9em; line-height: 1.4;">
-        <p style="margin: 0;">Intellinesia LTD</p>
-        <p style="margin: 0;">Kolkata</p>
-        <p style="margin: 0;">India</p>
-      </div>
-    </div>
-  </div>
-  `, otp)
-
-	subject := "Subject: Your OTP Code\r\n"
-	contentType := "MIME-Version: 1.0\r\nContent-Type: text/html; charset=\"UTF-8\"\r\n\r\n"
-	msg := []byte(subject + contentType + htmlBody)
-
-	smtpServer := fmt.Sprintf("%s:%s", smtpHost, smtpPort)
-	err := smtp.SendMail(smtpServer, auth, from, []string{email}, msg)
-	if err != nil {
-		return fmt.Errorf("failed to send email to %s: %w", email, err)
+	if signInAttempt == 0 {
+		return handler.SendBadRequest(c, nil, "sign_in_attempt is required")
 	}
 
-	return nil
+	if strategy == "" {
+		return handler.SendBadRequest(c, nil, "strategy is required")
+	}
+
+	attempt, err := h.service.GetSignInAttempt(uint(signInAttempt))
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Error fetching sign in attempt")
+	}
+
+	if attempt.Completed {
+		return handler.SendBadRequest(c, nil, "Sign in attempt already completed")
+	}
+
+	switch attempt.CurrentStep {
+	case model.SessionStepVerifyEmail:
+	case model.SessionStepVerifyEmailOTP:
+		// user := h.service.FindUserByEmail()
+		// h.service.SendEmailOTPVerification(, "")
+	case model.SessionStepVerifySecondFactor:
+		return handler.SendSuccess[any](c, nil)
+	case model.SessionStepVerifyPhone:
+		return handler.SendSuccess[any](c, nil)
+	case model.SessionStepVerifyPhoneOTP:
+		return handler.SendSuccess[any](c, nil)
+	}
+
+	return handler.SendSuccess[any](c, nil)
 }
 
 func generateBackupCodes(userID uint, db *gorm.DB) ([]string, error) {
@@ -543,20 +465,22 @@ func (h *Handler) PreparePasswordReset(c *fiber.Ctx) error {
 
 	fmt.Printf("Generated Passcode for %s: %s\n", primaryEmailAddress, passcode)
 
-	if err := SendOTP(primaryEmailAddress, passcode); err != nil {
+	if err := h.service.SendEmailOTPVerification(primaryEmailAddress, passcode); err != nil {
 		log.Println("Error sending OTP email: ", err)
 		return handler.SendInternalServerError(c, err, "Error sending OTP email")
 	}
 
 	session := handler.GetSession(c)
 	attempt := h.service.CreateSignInAttempt(
-		b.Email,
+		email.UserID,
 		session.ID,
+		email.ID,
+		model.SignInMethodPlainEmail,
 		false,
 		false,
 		model.SessionStepPasswordResetInitiation,
 		false,
-		0,
+		email.User.LastActiveOrgID,
 	)
 
 	if err := database.Connection.Create(attempt).Error; err != nil {
@@ -625,7 +549,7 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 		return handler.SendNotFound(c, nil, "Email not found")
 	}
 
-	if err := validatePassword(b.Password); err != nil {
+	if err := h.service.ValidatePassword(b.Password); err != nil {
 		return handler.SendBadRequest(c, nil, err.Error())
 	}
 
@@ -641,13 +565,15 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 
 	session := handler.GetSession(c)
 	attempt := h.service.CreateSignInAttempt(
-		b.Email,
+		email.UserID,
 		session.ID,
+		email.ID,
+		model.SignInMethodPlainEmail,
 		true,
 		false,
 		model.SessionStepPasswordResetCompletion,
 		true,
-		0,
+		email.User.LastActiveOrgID,
 	)
 
 	if err := database.Connection.Create(attempt).Error; err != nil {
@@ -658,3 +584,6 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 		"message": "Password updated successfully",
 	})
 }
+
+// business logic (apart from hanlder )
+// sign in app -> Sign IN atytemnpt -> send back to the user

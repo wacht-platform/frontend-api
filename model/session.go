@@ -7,14 +7,13 @@ import (
 type CurrentSessionStep string
 
 const (
-	SessionStepVerifyPassword      CurrentSessionStep = "verify_password"
-	SessionStepVerifyEmail         CurrentSessionStep = "verify_email"
-	SessionStepVerifyEmailOTP      CurrentSessionStep = "verify_email_otp"
-	SessionStepVerifySecondFactor  CurrentSessionStep = "verify_second_factor"
-	SessionStepVerifyPhone         CurrentSessionStep = "verify_phone"
-	SessionStepVerifyPhoneOTP      CurrentSessionStep = "verify_phone_otp"
-	SessionStepVerifyAuthenticator CurrentSessionStep = "verify_authenticator"
-	AddSecondFactor                CurrentSessionStep = "add_second_factor"
+	SessionStepVerifyEmail             CurrentSessionStep = "verify_email"
+	SessionStepVerifyEmailOTP          CurrentSessionStep = "verify_email_otp"
+	SessionStepVerifySecondFactor      CurrentSessionStep = "verify_second_factor"
+	SessionStepVerifyPhone             CurrentSessionStep = "verify_phone"
+	SessionStepVerifyPhoneOTP          CurrentSessionStep = "verify_phone_otp"
+	SessionStepVerifyAuthenticator     CurrentSessionStep = "verify_authenticator"
+	AddSecondFactor                    CurrentSessionStep = "add_second_factor"
 	SessionStepPasswordResetInitiation CurrentSessionStep = "password_reset_initiation"
 	SessionStepPasswordResetCompletion CurrentSessionStep = "password_reset_completion"
 )

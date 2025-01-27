@@ -17,7 +17,6 @@ func SignJWT(sessionID uint, iss string, exp time.Time, keypair model.Deployment
 	rotatingToken := model.NewRotatingToken(sessionID, exp.Add(time.Hour*24*30))
 
 	err := tx.Create(rotatingToken).Error
-
 	if err != nil {
 		return "", err
 	}
@@ -30,14 +29,12 @@ func SignJWT(sessionID uint, iss string, exp time.Time, keypair model.Deployment
 		Claim("sess", sessionID).
 		Claim("rotating_token", rotatingToken.ID).
 		Build()
-
 	if err != nil {
 		return "", err
 	}
 
 	privateKeyBlock, _ := pem.Decode([]byte(keypair.PrivateKey))
 	privateKey, err := x509.ParsePKCS1PrivateKey(privateKeyBlock.Bytes)
-
 	if err != nil {
 		log.Fatal("Error parsing private key: ", err)
 	}
@@ -54,13 +51,11 @@ func SignJWT(sessionID uint, iss string, exp time.Time, keypair model.Deployment
 func VerifyJWT(j string, keypair model.DeploymentKeyPair, iss string) (jwt.Token, error) {
 	publicKeyBlock, _ := pem.Decode([]byte(keypair.PublicKey))
 	publicKey, err := x509.ParsePKCS1PublicKey(publicKeyBlock.Bytes)
-
 	if err != nil {
 		return nil, err
 	}
 
 	token, err := jwt.Parse([]byte(j), jwt.WithKey(jwa.RS256(), publicKey), jwt.WithVerify(true), jwt.WithIssuer(fmt.Sprintf("https://%s", iss)))
-
 	if err != nil {
 		return nil, err
 	}
@@ -71,13 +66,11 @@ func VerifyJWT(j string, keypair model.DeploymentKeyPair, iss string) (jwt.Token
 func ParseJWT(j string, keypair model.DeploymentKeyPair, iss string) (jwt.Token, error) {
 	publicKeyBlock, _ := pem.Decode([]byte(keypair.PublicKey))
 	publicKey, err := x509.ParsePKCS1PublicKey(publicKeyBlock.Bytes)
-
 	if err != nil {
 		return nil, err
 	}
 
 	token, err := jwt.ParseInsecure([]byte(j), jwt.WithKey(jwa.RS256(), publicKey), jwt.WithIssuer(fmt.Sprintf("https://%s", iss)))
-
 	if err != nil {
 		return nil, err
 	}

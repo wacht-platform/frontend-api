@@ -29,7 +29,6 @@ func (h *Handler) GetCurrentSession(c *fiber.Ctx) error {
 		Preload("SignIns.User").
 		Where("id = ?", sessionID).
 		First(session).Error
-
 	if err != nil {
 		return handler.SendNotFound(c, nil, "Session not found")
 	}
@@ -41,7 +40,6 @@ func (h *Handler) SwitchActiveSignIn(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 
 	signInId, err := strconv.ParseUint(c.Query("sign_in_id"), 10, 64)
-
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid sign in ID")
 	}
@@ -91,7 +89,6 @@ func (h *Handler) SignOut(c *fiber.Ctx) error {
 			tx.Model(session).Update("active_sign_in_id", 0)
 			return nil
 		})
-
 		if err != nil {
 			return handler.SendInternalServerError(c, nil, "Failed to sign out")
 		}
@@ -104,7 +101,6 @@ func (h *Handler) SignOut(c *fiber.Ctx) error {
 			tx.Where("session_id = ?", session.ID).Delete(&model.SignIn{})
 			return nil
 		})
-
 		if err != nil {
 			return handler.SendInternalServerError(c, nil, "Failed to sign out")
 		}
