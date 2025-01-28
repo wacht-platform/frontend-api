@@ -41,7 +41,10 @@ func (h *Handler) SwitchActiveSignIn(c *fiber.Ctx) error {
 
 	signInId, err := strconv.ParseUint(c.Query("sign_in_id"), 10, 64)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "Invalid sign in ID")
+		return fiber.NewError(
+			fiber.StatusBadRequest,
+			"Invalid sign in ID",
+		)
 	}
 
 	validSignIn := false
@@ -54,7 +57,10 @@ func (h *Handler) SwitchActiveSignIn(c *fiber.Ctx) error {
 	}
 
 	if !validSignIn {
-		return fiber.NewError(fiber.StatusBadRequest, "Invalid sign in ID")
+		return fiber.NewError(
+			fiber.StatusBadRequest,
+			"Invalid sign in ID",
+		)
 	}
 
 	session.ActiveSignInID = uint(signInId)
@@ -74,23 +80,37 @@ func (h *Handler) SignOut(c *fiber.Ctx) error {
 	if signInIdStr == "" {
 		signInId, err := strconv.ParseUint(signInIdStr, 10, 64)
 		if err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "Invalid sign in ID")
+			return fiber.NewError(
+				fiber.StatusBadRequest,
+				"Invalid sign in ID",
+			)
 		}
 
 		signIn := new(model.SignIn)
-		count := database.Connection.Where("id = ? AND session_id = ?", signInId, session.ID).First(signIn).RowsAffected
+		count := database.Connection.Where("id = ? AND session_id = ?", signInId, session.ID).
+			First(signIn).
+			RowsAffected
 
 		if count == 0 {
-			return fiber.NewError(fiber.StatusBadRequest, "Sign in not found")
+			return fiber.NewError(
+				fiber.StatusBadRequest,
+				"Sign in not found",
+			)
 		}
 
-		err = database.Connection.Transaction(func(tx *gorm.DB) error {
-			tx.Delete(signIn)
-			tx.Model(session).Update("active_sign_in_id", 0)
-			return nil
-		})
+		err = database.Connection.Transaction(
+			func(tx *gorm.DB) error {
+				tx.Delete(signIn)
+				tx.Model(session).Update("active_sign_in_id", 0)
+				return nil
+			},
+		)
 		if err != nil {
-			return handler.SendInternalServerError(c, nil, "Failed to sign out")
+			return handler.SendInternalServerError(
+				c,
+				nil,
+				"Failed to sign out",
+			)
 		}
 
 		handler.RemoveSessionFromCache(session.ID)

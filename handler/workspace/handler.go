@@ -31,8 +31,16 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 	}
 
 	var orgMembership model.OrgMembership
-	if err := database.Connection.Where("organization_id = ? AND user_id = ?", b.OrganizationID, session.ActiveSignIn.UserID).First(&orgMembership).Error; err != nil {
-		return handler.SendForbidden(c, nil, "Not a member of this organization")
+	if err := database.Connection.Where(
+		"organization_id = ? AND user_id = ?",
+		b.OrganizationID,
+		session.ActiveSignIn.UserID,
+	).First(&orgMembership).Error; err != nil {
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Not a member of this organization",
+		)
 	}
 
 	workspace := model.Workspace{
@@ -98,7 +106,11 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 		return nil
 	})
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to create workspace")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to create workspace",
+		)
 	}
 
 	return handler.SendSuccess(c, fiber.Map{
@@ -121,8 +133,16 @@ func (h *Handler) GetWorkspace(c *fiber.Ctx) error {
 	}
 
 	var membership model.WorkspaceMembership
-	if err := database.Connection.Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignIn.UserID).Preload("Role").First(&membership).Error; err != nil {
-		return handler.SendForbidden(c, nil, "Not a member of this workspace")
+	if err := database.Connection.Where(
+		"workspace_id = ? AND user_id = ?",
+		workspaceID,
+		session.ActiveSignIn.UserID,
+	).Preload("Role").First(&membership).Error; err != nil {
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Not a member of this workspace",
+		)
 	}
 
 	return handler.SendSuccess(c, fiber.Map{
@@ -149,8 +169,16 @@ func (h *Handler) UpdateWorkspace(c *fiber.Ctx) error {
 	}
 
 	var membership model.WorkspaceMembership
-	if err := database.Connection.Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignIn.UserID).Preload("Role").First(&membership).Error; err != nil {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	if err := database.Connection.Where("workspace_id = ? AND user_id = ?",
+		workspaceID,
+		session.ActiveSignIn.UserID,
+	).
+		Preload("Role").First(&membership).Error; err != nil {
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Insufficient permissions",
+		)
 	}
 
 	hasPermission := false
@@ -162,14 +190,22 @@ func (h *Handler) UpdateWorkspace(c *fiber.Ctx) error {
 	}
 
 	if !hasPermission {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Insufficient permissions",
+		)
 	}
 
 	workspace.Name = b.Name
 	workspace.Description = b.Description
 
 	if err := database.Connection.Save(&workspace).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to update workspace")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to update workspace",
+		)
 	}
 
 	return handler.SendSuccess(c, fiber.Map{
@@ -185,10 +221,18 @@ func (h *Handler) DeleteWorkspace(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
-	// Check if user is owner
 	var membership model.WorkspaceMembership
-	if err := database.Connection.Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignIn.UserID).Preload("Role").First(&membership).Error; err != nil {
-		return handler.SendForbidden(c, nil, "Only workspace owner can delete the workspace")
+	if err := database.Connection.Where(
+		"workspace_id = ? AND user_id = ?",
+		workspaceID,
+		session.ActiveSignIn.UserID,
+	).
+		Preload("Role").First(&membership).Error; err != nil {
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Only workspace owner can delete the workspace",
+		)
 	}
 
 	isOwner := false
@@ -200,11 +244,19 @@ func (h *Handler) DeleteWorkspace(c *fiber.Ctx) error {
 	}
 
 	if !isOwner {
-		return handler.SendForbidden(c, nil, "Only workspace owner can delete the workspace")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Only workspace owner can delete the workspace",
+		)
 	}
 
 	if err := database.Connection.Delete(&model.Workspace{}, workspaceID).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to delete workspace")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to delete workspace",
+		)
 	}
 
 	return handler.SendSuccess(c, fiber.Map{
@@ -226,7 +278,11 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 
 	var membership model.WorkspaceMembership
 	if err := database.Connection.Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignIn.UserID).Preload("Role").First(&membership).Error; err != nil {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Insufficient permissions",
+		)
 	}
 
 	hasPermission := false
@@ -238,7 +294,11 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 	}
 
 	if !hasPermission {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Insufficient permissions",
+		)
 	}
 
 	var userEmail model.UserEmailAddress
@@ -247,8 +307,16 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 	}
 
 	var existingMembership model.WorkspaceMembership
-	if err := database.Connection.Where("workspace_id = ? AND user_id = ?", workspaceID, userEmail.UserID).First(&existingMembership).Error; err == nil {
-		return handler.SendBadRequest(c, nil, "User is already a member")
+	if err := database.Connection.Where(
+		"workspace_id = ? AND user_id = ?",
+		workspaceID,
+		userEmail.UserID,
+	).First(&existingMembership).Error; err == nil {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"User is already a member",
+		)
 	}
 
 	role := &model.WorkspaceRole{
@@ -290,7 +358,11 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 		return nil
 	})
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to add member")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to add member",
+		)
 	}
 
 	return handler.SendSuccess(c, fiber.Map{
@@ -309,7 +381,11 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 
 	var membership model.WorkspaceMembership
 	if err := database.Connection.Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignIn.UserID).Preload("Role").First(&membership).Error; err != nil {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Insufficient permissions",
+		)
 	}
 
 	hasPermission := false
@@ -321,11 +397,19 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 	}
 
 	if !hasPermission {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Insufficient permissions",
+		)
 	}
 
 	if err := database.Connection.Where("workspace_id = ? AND user_id = ?", workspaceID, memberID).Delete(&model.WorkspaceMembership{}).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to remove member")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to remove member",
+		)
 	}
 
 	return handler.SendSuccess(c, fiber.Map{

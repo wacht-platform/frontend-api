@@ -17,6 +17,8 @@ const (
 	SignInMethodPlainEmail    SignInMethod = "plain_email"
 	SignInMethodPlainUsername SignInMethod = "plain_username"
 	SignInMethodPhoneOTP      SignInMethod = "phone_otp"
+	SignInMethodMagicLink     SignInMethod = "magic_link"
+	SignInMethodEmailOTP      SignInMethod = "email_otp"
 	SignInMethodSSO           SignInMethod = "sso"
 	Passkey                   SignInMethod = "passkey"
 )
@@ -38,7 +40,9 @@ type Error struct {
 func (e *Error) Scan(src any) error {
 	bytes, ok := src.([]byte)
 	if !ok {
-		return errors.New(fmt.Sprint("Failed to unmarshal JSONB value:", src))
+		return errors.New(
+			fmt.Sprint("Failed to unmarshal JSONB value:", src),
+		)
 	}
 
 	result := Error{}
@@ -61,19 +65,17 @@ func (e *Error) GormDBDataType() string {
 
 type SignInAttempt struct {
 	Model
-	UserID                             uint                       `json:"-"`
-	IdentifierID                       uint                       `json:"-"`
-	SessionID                          uint                       `json:"session_id"`
-	Method                             SignInMethod               `json:"method"`
-	SSOProvider                        SSOProvider                `json:"sso_provider"`
-	ExpiresAt                          time.Time                  `json:"expires_at"`
-	FirstMethodAuthenticated           bool                       `json:"first_method_authenticated"`
-	SecondMethodAuthenticated          bool                       `json:"second_method_authenticated"`
-	SecondMethodAuthenticationRequired bool                       `json:"second_method_authentication_required"`
-	CurrentStep                        CurrentSessionStep         `json:"current_step"`
-	Completed                          bool                       `json:"completed"`
-	Errored                            bool                       `json:"errored"`
-	Errors                             datatypes.JSONSlice[Error] `json:"errors"`
+	UserID       uint                                   `json:"-"`
+	IdentifierID uint                                   `json:"-"`
+	SessionID    uint                                   `json:"session_id"`
+	Method       SignInMethod                           `json:"method"`
+	SSOProvider  SSOProvider                            `json:"sso_provider"`
+	ExpiresAt    time.Time                              `json:"expires_at"`
+	CurrentStep  SignInAttemptStep                      `json:"current_step"`
+	Steps        datatypes.JSONSlice[SignInAttemptStep] `json:"steps"`
+	Completed    bool                                   `json:"completed"`
+	Errored      bool                                   `json:"errored"`
+	Errors       datatypes.JSONSlice[Error]             `json:"errors"`
 }
 
 func NewSignInAttempt(method SignInMethod) *SignInAttempt {

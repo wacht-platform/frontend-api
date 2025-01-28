@@ -38,13 +38,22 @@ func getSessionToken(c *fiber.Ctx) string {
 	return c.Get(devSessionHeader)
 }
 
-func handleNewSession(c *fiber.Ctx, deployment model.Deployment) error {
+func handleNewSession(
+	c *fiber.Ctx,
+	deployment model.Deployment,
+) error {
 	var token string
 	session := model.NewSession()
 
 	err := database.Connection.Transaction(func(tx *gorm.DB) error {
 		var err error
-		token, err = utils.SignJWT(session.ID, deployment.Host, time.Now().Add(sessionDuration), deployment.KepPair, tx)
+		token, err = utils.SignJWT(
+			session.ID,
+			deployment.Host,
+			time.Now().Add(sessionDuration),
+			deployment.KepPair,
+			tx,
+		)
 		if err != nil {
 			return err
 		}
@@ -54,7 +63,12 @@ func handleNewSession(c *fiber.Ctx, deployment model.Deployment) error {
 		return err
 	})
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to create a new session")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to create a new session",
+			handler.ErrInternal,
+		)
 	}
 
 	setSessionToken(c, token, deployment.IsProduction())
@@ -64,11 +78,23 @@ func handleNewSession(c *fiber.Ctx, deployment model.Deployment) error {
 	return c.Next()
 }
 
-func handleExistingSession(c *fiber.Ctx, deployment model.Deployment, sessionToken string) error {
-	token, err := utils.VerifyJWT(sessionToken, deployment.KepPair, deployment.Host)
+func handleExistingSession(
+	c *fiber.Ctx,
+	deployment model.Deployment,
+	sessionToken string,
+) error {
+	token, err := utils.VerifyJWT(
+		sessionToken,
+		deployment.KepPair,
+		deployment.Host,
+	)
 
 	if errors.Is(err, jwt.TokenExpiredError()) {
-		token, err = utils.ParseJWT(sessionToken, deployment.KepPair, deployment.Host)
+		token, err = utils.ParseJWT(
+			sessionToken,
+			deployment.KepPair,
+			deployment.Host,
+		)
 		if err != nil {
 			return handler.SendUnauthorized(c, err, "Invalid session")
 		}
@@ -108,24 +134,41 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token) error {
 		return handler.SendUnauthorized(c, err, "Invalid session")
 	}
 
-	rotatingToken, err := validateRotatingToken(sessionID, rotatingTokenID)
+	rotatingToken, err := validateRotatingToken(
+		sessionID,
+		rotatingTokenID,
+	)
 	if err != nil {
 		return handler.SendUnauthorized(c, err, "Invalid session")
 	}
 
 	if err := database.Connection.Delete(&rotatingToken).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to refresh session")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to refresh session",
+		)
 	}
 
 	var token string
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
-		token, err = utils.SignJWT(sessionID, deployment.Host, time.Now().Add(sessionDuration), deployment.KepPair, tx)
+		token, err = utils.SignJWT(
+			sessionID,
+			deployment.Host,
+			time.Now().Add(sessionDuration),
+			deployment.KepPair,
+			tx,
+		)
 
 		return err
 	})
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to refresh session")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to refresh session",
+		)
 	}
 
 	setSessionToken(c, token, deployment.IsProduction())
@@ -149,14 +192,21 @@ func extractTokenClaims(token jwt.Token) (uint, uint, error) {
 	return uint(sessionID), uint(rotatingTokenID), nil
 }
 
-func validateRotatingToken(sessionID uint, rotatingTokenID uint) (model.RotatingToken, error) {
+func validateRotatingToken(
+	sessionID uint,
+	rotatingTokenID uint,
+) (model.RotatingToken, error) {
 	var rotatingToken model.RotatingToken
 	if err := database.Connection.First(&rotatingToken, rotatingTokenID).Error; err != nil {
 		return rotatingToken, err
 	}
 
-	if rotatingToken.SessionID != sessionID || !rotatingToken.IsValid() {
-		return rotatingToken, fiber.NewError(fiber.StatusUnauthorized, "Invalid rotating token")
+	if rotatingToken.SessionID != sessionID ||
+		!rotatingToken.IsValid() {
+		return rotatingToken, fiber.NewError(
+			fiber.StatusUnauthorized,
+			"Invalid rotating token",
+		)
 	}
 
 	return rotatingToken, nil
@@ -175,7 +225,10 @@ func RateLimiter() fiber.Handler {
 			return c.IP()
 		},
 		LimitReached: func(c *fiber.Ctx) error {
-			return fiber.NewError(fiber.StatusTooManyRequests, "Too many requests, please try again later.")
+			return fiber.NewError(
+				fiber.StatusTooManyRequests,
+				"Too many requests, please try again later.",
+			)
 		},
 		//  Storage: storage,
 	})

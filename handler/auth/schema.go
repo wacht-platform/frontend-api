@@ -12,10 +12,10 @@ type SignInRequest struct {
 }
 
 type SignUpRequest struct {
-	FirstName   string `form:"firstName"`
-	LastName    string `form:"lastName"`
+	FirstName   string `form:"first_name"`
+	LastName    string `form:"last_name"`
 	Username    string `form:"username"`
-	PhoneNumber string `form:"phoneNumber"`
+	PhoneNumber string `form:"phone_number"`
 	Email       string `form:"email"`
 	Password    string `form:"password"`
 }
@@ -34,8 +34,7 @@ type InitSSOResponse struct {
 }
 
 type VerifyOTPRequest struct {
-	Email    string `json:"email"`
-	Passcode string `json:"otp"`
+	VerificationCode string `json:"verification_code"`
 }
 
 type PrepareVerificationRequest struct {

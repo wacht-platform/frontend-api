@@ -14,5 +14,8 @@ func setupWorkspaceRoutes(app *fiber.App) {
 	router.Put("/:id", workspaceHandler.UpdateWorkspace)
 	router.Delete("/:id", workspaceHandler.DeleteWorkspace)
 	router.Post("/:id/members", workspaceHandler.InviteMember)
-	router.Delete("/:id/members/:memberId", workspaceHandler.RemoveMember)
+	router.Delete(
+		"/:id/members/:memberId",
+		workspaceHandler.RemoveMember,
+	)
 }

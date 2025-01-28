@@ -13,6 +13,7 @@ const (
 	FirstFactorEmailPassword    FirstFactor = "email_password"
 	FirstFactorUsernamePassword FirstFactor = "username_password"
 	FirstFactorEmailOTP         FirstFactor = "email_otp"
+	FirstFactorMagicLink        FirstFactor = "email_magic_link"
 	FirstFactorPhoneOTP         FirstFactor = "phone_otp"
 )
 
@@ -86,7 +87,9 @@ type IndividualAuthSettings struct {
 func (i *IndividualAuthSettings) Scan(src any) error {
 	bytes, ok := src.([]byte)
 	if !ok {
-		return errors.New(fmt.Sprint("Failed to unmarshal JSONB value:", src))
+		return errors.New(
+			fmt.Sprint("Failed to unmarshal JSONB value:", src),
+		)
 	}
 
 	result := IndividualAuthSettings{}
@@ -115,7 +118,9 @@ type VerificationPolicy struct {
 func (v *VerificationPolicy) Scan(src any) error {
 	bytes, ok := src.([]byte)
 	if !ok {
-		return errors.New(fmt.Sprint("Failed to unmarshal JSONB value:", src))
+		return errors.New(
+			fmt.Sprint("Failed to unmarshal JSONB value:", src),
+		)
 	}
 
 	result := VerificationPolicy{}
@@ -149,7 +154,9 @@ type AuthFactorsEnabled struct {
 func (a *AuthFactorsEnabled) Scan(src any) error {
 	bytes, ok := src.([]byte)
 	if !ok {
-		return errors.New(fmt.Sprint("Failed to unmarshal JSONB value:", src))
+		return errors.New(
+			fmt.Sprint("Failed to unmarshal JSONB value:", src),
+		)
 	}
 
 	result := AuthFactorsEnabled{}
@@ -186,7 +193,7 @@ type AuthSettings struct {
 	SecondFactorPolicy     SecondFactorPolicy     `json:"second_factor_policy"`
 	FirstFactor            FirstFactor            `json:"first_factor"`
 	SecondFactor           SecondFactor           `json:"second_factor"`
-	AlternateFirstFactors  []FirstFactor          `gorm:"type:text[]" json:"alternate_first_factors"`
-	AlternateSecondFactors []SecondFactor         `gorm:"type:text[]" json:"alternate_second_factors"`
+	AlternateFirstFactors  []FirstFactor          `json:"alternate_first_factors"  gorm:"type:text[]"`
+	AlternateSecondFactors []SecondFactor         `json:"alternate_second_factors" gorm:"type:text[]"`
 	DeploymentID           uint                   `json:"deployment_id"`
 }

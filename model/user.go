@@ -41,7 +41,7 @@ type UserEmailAddress struct {
 	Model
 	UserID               uint                 `json:"-"`
 	User                 User                 `json:"-"`
-	Email                string               `gorm:"index:idx_user_email_address_email" json:"email"`
+	Email                string               `json:"email"                       gorm:"index:idx_user_email_address_email"`
 	IsPrimary            bool                 `json:"is_primary"`
 	Verified             bool                 `json:"verified"`
 	VerifiedAt           time.Time            `json:"verified_at"`
@@ -85,5 +85,5 @@ type User struct {
 	PublicMetadata        datatypes.JSONMap   `json:"public_metadata"`
 	PrivateMetadata       datatypes.JSONMap   `json:"-"`
 	OtpSecret             string              `json:"otp_secret"`
-	BackupCodes           []string            `json:"backup_codes" gorm:"type:text[]"`
+	BackupCodes           []string            `json:"backup_codes"                 gorm:"type:text[]"`
 }

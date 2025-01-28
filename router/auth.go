@@ -13,11 +13,20 @@ func setupAuthRoutes(app *fiber.App) {
 	router.Post("/signup", authHandler.SignUp)
 	router.Post("/sso", authHandler.InitSSO)
 	router.Get("/sso-callback", authHandler.SSOCallback)
-	router.Get("/identifier-availability", authHandler.CheckIdentifierAvailability)
+	router.Get(
+		"/identifier-availability",
+		authHandler.CheckIdentifierAvailability,
+	)
 
-	router.Post("/prepare-verification", authHandler.PrepareVerification) // sign in attempt lega
-	router.Post("/verify-otp", authHandler.VerifyOTP)
+	router.Post(
+		"/prepare-verification",
+		authHandler.PrepareVerification,
+	)
+	router.Post("/complete-verification", authHandler.CompleteVerification)
 
-	router.Post("/prepare-reset-password", authHandler.PreparePasswordReset)
-	router.Post("/reset-password", authHandler.ResetPassword)
+	// router.Post(
+	// 	"/prepare-reset-password",
+	// 	authHandler.PreparePasswordReset,
+	// )
+	// router.Post("/reset-password", authHandler.ResetPassword)
 }

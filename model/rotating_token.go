@@ -12,7 +12,10 @@ func (r *RotatingToken) IsValid() bool {
 	return r.ValidUntil.After(time.Now())
 }
 
-func NewRotatingToken(sessionID uint, validUntil time.Time) *RotatingToken {
+func NewRotatingToken(
+	sessionID uint,
+	validUntil time.Time,
+) *RotatingToken {
 	return &RotatingToken{
 		SessionID:  sessionID,
 		ValidUntil: validUntil,

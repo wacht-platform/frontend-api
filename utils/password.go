@@ -11,5 +11,8 @@ func HashPassword(password string) (string, error) {
 }
 
 func ComparePassword(hashedPassword, password string) (bool, error) {
-	return argon2.VerifyEncoded([]byte(password), []byte(hashedPassword))
+	return argon2.VerifyEncoded(
+		[]byte(password),
+		[]byte(hashedPassword),
+	)
 }

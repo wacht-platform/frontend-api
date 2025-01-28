@@ -13,7 +13,12 @@ var ssoConfig = map[string]model.OauthCredentials{
 		ClientID:     "da77f65d-9dfd-4d47-aff9-59ce2959a0d8",
 		ClientSecret: "DyX8Q~ZKrXGxW53JhOFnN0zmK5.HzLY4XT2o3dhl",
 		RedirectURI:  "http://localhost:5173/auth/sso/microsoft/callback",
-		Scopes:       []string{"openid", "email", "profile", "https://graph.microsoft.com/User.Read"},
+		Scopes: []string{
+			"openid",
+			"email",
+			"profile",
+			"https://graph.microsoft.com/User.Read",
+		},
 	},
 	"github_oauth": {
 		ClientID:     "Ov23lifkTu6JeKZwE5V0",

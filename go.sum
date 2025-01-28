@@ -76,6 +76,8 @@ github.com/lestrrat-go/jwx/v3 v3.0.0-alpha1 h1:IKsSdax3m7zsi4ooThn7YR74PMsx8fqcL
 github.com/lestrrat-go/jwx/v3 v3.0.0-alpha1/go.mod h1:JLWHVwLtN56LfSrlpyjhvKEdG00MTYOrmzLIJkrCeDw=
 github.com/lestrrat-go/option v1.0.1 h1:oAzP2fvZGQKWkvHa1/SAcFolBEca1oN+mQ7eooNBEYU=
 github.com/lestrrat-go/option v1.0.1/go.mod h1:5ZHFbivi4xwXxhxY9XHDe2FHo6/Z7WWmtT7T5nBBp3I=
+github.com/lib/pq v1.10.9 h1:YXG7RB+JIjhP29X+OtkiDnYaXQwpS4JEWq7dtCCRUEw=
+github.com/lib/pq v1.10.9/go.mod h1:AlVN5x4E4T544tWzH6hKfbfQvm3HdbOxrmggDNAPY9o=
 github.com/matthewhartstonge/argon2 v1.1.1 h1:HI58p4mCeh9WXXiRHKr2Ef2dEVD9T/kca2oKCiyACto=
 github.com/matthewhartstonge/argon2 v1.1.1/go.mod h1:wPwadrM7vgZ4Ygd00znyNc0yJIf/LwUjxZ1k6P3oWpo=
 github.com/mattn/go-colorable v0.1.13 h1:fFA4WZxdEF4tXPZVKMLwD8oUnCTTo08duU7wxecdEvA=

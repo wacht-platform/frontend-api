@@ -4,18 +4,16 @@ import (
 	"github.com/godruoyi/go-snowflake"
 )
 
-type CurrentSessionStep string
+type SignInAttemptStep string
 
 const (
-	SessionStepVerifyEmail             CurrentSessionStep = "verify_email"
-	SessionStepVerifyEmailOTP          CurrentSessionStep = "verify_email_otp"
-	SessionStepVerifySecondFactor      CurrentSessionStep = "verify_second_factor"
-	SessionStepVerifyPhone             CurrentSessionStep = "verify_phone"
-	SessionStepVerifyPhoneOTP          CurrentSessionStep = "verify_phone_otp"
-	SessionStepVerifyAuthenticator     CurrentSessionStep = "verify_authenticator"
-	AddSecondFactor                    CurrentSessionStep = "add_second_factor"
-	SessionStepPasswordResetInitiation CurrentSessionStep = "password_reset_initiation"
-	SessionStepPasswordResetCompletion CurrentSessionStep = "password_reset_completion"
+	SignInAttemptStepVerifyEmail             SignInAttemptStep = "verify_email"
+	SignInAttemptStepVerifyEmailOTP          SignInAttemptStep = "verify_email_otp"
+	SignInAttemptStepVerifySecondFactor      SignInAttemptStep = "verify_second_factor"
+	SignInAttemptStepVerifyPhone             SignInAttemptStep = "verify_phone"
+	SignInAttemptStepVerifyPhoneOTP          SignInAttemptStep = "verify_phone_otp"
+	SignInAttemptStepPasswordResetInitiation SignInAttemptStep = "password_reset_initiation"
+	SignInAttemptStepPasswordResetCompletion SignInAttemptStep = "password_reset_completion"
 )
 
 type Session struct {

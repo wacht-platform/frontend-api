@@ -10,5 +10,5 @@ type UpdateOrgRequest struct {
 
 type InviteMemberRequest struct {
 	Email string `form:"email" validate:"required,email"`
-	Role  string `form:"role" validate:"required,oneof=member admin owner"`
+	Role  string `form:"role"  validate:"required,oneof=member admin owner"`
 }

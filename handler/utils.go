@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -29,12 +30,18 @@ func GetSession(c *fiber.Ctx) *model.Session {
 }
 
 func RemoveSessionFromCache(id uint) {
-	database.Cache.Del(context.Background(), fmt.Sprintf("session:%d", id))
+	database.Cache.Del(
+		context.Background(),
+		fmt.Sprintf("session:%d", id),
+	)
 }
 
 func getSessionFromCache(id uint) (*model.Session, error) {
 	var session model.Session
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		10*time.Second,
+	)
 	defer cancel()
 
 	v := database.Cache.Get(ctx, fmt.Sprintf("session:%d", id))
@@ -42,10 +49,20 @@ func getSessionFromCache(id uint) (*model.Session, error) {
 		return nil, v.Err()
 	}
 
+	if v.Val() == "" {
+		return nil, fmt.Errorf("session not found")
+	}
+
 	err := json.Unmarshal([]byte(v.Val()), &session)
 	if err != nil {
 		return nil, err
 	}
+
+	sessionID, err := strconv.ParseUint(session.IDStr, 10, 32)
+	if err != nil {
+		return nil, err
+	}
+	session.ID = uint(sessionID)
 
 	return &session, nil
 }
@@ -60,7 +77,12 @@ func getSessionAndSetToCache(sessionId uint) *model.Session {
 		return nil
 	}
 
-	cmd := database.Cache.Set(context.Background(), fmt.Sprintf("session:%d", sessionId), json, time.Hour)
+	cmd := database.Cache.Set(
+		context.Background(),
+		fmt.Sprintf("session:%d", sessionId),
+		json,
+		time.Hour,
+	)
 	if cmd.Err() != nil {
 		return nil
 	}

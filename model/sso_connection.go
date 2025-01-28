@@ -62,7 +62,9 @@ type OauthCredentials struct {
 func (o *OauthCredentials) Scan(value interface{}) error {
 	bytes, ok := value.([]byte)
 	if !ok {
-		return errors.New(fmt.Sprint("Failed to unmarshal JSONB value:", value))
+		return errors.New(
+			fmt.Sprint("Failed to unmarshal JSONB value:", value),
+		)
 	}
 
 	result := OauthCredentials{}
@@ -88,6 +90,6 @@ type SSOConnection struct {
 	DeploymentID         uint        `json:"deployment_id"`
 	Provider             SSOProvider `json:"provider"`
 	Enabled              bool        `json:"enabled"`
-	UserDefinedScopes    []string    `gorm:"type:text[]" json:"user_defined_scopes"`
+	UserDefinedScopes    []string    `json:"user_defined_scopes"    gorm:"type:text[]"`
 	CustomCredentialsSet bool        `json:"custom_credentials_set"`
 }

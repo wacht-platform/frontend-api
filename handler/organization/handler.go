@@ -37,7 +37,6 @@ func (h *Handler) CreateOrganization(c *fiber.Ctx) error {
 		Name: b.Name,
 	}
 
-	// Create owner role
 	ownerRole := &model.OrgRole{
 		Model: model.Model{
 			ID: uint(snowflake.ID()),
@@ -53,7 +52,6 @@ func (h *Handler) CreateOrganization(c *fiber.Ctx) error {
 		},
 	}
 
-	// Create member role
 	memberRole := &model.OrgRole{
 		Model: model.Model{
 			ID: uint(snowflake.ID()),
@@ -118,7 +116,11 @@ func (h *Handler) GetOrganization(c *fiber.Ctx) error {
 
 	// Check if user is member
 	var membership model.OrgMembership
-	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignIn.UserID).Preload("Role").First(&membership).Error; err != nil {
+	if err := database.Connection.Where(
+		"organization_id = ? AND user_id = ?",
+		orgID,
+		session.ActiveSignIn.UserID,
+	).Preload("Role").First(&membership).Error; err != nil {
 		return handler.SendForbidden(c, nil, "Not a member of this organization")
 	}
 
@@ -241,7 +243,11 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 	}
 
 	var existingMembership model.OrgMembership
-	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, userEmail.UserID).First(&existingMembership).Error; err == nil {
+	if err := database.Connection.Where(
+		"organization_id = ? AND user_id = ?",
+		orgID,
+		userEmail.UserID,
+	).First(&existingMembership).Error; err == nil {
 		return handler.SendBadRequest(c, nil, "User is already a member")
 	}
 

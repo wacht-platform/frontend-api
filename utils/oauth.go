@@ -21,7 +21,10 @@ type OAuthUser struct {
 	ImageUrl  string `json:"image_url"`
 }
 
-func GenerateVerificationUrl(ssoProvider model.SSOProvider, attempt model.SignInAttempt) string {
+func GenerateVerificationUrl(
+	ssoProvider model.SSOProvider,
+	attempt model.SignInAttempt,
+) string {
 	url := ""
 
 	defcred := config.GetDefaultOAuthCredentials(string(ssoProvider))
@@ -39,18 +42,26 @@ func GenerateVerificationUrl(ssoProvider model.SSOProvider, attempt model.SignIn
 			AuthURL:  "https://x.com/i/oauth2/authorize",
 			TokenURL: "https://x.com/i/oauth2/token",
 		}
-		url = conf.AuthCodeURL(strconv.FormatUint(uint64(attempt.ID), 10))
+		url = conf.AuthCodeURL(
+			strconv.FormatUint(uint64(attempt.ID), 10),
+		)
 	case model.SSOProviderGitHub:
 		conf.Endpoint = github.Endpoint
-		url = conf.AuthCodeURL(strconv.FormatUint(uint64(attempt.ID), 10))
+		url = conf.AuthCodeURL(
+			strconv.FormatUint(uint64(attempt.ID), 10),
+		)
 	case model.SSOProviderGitLab:
 	case model.SSOProviderGoogle:
 		conf.Endpoint = google.Endpoint
-		url = conf.AuthCodeURL(strconv.FormatUint(uint64(attempt.ID), 10))
+		url = conf.AuthCodeURL(
+			strconv.FormatUint(uint64(attempt.ID), 10),
+		)
 	case model.SSOProviderFacebook:
 	case model.SSOProviderMicrosoft:
 		conf.Endpoint = microsoft.AzureADEndpoint("")
-		url = conf.AuthCodeURL(strconv.FormatUint(uint64(attempt.ID), 10))
+		url = conf.AuthCodeURL(
+			strconv.FormatUint(uint64(attempt.ID), 10),
+		)
 
 	case model.SSOProviderLinkedIn:
 	case model.SSOProviderDiscord:
@@ -59,11 +70,18 @@ func GenerateVerificationUrl(ssoProvider model.SSOProvider, attempt model.SignIn
 	return url
 }
 
-func ExchangeTokenForUser(token *oauth2.Token, ssoProvider model.SSOProvider) (*OAuthUser, error) {
+func ExchangeTokenForUser(
+	token *oauth2.Token,
+	ssoProvider model.SSOProvider,
+) (*OAuthUser, error) {
 	switch ssoProvider {
 	case model.SSOProviderX:
 	case model.SSOProviderGitHub:
-		req, err := http.NewRequest("GET", "https://api.github.com/user", nil)
+		req, err := http.NewRequest(
+			"GET",
+			"https://api.github.com/user",
+			nil,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -90,7 +108,11 @@ func ExchangeTokenForUser(token *oauth2.Token, ssoProvider model.SSOProvider) (*
 			lastName = namesplit[1]
 		}
 
-		req, err = http.NewRequest("GET", "https://api.github.com/user/emails", nil)
+		req, err = http.NewRequest(
+			"GET",
+			"https://api.github.com/user/emails",
+			nil,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -119,7 +141,11 @@ func ExchangeTokenForUser(token *oauth2.Token, ssoProvider model.SSOProvider) (*
 		}
 	case model.SSOProviderGitLab:
 	case model.SSOProviderGoogle:
-		req, err := http.NewRequest("GET", "https://www.googleapis.com/oauth2/v3/userinfo", nil)
+		req, err := http.NewRequest(
+			"GET",
+			"https://www.googleapis.com/oauth2/v3/userinfo",
+			nil,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -143,7 +169,11 @@ func ExchangeTokenForUser(token *oauth2.Token, ssoProvider model.SSOProvider) (*
 		}, nil
 	case model.SSOProviderFacebook:
 	case model.SSOProviderMicrosoft:
-		req, err := http.NewRequest("GET", "https://graph.microsoft.com/v1.0/me", nil)
+		req, err := http.NewRequest(
+			"GET",
+			"https://graph.microsoft.com/v1.0/me",
+			nil,
+		)
 		if err != nil {
 			return nil, err
 		}
