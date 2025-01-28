@@ -171,8 +171,8 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 
 	attempt := h.service.CreateSignInAttempt(
 		u.ID,
-		session.ID,
 		*u.PrimaryEmailAddressID,
+		session.ID,
 		model.SignInMethodPlainEmail,
 		steps,
 		completed,
