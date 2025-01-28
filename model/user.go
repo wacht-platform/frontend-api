@@ -73,15 +73,15 @@ type User struct {
 	Password              string              `json:"-"`
 	SchemaVersion         SchemaVersion       `json:"schema_version"`
 	Disabled              bool                `json:"disabled"`
-	PrimaryEmailAddressID uint                `json:"primary_email_address_id"`
-	PrimaryPhoneNumberID  uint                `json:"primary_phone_number_id"`
+	PrimaryEmailAddressID *uint               `json:"primary_email_address_id"`
+	PrimaryPhoneNumberID  *uint               `json:"primary_phone_number_id"`
 	SecondFactorPolicy    SecondFactorPolicy  `json:"second_factor_policy"`
 	UserEmailAddresses    []*UserEmailAddress `json:"user_email_addresses"`
 	UserPhoneNumbers      []*UserPhoneNumber  `json:"user_phone_numbers"`
 	SocialConnections     []*SocialConnection `json:"social_connections,omitempty"`
 	SignIns               []*SignIn           `json:"-"`
-	LastActiveOrgID       uint                `json:"last_active_org_id"`
-	DeploymentID          uint                `json:"deployment_id"`
+	LastActiveOrgID       *uint               `json:"last_active_org_id"`
+	DeploymentID          uint                `json:"-"`
 	PublicMetadata        datatypes.JSONMap   `json:"public_metadata"`
 	PrivateMetadata       datatypes.JSONMap   `json:"-"`
 	OtpSecret             string              `json:"otp_secret"`

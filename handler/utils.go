@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -25,6 +26,8 @@ func GetSession(c *fiber.Ctx) *model.Session {
 	if err != nil {
 		session = getSessionAndSetToCache(sessionID)
 	}
+
+	log.Println("session", session)
 
 	return session
 }
@@ -48,6 +51,8 @@ func getSessionFromCache(id uint) (*model.Session, error) {
 	if v.Err() != nil {
 		return nil, v.Err()
 	}
+
+	log.Println(v.Val())
 
 	if v.Val() == "" {
 		return nil, fmt.Errorf("session not found")

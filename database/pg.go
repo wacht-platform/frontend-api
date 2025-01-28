@@ -44,5 +44,13 @@ func AutoMigratePg() error {
 		&model.DeploymentKeyPair{},
 		&model.RotatingToken{},
 		&model.UserPhoneNumber{},
+		&model.Organization{},
+		&model.OrganizationPermissions{},
+		&model.OrgnizationRole{},
+		&model.OrganizationMembership{},
+		&model.Workspace{},
+		&model.WorkspacePermissions{},
+		&model.WorkspaceRole{},
+		&model.WorkspaceMembership{},
 	)
 }

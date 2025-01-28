@@ -1,7 +1,7 @@
 package model
 
-type OrgRole struct {
+type OrgnizationRole struct {
 	Model
-	Name        string                `json:"name"`
-	Permissions []*OrgRolePermissions `json:"permissions"`
+	Name        string                     `json:"name"`
+	Permissions []*OrganizationPermissions `json:"permissions" gorm:"many2many:org_role_permissions;"`
 }

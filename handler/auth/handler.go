@@ -89,7 +89,7 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 		model.SignInMethodPlainEmail,
 		steps,
 		completed,
-		email.User.LastActiveOrgID,
+		*email.User.LastActiveOrgID,
 	)
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
@@ -102,6 +102,8 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 			if err := tx.Create(signIn).Error; err != nil {
 				return err
 			}
+			signIn.User = &email.User
+
 			session.SignIns = append(session.SignIns, signIn)
 			session.ActiveSignInID = signIn.ID
 		}
@@ -171,7 +173,7 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 	attempt := h.service.CreateSignInAttempt(
 		u.ID,
 		session.ID,
-		u.PrimaryEmailAddressID,
+		*u.PrimaryEmailAddressID,
 		model.SignInMethodPlainEmail,
 		steps,
 		completed,
@@ -298,13 +300,15 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			return handler.SendInternalServerError(c, err, "Error generating OTP secret")
 		}
 
+		primaryAddressID := uint(snowflake.ID())
+
 		u := model.User{
 			Model:                 model.Model{ID: uint(snowflake.ID())},
 			SchemaVersion:         model.SchemaVersionV1,
 			SecondFactorPolicy:    deployment.AuthSettings.SecondFactorPolicy,
 			DeploymentID:          deployment.ID,
 			OtpSecret:             otpSecret.Secret(),
-			PrimaryEmailAddressID: uint(snowflake.ID()),
+			PrimaryEmailAddressID: &primaryAddressID,
 		}
 
 		if err := tx.Create(&u).Error; err != nil {
@@ -312,7 +316,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		}
 
 		email := model.UserEmailAddress{
-			Model:     model.Model{ID: u.PrimaryEmailAddressID},
+			Model:     model.Model{ID: primaryAddressID},
 			Email:     user.Email,
 			IsPrimary: true,
 			UserID:    u.ID,
@@ -366,37 +370,72 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 	strategy := c.Query("strategy")
 
 	if signInAttempt == 0 {
-		return handler.SendBadRequest(c, nil, "sign_in_attempt is required", handler.ErrInvalidSignInAttempt)
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"sign_in_attempt is required",
+			handler.ErrInvalidSignInAttempt,
+		)
 	}
 
 	if strategy == "" {
-		return handler.SendBadRequest(c, nil, "strategy is required", handler.ErrVerificationStrategyRequired)
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"strategy is required",
+			handler.ErrVerificationStrategyRequired,
+		)
 	}
 
 	attempt, err := h.service.GetSignInAttempt(uint(signInAttempt))
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Error fetching sign in attempt")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Error fetching sign in attempt",
+			handler.ErrInvalidSignInAttempt,
+		)
 	}
 
 	if attempt.Completed {
-		return handler.SendBadRequest(c, nil, "Sign in attempt already completed")
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Sign in attempt already completed",
+			handler.ErrInvalidSignInAttempt,
+		)
 	}
 
 	switch attempt.CurrentStep {
 	case model.SignInAttemptStepVerifyEmail, model.SignInAttemptStepVerifyEmailOTP:
 		email, err := h.service.FindUserByEmailID(attempt.IdentifierID)
 		if err != nil {
-			return handler.SendInternalServerError(c, err, "Error fetching user")
+			return handler.SendInternalServerError(
+				c,
+				err,
+				"Error fetching user",
+				handler.ErrInvalidSignInAttempt,
+			)
 		}
 
 		if attempt.CurrentStep == model.SignInAttemptStepVerifyEmailOTP && email.Verified {
-			return handler.SendBadRequest(c, nil, "Email already verified")
+			return handler.SendBadRequest(
+				c,
+				nil,
+				"Email already verified",
+				handler.ErrInvalidSignInAttempt,
+			)
 		}
 
 		code, err := totp.GenerateCode(email.User.OtpSecret, time.Now())
 
 		if err != nil {
-			return handler.SendInternalServerError(c, err, "Error generating OTP")
+			return handler.SendInternalServerError(
+				c,
+				err,
+				"Error generating OTP",
+				handler.ErrInternal,
+			)
 		}
 
 		h.service.SendEmailOTPVerification(email.Email, code)
@@ -488,6 +527,8 @@ func (h *Handler) CompleteVerification(c *fiber.Ctx) error {
 				attempt.Completed = true
 				attempt.Steps = nil
 				signin = model.NewSignIn(session.ID, email.UserID)
+				signin.User = &email.User
+
 				session.SignIns = append(session.SignIns, signin)
 				session.ActiveSignIn = signin
 			} else {

@@ -30,7 +30,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
-	var orgMembership model.OrgMembership
+	var orgMembership model.OrganizationMembership
 	if err := database.Connection.Where(
 		"organization_id = ? AND user_id = ?",
 		b.OrganizationID,
@@ -56,7 +56,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 			ID: uint(snowflake.ID()),
 		},
 		Name: "workspace:owner",
-		Permissions: []*model.WorkspaceRolePermissions{
+		Permissions: []*model.WorkspacePermissions{
 			{
 				Model: model.Model{
 					ID: uint(snowflake.ID()),
@@ -71,7 +71,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 			ID: uint(snowflake.ID()),
 		},
 		Name: "workspace:member",
-		Permissions: []*model.WorkspaceRolePermissions{
+		Permissions: []*model.WorkspacePermissions{
 			{
 				Model: model.Model{
 					ID: uint(snowflake.ID()),
@@ -328,12 +328,12 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 
 	switch b.Role {
 	case "owner":
-		role.Permissions = []*model.WorkspaceRolePermissions{{
+		role.Permissions = []*model.WorkspacePermissions{{
 			Model:      model.Model{ID: uint(snowflake.ID())},
 			Permission: "all",
 		}}
 	case "member":
-		role.Permissions = []*model.WorkspaceRolePermissions{{
+		role.Permissions = []*model.WorkspacePermissions{{
 			Model:      model.Model{ID: uint(snowflake.ID())},
 			Permission: "read",
 		}}

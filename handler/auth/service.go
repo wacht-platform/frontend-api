@@ -147,7 +147,7 @@ func (s *AuthService) CreateUser(
 		LastName:              b.LastName,
 		Username:              b.Username,
 		Password:              hashedPassword,
-		PrimaryEmailAddressID: emailID,
+		PrimaryEmailAddressID: &emailID,
 		UserEmailAddresses: []*model.UserEmailAddress{{
 			Model:     model.Model{ID: emailID},
 			Email:     b.Email,

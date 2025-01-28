@@ -37,12 +37,12 @@ func (h *Handler) CreateOrganization(c *fiber.Ctx) error {
 		Name: b.Name,
 	}
 
-	ownerRole := &model.OrgRole{
+	ownerRole := &model.OrgnizationRole{
 		Model: model.Model{
 			ID: uint(snowflake.ID()),
 		},
 		Name: "organization:owner",
-		Permissions: []*model.OrgRolePermissions{
+		Permissions: []*model.OrganizationPermissions{
 			{
 				Model: model.Model{
 					ID: uint(snowflake.ID()),
@@ -52,12 +52,12 @@ func (h *Handler) CreateOrganization(c *fiber.Ctx) error {
 		},
 	}
 
-	memberRole := &model.OrgRole{
+	memberRole := &model.OrgnizationRole{
 		Model: model.Model{
 			ID: uint(snowflake.ID()),
 		},
 		Name: "organization:member",
-		Permissions: []*model.OrgRolePermissions{
+		Permissions: []*model.OrganizationPermissions{
 			{
 				Model: model.Model{
 					ID: uint(snowflake.ID()),
@@ -67,13 +67,13 @@ func (h *Handler) CreateOrganization(c *fiber.Ctx) error {
 		},
 	}
 
-	membership := model.OrgMembership{
+	membership := model.OrganizationMembership{
 		Model: model.Model{
 			ID: uint(snowflake.ID()),
 		},
 		OrganizationID: org.ID,
 		UserID:         session.ActiveSignIn.UserID,
-		Role:           []*model.OrgRole{ownerRole},
+		Role:           []*model.OrgnizationRole{ownerRole},
 	}
 
 	err := database.Connection.Transaction(func(tx *gorm.DB) error {
@@ -115,7 +115,7 @@ func (h *Handler) GetOrganization(c *fiber.Ctx) error {
 	}
 
 	// Check if user is member
-	var membership model.OrgMembership
+	var membership model.OrganizationMembership
 	if err := database.Connection.Where(
 		"organization_id = ? AND user_id = ?",
 		orgID,
@@ -147,7 +147,7 @@ func (h *Handler) UpdateOrganization(c *fiber.Ctx) error {
 		return handler.SendNotFound(c, nil, "Organization not found")
 	}
 
-	var membership model.OrgMembership
+	var membership model.OrganizationMembership
 	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignIn.UserID).Preload("Role").First(&membership).Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
@@ -182,7 +182,7 @@ func (h *Handler) DeleteOrganization(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
-	var membership model.OrgMembership
+	var membership model.OrganizationMembership
 	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignIn.UserID).Preload("Role").First(&membership).Error; err != nil {
 		return handler.SendForbidden(c, nil, "Only organization owner can delete the organization")
 	}
@@ -220,7 +220,7 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
-	var membership model.OrgMembership
+	var membership model.OrganizationMembership
 	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignIn.UserID).Preload("Role").First(&membership).Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
@@ -242,7 +242,7 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 		return handler.SendNotFound(c, nil, "User not found")
 	}
 
-	var existingMembership model.OrgMembership
+	var existingMembership model.OrganizationMembership
 	if err := database.Connection.Where(
 		"organization_id = ? AND user_id = ?",
 		orgID,
@@ -252,7 +252,7 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 	}
 
 	// Create role for the new member
-	role := &model.OrgRole{
+	role := &model.OrgnizationRole{
 		Model: model.Model{
 			ID: uint(snowflake.ID()),
 		},
@@ -261,24 +261,24 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 
 	switch b.Role {
 	case "owner":
-		role.Permissions = []*model.OrgRolePermissions{{
+		role.Permissions = []*model.OrganizationPermissions{{
 			Model:      model.Model{ID: uint(snowflake.ID())},
 			Permission: "all",
 		}}
 	case "member":
-		role.Permissions = []*model.OrgRolePermissions{{
+		role.Permissions = []*model.OrganizationPermissions{{
 			Model:      model.Model{ID: uint(snowflake.ID())},
 			Permission: "read",
 		}}
 	}
 
-	newMembership := model.OrgMembership{
+	newMembership := model.OrganizationMembership{
 		Model: model.Model{
 			ID: uint(snowflake.ID()),
 		},
 		OrganizationID: uint(snowflake.ID()),
 		UserID:         userEmail.UserID,
-		Role:           []*model.OrgRole{role},
+		Role:           []*model.OrgnizationRole{role},
 	}
 
 	err := database.Connection.Transaction(func(tx *gorm.DB) error {
@@ -308,7 +308,7 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
-	var membership model.OrgMembership
+	var membership model.OrganizationMembership
 	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignIn.UserID).Preload("Role").First(&membership).Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
@@ -325,7 +325,7 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, memberID).Delete(&model.OrgMembership{}).Error; err != nil {
+	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, memberID).Delete(&model.OrganizationMembership{}).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to remove member")
 	}
 
