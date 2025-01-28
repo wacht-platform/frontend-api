@@ -28,17 +28,17 @@ func (m DeploymentMode) GormDBDataType() string {
 
 type Deployment struct {
 	Model
-	MaintenanceMode bool              `json:"maintenance_mode"`
-	Host            string            `json:"host"`
-	PublishableKey  string            `json:"publishable_key"`
-	Secret          string            `json:"-"`
-	OrgSettings     OrgSettings       `json:"org_settings"`
-	AuthSettings    AuthSettings      `json:"auth_settings"`
-	SSOConnections  []SSOConnection   `json:"sso_connections"`
-	ProjectID       uint              `json:"project_id"`
-	Project         Project           `json:"-"`
-	Mode            DeploymentMode    `json:"mode"`
-	KepPair         DeploymentKeyPair `json:"-"`
+	MaintenanceMode   bool                         `json:"maintenance_mode"`
+	Host              string                       `json:"host"`
+	PublishableKey    string                       `json:"publishable_key"`
+	Secret            string                       `json:"-"`
+	OrgSettings       OrgSettings                  `json:"org_settings"`
+	AuthSettings      AuthSettings                 `json:"auth_settings"`
+	SocialConnections []DeploymentSocialConnection `json:"social_connections"`
+	ProjectID         uint                         `json:"project_id"`
+	Project           Project                      `json:"-"`
+	Mode              DeploymentMode               `json:"mode"`
+	KepPair           DeploymentKeyPair            `json:"-"`
 }
 
 func (d *Deployment) IsProduction() bool {

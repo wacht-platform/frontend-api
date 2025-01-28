@@ -67,23 +67,26 @@ func (s SchemaVersion) Value() (driver.Value, error) {
 
 type User struct {
 	Model
-	FirstName             string              `json:"first_name"`
-	LastName              string              `json:"last_name"`
-	Username              string              `json:"username"`
-	Password              string              `json:"-"`
-	SchemaVersion         SchemaVersion       `json:"schema_version"`
-	Disabled              bool                `json:"disabled"`
-	PrimaryEmailAddressID *uint               `json:"primary_email_address_id"`
-	PrimaryPhoneNumberID  *uint               `json:"primary_phone_number_id"`
-	SecondFactorPolicy    SecondFactorPolicy  `json:"second_factor_policy"`
-	UserEmailAddresses    []*UserEmailAddress `json:"user_email_addresses"`
-	UserPhoneNumbers      []*UserPhoneNumber  `json:"user_phone_numbers"`
-	SocialConnections     []*SocialConnection `json:"social_connections,omitempty"`
-	SignIns               []*SignIn           `json:"-"`
-	LastActiveOrgID       *uint               `json:"last_active_org_id"`
-	DeploymentID          uint                `json:"-"`
-	PublicMetadata        datatypes.JSONMap   `json:"public_metadata"`
-	PrivateMetadata       datatypes.JSONMap   `json:"-"`
-	OtpSecret             string              `json:"otp_secret"`
-	BackupCodes           []string            `json:"backup_codes"                 gorm:"type:text[]"`
+	FirstName                      string                  `json:"first_name"`
+	LastName                       string                  `json:"last_name"`
+	Username                       string                  `json:"username"`
+	Password                       string                  `json:"-"`
+	SchemaVersion                  SchemaVersion           `json:"schema_version"`
+	Disabled                       bool                    `json:"disabled"`
+	PrimaryEmailAddressID          *uint                   `json:"primary_email_address_id"`
+	PrimaryPhoneNumberID           *uint                   `json:"primary_phone_number_id"`
+	SecondFactorPolicy             SecondFactorPolicy      `json:"second_factor_policy"`
+	UserEmailAddresses             []*UserEmailAddress     `json:"user_email_addresses"`
+	UserPhoneNumbers               []*UserPhoneNumber      `json:"user_phone_numbers"`
+	SocialConnections              []*SocialConnection     `json:"social_connections,omitempty"`
+	SignIns                        []*SignIn               `json:"-"`
+	ActiveOrganizationMembershipID *uint                   `json:"active_organization_id"`
+	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization"`
+	ActiveWorkspaceMembershipID    *uint                   `json:"active_workspace_id"`
+	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace"`
+	DeploymentID                   uint                    `json:"-"`
+	PublicMetadata                 datatypes.JSONMap       `json:"public_metadata"`
+	PrivateMetadata                datatypes.JSONMap       `json:"-"`
+	OtpSecret                      string                  `json:"-"`
+	BackupCodes                    []string                `json:"backup_codes"                 gorm:"type:text[]"`
 }

@@ -37,7 +37,7 @@ func AutoMigratePg() error {
 		&model.User{},
 		&model.Session{},
 		&model.UserEmailAddress{},
-		&model.SSOConnection{},
+		&model.DeploymentSocialConnection{},
 		&model.SignInAttempt{},
 		&model.SocialConnection{},
 		&model.SignIn{},

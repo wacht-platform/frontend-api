@@ -6,15 +6,11 @@ import (
 
 type SignIn struct {
 	Model
-	SessionID                uint                    `json:"-"                              gorm:"index:idx_session_user_id,unique"`
-	UserID                   uint                    `json:"-"                              gorm:"index:idx_session_user_id,unique"`
-	User                     *User                   `json:"user,omitempty"`
-	WorkspaceMembershipID    *uint                   `json:"-"`
-	WorkspaceMembership      *WorkspaceMembership    `json:"workspace_membership,omitempty"`
-	OrganizationMembershipID *uint                   `json:"-"`
-	OrganizationMembership   *OrganizationMembership `json:"org_membership,omitempty"`
-	Expired                  bool                    `json:"expired"`
-	ExpiredAt                string                  `json:"expired_at"`
+	SessionID uint   `json:"-"                              gorm:"index:idx_session_user_id,unique"`
+	UserID    uint   `json:"-"                              gorm:"index:idx_session_user_id,unique"`
+	User      *User  `json:"user,omitempty"`
+	Expired   bool   `json:"expired"`
+	ExpiredAt string `json:"expired_at"`
 }
 
 func NewSignIn(sessionID, userID uint) *SignIn {

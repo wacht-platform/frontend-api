@@ -69,7 +69,7 @@ type SignInAttempt struct {
 	IdentifierID uint                                   `json:"-"`
 	SessionID    uint                                   `json:"session_id"`
 	Method       SignInMethod                           `json:"method"`
-	SSOProvider  SSOProvider                            `json:"sso_provider"`
+	SSOProvider  SocialConnectionProvider               `json:"sso_provider"`
 	ExpiresAt    time.Time                              `json:"expires_at"`
 	CurrentStep  SignInAttemptStep                      `json:"current_step"`
 	Steps        datatypes.JSONSlice[SignInAttemptStep] `json:"steps"`

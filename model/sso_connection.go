@@ -7,46 +7,46 @@ import (
 	"fmt"
 )
 
-type SSOProvider string
+type SocialConnectionProvider string
 
 const (
-	SSOProviderX         SSOProvider = "x_oauth"
-	SSOProviderGitHub    SSOProvider = "github_oauth"
-	SSOProviderGitLab    SSOProvider = "gitlab_oauth"
-	SSOProviderGoogle    SSOProvider = "google_oauth"
-	SSOProviderFacebook  SSOProvider = "facebook_oauth"
-	SSOProviderMicrosoft SSOProvider = "microsoft_oauth"
-	SSOProviderLinkedIn  SSOProvider = "linkedin_oauth"
-	SSOProviderDiscord   SSOProvider = "discord_oauth"
-	SSOProviderApple     SSOProvider = "apple_oauth"
+	SocialConnectionProviderX         SocialConnectionProvider = "x_oauth"
+	SocialConnectionProviderGitHub    SocialConnectionProvider = "github_oauth"
+	SocialConnectionProviderGitLab    SocialConnectionProvider = "gitlab_oauth"
+	SocialConnectionProviderGoogle    SocialConnectionProvider = "google_oauth"
+	SocialConnectionProviderFacebook  SocialConnectionProvider = "facebook_oauth"
+	SocialConnectionProviderMicrosoft SocialConnectionProvider = "microsoft_oauth"
+	SocialConnectionProviderLinkedIn  SocialConnectionProvider = "linkedin_oauth"
+	SocialConnectionProviderDiscord   SocialConnectionProvider = "discord_oauth"
+	SocialConnectionProviderApple     SocialConnectionProvider = "apple_oauth"
 )
 
-func (p *SSOProvider) Scan(value interface{}) error {
-	*p = SSOProvider(value.(string))
+func (p *SocialConnectionProvider) Scan(value interface{}) error {
+	*p = SocialConnectionProvider(value.(string))
 	return nil
 }
 
-func (p SSOProvider) Value() (driver.Value, error) {
+func (p SocialConnectionProvider) Value() (driver.Value, error) {
 	return string(p), nil
 }
 
-func (p SSOProvider) VerificationStrategy() VerificationStrategy {
+func (p SocialConnectionProvider) VerificationStrategy() VerificationStrategy {
 	switch p {
-	case SSOProviderX:
+	case SocialConnectionProviderX:
 		return Otp
-	case SSOProviderGitHub:
+	case SocialConnectionProviderGitHub:
 		return OauthGithub
-	case SSOProviderGoogle:
+	case SocialConnectionProviderGoogle:
 		return OauthGoogle
-	case SSOProviderMicrosoft:
+	case SocialConnectionProviderMicrosoft:
 		return OauthMicrosoft
-	case SSOProviderFacebook:
+	case SocialConnectionProviderFacebook:
 		return OauthFacebook
-	case SSOProviderLinkedIn:
+	case SocialConnectionProviderLinkedIn:
 		return OauthLinkedIn
-	case SSOProviderDiscord:
+	case SocialConnectionProviderDiscord:
 		return OauthDiscord
-	case SSOProviderApple:
+	case SocialConnectionProviderApple:
 		return OauthApple
 	}
 	return ""
@@ -85,11 +85,11 @@ func (a *OauthCredentials) GormDBDataType() string {
 	return "jsonb"
 }
 
-type SSOConnection struct {
+type DeploymentSocialConnection struct {
 	Model
-	DeploymentID         uint        `json:"deployment_id"`
-	Provider             SSOProvider `json:"provider"`
-	Enabled              bool        `json:"enabled"`
-	UserDefinedScopes    []string    `json:"user_defined_scopes"    gorm:"type:text[]"`
-	CustomCredentialsSet bool        `json:"custom_credentials_set"`
+	DeploymentID      uint                     `json:"deployment_id"`
+	Provider          SocialConnectionProvider `json:"provider"`
+	Enabled           bool                     `json:"enabled"`
+	UserDefinedScopes []string                 `json:"user_defined_scopes"    gorm:"type:text[]"`
+	Credentials       *OauthCredentials        `json:"-"`
 }

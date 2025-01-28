@@ -4,7 +4,7 @@ type SocialConnection struct {
 	Model
 	UserID             uint
 	UserEmailAddressID uint
-	Provider           SSOProvider
+	Provider           SocialConnectionProvider
 	EmailAdress        string
 	AcessToken         string
 	RefreshToken       string

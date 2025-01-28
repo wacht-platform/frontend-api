@@ -89,7 +89,6 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 		model.SignInMethodPlainEmail,
 		steps,
 		completed,
-		*email.User.LastActiveOrgID,
 	)
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
@@ -177,7 +176,6 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 		model.SignInMethodPlainEmail,
 		steps,
 		completed,
-		0,
 	)
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
@@ -205,7 +203,7 @@ func (h *Handler) AuthMethods(c *fiber.Ctx) error {
 }
 
 func (h *Handler) InitSSO(c *fiber.Ctx) error {
-	provider := model.SSOProvider(c.Query("provider"))
+	provider := model.SocialConnectionProvider(c.Query("provider"))
 	if provider == "" {
 		return handler.SendBadRequest(
 			c,

@@ -22,7 +22,7 @@ type OAuthUser struct {
 }
 
 func GenerateVerificationUrl(
-	ssoProvider model.SSOProvider,
+	ssoProvider model.SocialConnectionProvider,
 	attempt model.SignInAttempt,
 ) string {
 	url := ""
@@ -37,7 +37,7 @@ func GenerateVerificationUrl(
 	}
 
 	switch ssoProvider {
-	case model.SSOProviderX:
+	case model.SocialConnectionProviderX:
 		conf.Endpoint = oauth2.Endpoint{
 			AuthURL:  "https://x.com/i/oauth2/authorize",
 			TokenURL: "https://x.com/i/oauth2/token",
@@ -45,26 +45,26 @@ func GenerateVerificationUrl(
 		url = conf.AuthCodeURL(
 			strconv.FormatUint(uint64(attempt.ID), 10),
 		)
-	case model.SSOProviderGitHub:
+	case model.SocialConnectionProviderGitHub:
 		conf.Endpoint = github.Endpoint
 		url = conf.AuthCodeURL(
 			strconv.FormatUint(uint64(attempt.ID), 10),
 		)
-	case model.SSOProviderGitLab:
-	case model.SSOProviderGoogle:
+	case model.SocialConnectionProviderGitLab:
+	case model.SocialConnectionProviderGoogle:
 		conf.Endpoint = google.Endpoint
 		url = conf.AuthCodeURL(
 			strconv.FormatUint(uint64(attempt.ID), 10),
 		)
-	case model.SSOProviderFacebook:
-	case model.SSOProviderMicrosoft:
+	case model.SocialConnectionProviderFacebook:
+	case model.SocialConnectionProviderMicrosoft:
 		conf.Endpoint = microsoft.AzureADEndpoint("")
 		url = conf.AuthCodeURL(
 			strconv.FormatUint(uint64(attempt.ID), 10),
 		)
 
-	case model.SSOProviderLinkedIn:
-	case model.SSOProviderDiscord:
+	case model.SocialConnectionProviderLinkedIn:
+	case model.SocialConnectionProviderDiscord:
 	}
 
 	return url
@@ -72,11 +72,11 @@ func GenerateVerificationUrl(
 
 func ExchangeTokenForUser(
 	token *oauth2.Token,
-	ssoProvider model.SSOProvider,
+	ssoProvider model.SocialConnectionProvider,
 ) (*OAuthUser, error) {
 	switch ssoProvider {
-	case model.SSOProviderX:
-	case model.SSOProviderGitHub:
+	case model.SocialConnectionProviderX:
+	case model.SocialConnectionProviderGitHub:
 		req, err := http.NewRequest(
 			"GET",
 			"https://api.github.com/user",
@@ -139,8 +139,8 @@ func ExchangeTokenForUser(
 				}, nil
 			}
 		}
-	case model.SSOProviderGitLab:
-	case model.SSOProviderGoogle:
+	case model.SocialConnectionProviderGitLab:
+	case model.SocialConnectionProviderGoogle:
 		req, err := http.NewRequest(
 			"GET",
 			"https://www.googleapis.com/oauth2/v3/userinfo",
@@ -167,8 +167,8 @@ func ExchangeTokenForUser(
 			LastName:  res["family_name"].(string),
 			Email:     res["email"].(string),
 		}, nil
-	case model.SSOProviderFacebook:
-	case model.SSOProviderMicrosoft:
+	case model.SocialConnectionProviderFacebook:
+	case model.SocialConnectionProviderMicrosoft:
 		req, err := http.NewRequest(
 			"GET",
 			"https://graph.microsoft.com/v1.0/me",
@@ -196,8 +196,8 @@ func ExchangeTokenForUser(
 			LastName:  res["surname"].(string),
 			Email:     res["mail"].(string),
 		}, nil
-	case model.SSOProviderLinkedIn:
-	case model.SSOProviderDiscord:
+	case model.SocialConnectionProviderLinkedIn:
+	case model.SocialConnectionProviderDiscord:
 	}
 	return nil, nil
 }

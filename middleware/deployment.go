@@ -13,7 +13,7 @@ func SetDeploymentMiddleware(c *fiber.Ctx) error {
 		Joins("OrgSettings").
 		Joins("AuthSettings").
 		Joins("KepPair").
-		Preload("SSOConnections").
+		Preload("SocialConnections").
 		First(&deployment).
 		Error
 	if err != nil {

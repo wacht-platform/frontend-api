@@ -97,7 +97,6 @@ func (s *AuthService) CreateSignInAttempt(
 	method model.SignInMethod,
 	steps []model.SignInAttemptStep,
 	completed bool,
-	lastActiveOrgID uint,
 ) *model.SignInAttempt {
 	attempt := model.NewSignInAttempt(method)
 	if len(steps) > 0 {
@@ -174,7 +173,7 @@ func (s *AuthService) CreateUser(
 func (s *AuthService) CreateSocialConnection(
 	userID uint,
 	emailID uint,
-	provider model.SSOProvider,
+	provider model.SocialConnectionProvider,
 	email string,
 	token *oauth2.Token,
 ) model.SocialConnection {
@@ -248,7 +247,7 @@ func (s *AuthService) CheckUsernameExists(username string) bool {
 	return count > 0
 }
 
-func getOAuthConfig(provider model.SSOProvider) *oauth2.Config {
+func getOAuthConfig(provider model.SocialConnectionProvider) *oauth2.Config {
 	cred := config.GetDefaultOAuthCredentials(string(provider))
 	conf := &oauth2.Config{
 		ClientID:     cred.ClientID,
@@ -258,21 +257,21 @@ func getOAuthConfig(provider model.SSOProvider) *oauth2.Config {
 	}
 
 	switch provider {
-	case model.SSOProviderGitHub:
+	case model.SocialConnectionProviderGitHub:
 		conf.Endpoint = github.Endpoint
-	case model.SSOProviderGoogle:
+	case model.SocialConnectionProviderGoogle:
 		conf.Endpoint = google.Endpoint
-	case model.SSOProviderMicrosoft:
+	case model.SocialConnectionProviderMicrosoft:
 		conf.Endpoint = microsoft.AzureADEndpoint("")
-	case model.SSOProviderFacebook:
+	case model.SocialConnectionProviderFacebook:
 		conf.Endpoint = facebook.Endpoint
-	case model.SSOProviderLinkedIn:
+	case model.SocialConnectionProviderLinkedIn:
 		conf.Endpoint = linkedin.Endpoint
-	case model.SSOProviderX:
+	case model.SocialConnectionProviderX:
 		conf.Endpoint = config.XOAuthEndpoint
-	case model.SSOProviderApple:
+	case model.SocialConnectionProviderApple:
 		conf.Endpoint = config.AppleOAuthEndpoint
-	case model.SSOProviderDiscord:
+	case model.SocialConnectionProviderDiscord:
 		conf.Endpoint = config.DiscordOAuthEndpoint
 	}
 
