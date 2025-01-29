@@ -6,8 +6,8 @@ import (
 
 type SignIn struct {
 	Model
-	SessionID uint   `json:"-"                              gorm:"index:idx_session_user_id,unique"`
-	UserID    uint   `json:"-"                              gorm:"index:idx_session_user_id,unique"`
+	SessionID uint   `json:"-"              gorm:"index:idx_session_user_id,unique"`
+	UserID    uint   `json:"-"              gorm:"index:idx_session_user_id,unique"`
 	User      *User  `json:"user,omitempty"`
 	Expired   bool   `json:"expired"`
 	ExpiredAt string `json:"expired_at"`

@@ -22,18 +22,14 @@ func (h *Handler) GetCurrentSession(c *fiber.Ctx) error {
 	session := new(model.Session)
 
 	err := database.Connection.Preload("ActiveSignIn").
-		Preload("ActiveSignIn.User").
-		Preload("ActiveSignIn.User.UserEmailAddresses").
-		Preload("ActiveSignIn.User.UserEmailAddresses.SocialConnection").
 		Preload("SignIns").
-		Preload("SignIns.User").
 		Where("id = ?", sessionID).
 		First(session).Error
 	if err != nil {
 		return handler.SendNotFound(c, nil, "Session not found")
 	}
 
-	return c.JSON(session)
+	return handler.SendSuccess(c, session)
 }
 
 func (h *Handler) SwitchActiveSignIn(c *fiber.Ctx) error {

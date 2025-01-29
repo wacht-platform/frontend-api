@@ -18,8 +18,9 @@ const (
 
 type Session struct {
 	Model
-	SignInAttempts []*SignInAttempt `json:"sign_in_attempts,omitempty"`
+	SigninAttempts []*SignInAttempt `json:"sign_in_attempts,omitempty"`
 	SignIns        []*SignIn        `json:"sign_ins,omitempty"`
+	SignupAttempts []*SignupAttempt `json:"signup_attempts,omitempty"`
 	ActiveSignInID uint             `json:"-"`
 	ActiveSignIn   *SignIn          `json:"active_sign_in,omitempty"`
 }

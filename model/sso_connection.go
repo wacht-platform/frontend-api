@@ -90,6 +90,6 @@ type DeploymentSocialConnection struct {
 	DeploymentID      uint                     `json:"deployment_id"`
 	Provider          SocialConnectionProvider `json:"provider"`
 	Enabled           bool                     `json:"enabled"`
-	UserDefinedScopes []string                 `json:"user_defined_scopes"    gorm:"type:text[]"`
+	UserDefinedScopes []string                 `json:"user_defined_scopes" gorm:"type:text[]"`
 	Credentials       *OauthCredentials        `json:"-"`
 }

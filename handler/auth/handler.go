@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/godruoyi/go-snowflake"
@@ -107,7 +108,7 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 			session.ActiveSignInID = signIn.ID
 		}
 
-		session.SignInAttempts = append(session.SignInAttempts, attempt)
+		session.SigninAttempts = append(session.SigninAttempts, attempt)
 
 		return tx.Save(session).Error
 	})
@@ -132,11 +133,11 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 
 	if err := h.service.ValidateSignUpRequest(b, d); err != nil {
-		return handler.SendBadRequest(c, nil, err.Error())
+		return handler.SendBadRequest(c, nil, err.Error(), handler.ErrBadRequestBody)
 	}
 
 	if b.Email != "" && h.service.CheckEmailExists(b.Email) {
-		return handler.SendBadRequest(c, nil, "Email is already regsitered", handler.ErrEmailExists)
+		return handler.SendBadRequest(c, nil, "Email is already registered", handler.ErrEmailExists)
 	}
 
 	hashedPassword, err := h.service.HashPassword(b.Password)
@@ -144,52 +145,54 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Error hashing password")
 	}
 
-	otpSecret, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      "Intellinesia",
-		AccountName: b.Email,
-	})
+	attempt, err := h.service.CreateSignupAttempt(b, hashedPassword, session, d)
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Error generating OTP secret")
+		return handler.SendInternalServerError(c, err, "Error creating signup attempt")
 	}
 
-	completed := !d.AuthSettings.VerificationPolicy.Email
-
-	u := h.service.CreateUser(
-		b,
-		hashedPassword,
-		d.ID,
-		d.AuthSettings.SecondFactorPolicy,
-		otpSecret.Secret(),
-	)
-
-	steps, completed := h.service.DetermineAuthenticationStep(
-		completed,
-		true,
-		false,
-		d.AuthSettings,
-	)
-
-	attempt := h.service.CreateSignInAttempt(
-		u.ID,
-		*u.PrimaryEmailAddressID,
-		session.ID,
-		model.SignInMethodPlainEmail,
-		steps,
-		completed,
-	)
-
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&u).Error; err != nil {
-			return err
-		}
-
 		if err := tx.Create(attempt).Error; err != nil {
 			return err
 		}
 
-		session.SignInAttempts = append(session.SignInAttempts, attempt)
-		return nil
+		session.SignupAttempts = append(session.SignupAttempts, attempt)
+
+		if len(attempt.RemainingSteps) == 0 {
+			otpSecret, err := totp.Generate(totp.GenerateOpts{
+				Issuer:      d.Project.Name,
+				AccountName: attempt.Email,
+			})
+			if err != nil {
+				return err
+			}
+
+			u := h.service.CreateUser(
+				b,
+				attempt.Password,
+				d.ID,
+				d.AuthSettings.SecondFactorPolicy,
+				otpSecret.Secret(),
+				!d.AuthSettings.VerificationPolicy.Email,
+			)
+
+			if err := tx.Create(&u).Error; err != nil {
+				return err
+			}
+
+			signIn := model.NewSignIn(session.ID, u.ID)
+			signIn.User = &u
+
+			if err := tx.Create(signIn).Error; err != nil {
+				return err
+			}
+
+			session.SignIns = append(session.SignIns, signIn)
+			session.ActiveSignInID = signIn.ID
+		}
+
+		return tx.Save(session).Error
 	})
+
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Something went wrong")
 	}
@@ -223,7 +226,7 @@ func (h *Handler) InitSSO(c *fiber.Ctx) error {
 		if err := tx.Create(attempt).Error; err != nil {
 			return err
 		}
-		session.SignInAttempts = append(session.SignInAttempts, attempt)
+		session.SigninAttempts = append(session.SigninAttempts, attempt)
 		return nil
 	})
 	if err != nil {
@@ -364,14 +367,15 @@ func (h *Handler) CheckIdentifierAvailability(c *fiber.Ctx) error {
 }
 
 func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
-	signInAttempt := c.QueryInt("sign_in_attempt")
+	attemptIdentifier := c.QueryInt("attempt_identifier")
+	identifierType := c.Query("identifier_type")
 	strategy := c.Query("strategy")
 
-	if signInAttempt == 0 {
+	if attemptIdentifier == 0 {
 		return handler.SendBadRequest(
 			c,
 			nil,
-			"sign_in_attempt is required",
+			"either sign_in_attempt or sign_up_attempt is required",
 			handler.ErrInvalidSignInAttempt,
 		)
 	}
@@ -385,117 +389,137 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 		)
 	}
 
-	attempt, err := h.service.GetSignInAttempt(uint(signInAttempt))
-	if err != nil {
-		return handler.SendInternalServerError(
-			c,
-			err,
-			"Error fetching sign in attempt",
-			handler.ErrInvalidSignInAttempt,
-		)
-	}
-
-	if attempt.Completed {
-		return handler.SendBadRequest(
-			c,
-			nil,
-			"Sign in attempt already completed",
-			handler.ErrInvalidSignInAttempt,
-		)
-	}
-
-	switch attempt.CurrentStep {
-	case model.SignInAttemptStepVerifyEmail, model.SignInAttemptStepVerifyEmailOTP:
-		email, err := h.service.FindUserByEmailID(attempt.IdentifierID)
+	if identifierType == "signin" {
+		attempt, err := h.service.GetSignInAttempt(uint(attemptIdentifier))
 		if err != nil {
 			return handler.SendInternalServerError(
 				c,
 				err,
-				"Error fetching user",
+				"Error fetching sign in attempt",
 				handler.ErrInvalidSignInAttempt,
 			)
 		}
 
-		if attempt.CurrentStep == model.SignInAttemptStepVerifyEmailOTP && email.Verified {
+		if attempt.Completed {
 			return handler.SendBadRequest(
 				c,
 				nil,
-				"Email already verified",
+				"Sign in attempt already completed",
 				handler.ErrInvalidSignInAttempt,
 			)
 		}
 
-		code, err := totp.GenerateCode(email.User.OtpSecret, time.Now())
+		switch attempt.CurrentStep {
+		case model.SignInAttemptStepVerifyEmailOTP:
+			email, err := h.service.FindUserByEmailID(attempt.IdentifierID)
+			if err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error fetching user",
+					handler.ErrInvalidSignInAttempt,
+				)
+			}
 
+			if attempt.CurrentStep == model.SignInAttemptStepVerifyEmailOTP && email.Verified {
+				return handler.SendBadRequest(
+					c,
+					nil,
+					"Email already verified",
+					handler.ErrInvalidSignInAttempt,
+				)
+			}
+
+			code, err := totp.GenerateCode(email.User.OtpSecret, time.Now())
+			if err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error generating OTP",
+					handler.ErrInternal,
+				)
+			}
+
+			if err := h.service.StoreOTPInRedis(fmt.Sprintf("signin:%d", attempt.ID), code); err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error storing OTP",
+					handler.ErrInternal,
+				)
+			}
+
+			h.service.SendEmailOTPVerification(email.Email, code)
+		case model.SignInAttemptStepVerifyPhoneOTP:
+			return handler.SendSuccess[any](c, nil)
+		default:
+			return handler.SendBadRequest(c, nil, "Invalid step")
+		}
+	} else {
+		attempt, err := h.service.GetSignupAttempt(uint(attemptIdentifier))
 		if err != nil {
 			return handler.SendInternalServerError(
 				c,
 				err,
-				"Error generating OTP",
-				handler.ErrInternal,
+				"Error fetching sign up attempt",
+				handler.ErrInvalidSignInAttempt,
 			)
 		}
 
-		h.service.SendEmailOTPVerification(email.Email, code)
-	case model.SignInAttemptStepVerifySecondFactor:
-		return handler.SendSuccess[any](c, nil)
-	case model.SignInAttemptStepVerifyPhone:
-		return handler.SendSuccess[any](c, nil)
-	case model.SignInAttemptStepVerifyPhoneOTP:
-		return handler.SendSuccess[any](c, nil)
-	default:
-		return handler.SendBadRequest(c, nil, "Invalid step")
+		switch attempt.CurrentStep {
+		case model.SignupAttemptStepVerifyEmail:
+			key, err := totp.Generate(totp.GenerateOpts{})
+			if err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error generating OTP",
+					handler.ErrInternal,
+				)
+			}
+
+			code, err := totp.GenerateCode(key.Secret(), time.Now())
+			if err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error generating OTP",
+					handler.ErrInternal,
+				)
+			}
+
+			if err := h.service.StoreOTPInRedis(fmt.Sprintf("signup:%d", attempt.ID), code); err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Something went wrong",
+					handler.ErrInternal,
+				)
+			}
+
+			h.service.SendEmailOTPVerification(attempt.Email, code)
+		case model.SignupAttemptStepVerifyPhone:
+			return handler.SendSuccess[any](c, nil)
+		default:
+			return handler.SendBadRequest(c, nil, "Invalid step")
+		}
 	}
 
 	return handler.SendSuccess[any](c, nil)
 }
 
-// func generateBackupCodes(userID uint, db *gorm.DB) ([]string, error) {
-// 	const backupCodeCount = 2
-
-// 	var user model.User
-// 	if err := db.Where("id = ?", userID).First(&user).Error; err != nil {
-// 		return nil, fmt.Errorf("failed to find user with ID %d: %w", userID, err)
-// 	}
-
-// 	if len(user.BackupCodes) > 0 {
-// 		return nil, fmt.Errorf("backup codes already exist for user ID %d", userID)
-// 	}
-
-// 	var rawCodes []string
-// 	var hashedCodes []string
-// 	for i := 0; i < backupCodeCount; i++ {
-// 		rawCode := fmt.Sprintf("%d", snowflake.ID())
-// 		rawCodes = append(rawCodes, rawCode)
-
-// 		hashedCode, err := bcrypt.GenerateFromPassword([]byte(rawCode), bcrypt.DefaultCost)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("failed to hash backup code: %w", err)
-// 		}
-// 		hashedCodes = append(hashedCodes, string(hashedCode))
-// 	}
-
-// 	user.BackupCodes = hashedCodes
-// 	if err := db.Save(&user).Error; err != nil {
-// 		return nil, fmt.Errorf("failed to save backup codes for user ID %d: %w", userID, err)
-// 	}
-
-// 	return rawCodes, nil
-// }
-
 func (h *Handler) CompleteVerification(c *fiber.Ctx) error {
-	signinattempt := c.QueryInt("sign_in_attempt")
+	attemptIdentifier := c.QueryInt("attempt_identifier")
+	identifierType := c.Query("identifier_type")
 	session := handler.GetSession(c)
-	if signinattempt == 0 {
-		return handler.SendBadRequest(c, nil, "sign_in_attempt is required")
-	}
 
-	attempt, err := h.service.GetSignInAttempt(uint(signinattempt))
-	if err != nil {
-		return handler.SendInternalServerError(c, err, "Error fetching sign in attempt")
-	}
-	if attempt.Completed {
-		return handler.SendBadRequest(c, nil, "Sign in attempt already completed")
+	if attemptIdentifier == 0 {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"either sign_in_attempt or sign_up_attempt is required",
+			handler.ErrInvalidSignInAttempt,
+		)
 	}
 
 	b, verr := handler.Validate[VerifyOTPRequest](c)
@@ -503,64 +527,129 @@ func (h *Handler) CompleteVerification(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, verr, "Bad request body")
 	}
 
-	var signin *model.SignIn
+	if identifierType == "signin" {
+		attempt, err := h.service.GetSignInAttempt(uint(attemptIdentifier))
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Error fetching sign in attempt")
+		}
+		if attempt.Completed {
+			return handler.SendBadRequest(c, nil, "Sign in attempt already completed")
+		}
 
-	switch attempt.CurrentStep {
-	case model.SignInAttemptStepVerifyEmail, model.SignInAttemptStepVerifyEmailOTP:
-		{
-			email, err := h.service.FindUserByEmailID(attempt.IdentifierID)
-			if err != nil {
-				return handler.SendInternalServerError(c, err, "Error fetching user")
-			}
-			if attempt.CurrentStep == model.SignInAttemptStepVerifyEmailOTP && email.Verified {
-				return handler.SendBadRequest(c, nil, "Email already verified")
-			}
+		var signin *model.SignIn
 
-			valid := totp.Validate(b.VerificationCode, email.User.OtpSecret)
-			if !valid {
-				return handler.SendBadRequest(c, nil, "Invalid OTP")
-			}
-
-			if len(attempt.Steps) == 1 {
-				attempt.Completed = true
-				attempt.Steps = nil
-				signin = model.NewSignIn(session.ID, email.UserID)
-				signin.User = &email.User
-
-				session.SignIns = append(session.SignIns, signin)
-				session.ActiveSignIn = signin
-			} else {
-				attempt.Steps = attempt.Steps[1:]
-				attempt.CurrentStep = attempt.Steps[0]
-			}
-
-			if !email.Verified {
-				email.Verified = true
-				email.VerificationStrategy = model.Otp
-				email.VerifiedAt = time.Now()
-			}
-
-			if err := h.service.db.Transaction(func(tx *gorm.DB) error {
-				if err := tx.Save(email).Error; err != nil {
-					return err
+		switch attempt.CurrentStep {
+		case model.SignInAttemptStepVerifyEmail, model.SignInAttemptStepVerifyEmailOTP:
+			{
+				email, err := h.service.FindUserByEmailID(attempt.IdentifierID)
+				if err != nil {
+					return handler.SendInternalServerError(c, err, "Error fetching user")
+				}
+				if attempt.CurrentStep == model.SignInAttemptStepVerifyEmailOTP && email.Verified {
+					return handler.SendBadRequest(c, nil, "Email already verified")
 				}
 
-				if attempt.Completed {
-					if err := tx.Create(signin).Error; err != nil {
+				storedOTP, err := h.service.GetOTPFromRedis(fmt.Sprintf("signin:%d", attempt.ID))
+				if err != nil {
+					return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
+				}
+
+				if storedOTP != b.VerificationCode {
+					return handler.SendBadRequest(c, nil, "Invalid OTP")
+				}
+
+				if len(attempt.RemainingSteps) == 1 {
+					attempt.Completed = true
+					attempt.RemainingSteps = nil
+					signin = model.NewSignIn(session.ID, email.UserID)
+					signin.User = &email.User
+
+					session.SignIns = append(session.SignIns, signin)
+					session.ActiveSignInID = signin.ID
+				} else {
+					attempt.RemainingSteps = attempt.RemainingSteps[1:]
+					attempt.CurrentStep = attempt.RemainingSteps[0]
+				}
+
+				if err := database.Connection.Transaction(func(tx *gorm.DB) error {
+					if err := tx.Save(email).Error; err != nil {
 						return err
 					}
+
+					if attempt.Completed {
+						if err := tx.Create(signin).Error; err != nil {
+							return err
+						}
+					}
+
+					handler.RemoveSessionFromCache(session.ID)
+
+					return tx.Save(attempt).Error
+				}); err != nil {
+					return handler.SendInternalServerError(c, err, "Something went wrong")
 				}
 
-				handler.RemoveSessionFromCache(session.ID)
+				h.service.DeleteOTPFromRedis(fmt.Sprintf("signin:%d", attempt.ID))
+			}
+		}
+	} else {
+		attempt, err := h.service.GetSignupAttempt(uint(attemptIdentifier))
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Error fetching sign up attempt")
+		}
 
-				return tx.Save(attempt).Error
-			}); err != nil {
-				return handler.SendInternalServerError(c, err, "Something went wrong")
+		storedOTP, err := h.service.GetOTPFromRedis(fmt.Sprintf("signup:%d", attempt.ID))
+		if err != nil {
+			return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
+		}
+
+		if storedOTP != b.VerificationCode {
+			return handler.SendBadRequest(c, nil, "Invalid OTP")
+		}
+
+		d := handler.GetDeployment(c)
+		otpSecret, err := totp.Generate(totp.GenerateOpts{
+			Issuer:      d.Project.Name,
+			AccountName: attempt.Email,
+		})
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Error generating OTP secret")
+		}
+
+		user, err := h.service.CreateVerifiedUser(attempt, d, otpSecret.Secret())
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Error creating user")
+		}
+
+		signIn := model.NewSignIn(session.ID, user.ID)
+		signIn.User = user
+
+		if err := database.Connection.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Create(user).Error; err != nil {
+				return err
 			}
 
-			return handler.SendSuccess[any](c, session)
+			if err := tx.Create(signIn).Error; err != nil {
+				return err
+			}
+
+			session.SignIns = append(session.SignIns, signIn)
+			session.ActiveSignInID = signIn.ID
+
+			attempt.RemainingSteps = attempt.RemainingSteps[1:]
+			if len(attempt.RemainingSteps) > 0 {
+				attempt.CurrentStep = attempt.RemainingSteps[0]
+			} else {
+				attempt.CurrentStep = ""
+			}
+
+			return tx.Save(session).Error
+		}); err != nil {
+			return handler.SendInternalServerError(c, err, "Something went wrong")
 		}
+
+		h.service.DeleteOTPFromRedis(fmt.Sprintf("signup:%d", attempt.ID))
 	}
 
-	return handler.SendSuccess[any](c, nil)
+	return handler.SendSuccess(c, session)
 }

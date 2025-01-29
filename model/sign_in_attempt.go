@@ -65,17 +65,17 @@ func (e *Error) GormDBDataType() string {
 
 type SignInAttempt struct {
 	Model
-	UserID       uint                                   `json:"-"`
-	IdentifierID uint                                   `json:"-"`
-	SessionID    uint                                   `json:"session_id"`
-	Method       SignInMethod                           `json:"method"`
-	SSOProvider  SocialConnectionProvider               `json:"sso_provider"`
-	ExpiresAt    time.Time                              `json:"expires_at"`
-	CurrentStep  SignInAttemptStep                      `json:"current_step"`
-	Steps        datatypes.JSONSlice[SignInAttemptStep] `json:"steps"`
-	Completed    bool                                   `json:"completed"`
-	Errored      bool                                   `json:"errored"`
-	Errors       datatypes.JSONSlice[Error]             `json:"errors"`
+	UserID         uint                                   `json:"-"`
+	IdentifierID   uint                                   `json:"-"`
+	SessionID      uint                                   `json:"session_id"`
+	Method         SignInMethod                           `json:"method"`
+	SSOProvider    SocialConnectionProvider               `json:"sso_provider"`
+	ExpiresAt      time.Time                              `json:"expires_at"`
+	CurrentStep    SignInAttemptStep                      `json:"current_step"`
+	RemainingSteps datatypes.JSONSlice[SignInAttemptStep] `json:"remaining_steps"`
+	Completed      bool                                   `json:"completed"`
+	Errored        bool                                   `json:"errored"`
+	Errors         datatypes.JSONSlice[Error]             `json:"errors"`
 }
 
 func NewSignInAttempt(method SignInMethod) *SignInAttempt {

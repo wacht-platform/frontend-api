@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"net/smtp"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/godruoyi/go-snowflake"
 	"github.com/ilabs/wacht-fe/config"
@@ -102,7 +104,7 @@ func (s *AuthService) CreateSignInAttempt(
 	if len(steps) > 0 {
 		attempt.CurrentStep = steps[0]
 	}
-	attempt.Steps = datatypes.NewJSONSlice(steps)
+	attempt.RemainingSteps = datatypes.NewJSONSlice(steps)
 	attempt.IdentifierID = identifierID
 	attempt.Completed = completed
 	attempt.UserID = userID
@@ -138,6 +140,7 @@ func (s *AuthService) CreateUser(
 	deploymentID uint,
 	secondFactorPolicy model.SecondFactorPolicy,
 	otpSecret string,
+	verified bool,
 ) model.User {
 	emailID := uint(snowflake.ID())
 	u := model.User{
@@ -148,9 +151,12 @@ func (s *AuthService) CreateUser(
 		Password:              hashedPassword,
 		PrimaryEmailAddressID: &emailID,
 		UserEmailAddresses: []*model.UserEmailAddress{{
-			Model:     model.Model{ID: emailID},
-			Email:     b.Email,
-			IsPrimary: true,
+			Model:                model.Model{ID: emailID},
+			Email:                b.Email,
+			IsPrimary:            true,
+			Verified:             verified,
+			VerificationStrategy: model.Otp,
+			VerifiedAt:           time.Now(),
 		}},
 		SchemaVersion:      model.SchemaVersionV1,
 		SecondFactorPolicy: secondFactorPolicy,
@@ -165,6 +171,7 @@ func (s *AuthService) CreateUser(
 			PhoneNumber: b.PhoneNumber,
 			Verified:    false,
 		})
+		u.PrimaryPhoneNumberID = &phoneNumberID
 	}
 
 	return u
@@ -400,4 +407,143 @@ func (s *AuthService) SendEmailOTPVerification(email string, otp string) error {
 	}
 
 	return nil
+}
+
+func (s *AuthService) CreateSignupAttempt(
+	b *SignUpRequest,
+	hashedPassword string,
+	session *model.Session,
+	d model.Deployment,
+) (*model.SignupAttempt, error) {
+	var requiredFields []string
+	if d.AuthSettings.FirstName.Required {
+		requiredFields = append(requiredFields, "first_name")
+	}
+	if d.AuthSettings.LastName.Required {
+		requiredFields = append(requiredFields, "last_name")
+	}
+	if d.AuthSettings.EmailAddress.Required {
+		requiredFields = append(requiredFields, "email")
+	}
+	if d.AuthSettings.Username.Required {
+		requiredFields = append(requiredFields, "username")
+	}
+	if d.AuthSettings.PhoneNumber.Required {
+		requiredFields = append(requiredFields, "phone_number")
+	}
+
+	var missingFields []string
+	for _, field := range requiredFields {
+		switch field {
+		case "first_name":
+			if b.FirstName == "" {
+				missingFields = append(missingFields, field)
+			}
+		case "last_name":
+			if b.LastName == "" {
+				missingFields = append(missingFields, field)
+			}
+		case "email":
+			if b.Email == "" {
+				missingFields = append(missingFields, field)
+			}
+		case "username":
+			if b.Username == "" {
+				missingFields = append(missingFields, field)
+			}
+		case "phone_number":
+			if b.PhoneNumber == "" {
+				missingFields = append(missingFields, field)
+			}
+		}
+	}
+
+	var steps []model.SignupAttemptStep
+	if d.AuthSettings.VerificationPolicy.Email && b.Email != "" {
+		steps = append(steps, model.SignupAttemptStepVerifyEmail)
+	}
+	if d.AuthSettings.VerificationPolicy.PhoneNumber && b.PhoneNumber != "" {
+		steps = append(steps, model.SignupAttemptStepVerifyPhone)
+	}
+
+	attempt := &model.SignupAttempt{
+		Model: model.Model{
+			ID: uint(snowflake.ID()),
+		},
+		SessionID:      session.ID,
+		FirstName:      b.FirstName,
+		LastName:       b.LastName,
+		Email:          b.Email,
+		Username:       b.Username,
+		PhoneNumber:    b.PhoneNumber,
+		Password:       hashedPassword,
+		RequiredFields: datatypes.NewJSONSlice(requiredFields),
+		MissingFields:  datatypes.NewJSONSlice(missingFields),
+		RemainingSteps: datatypes.NewJSONSlice(steps),
+	}
+
+	if len(steps) > 0 {
+		attempt.CurrentStep = steps[0]
+	}
+
+	return attempt, nil
+}
+
+const (
+	otpExpirationTime = 5 * time.Minute
+)
+
+func (s *AuthService) StoreOTPInRedis(key string, otp string) error {
+	return database.Cache.Set(
+		context.Background(),
+		fmt.Sprintf("otp:%s", key),
+		otp,
+		otpExpirationTime,
+	).Err()
+}
+
+func (s *AuthService) GetOTPFromRedis(key string) (string, error) {
+	return database.Cache.Get(
+		context.Background(),
+		fmt.Sprintf("otp:%s", key),
+	).Result()
+}
+
+func (s *AuthService) DeleteOTPFromRedis(key string) error {
+	return database.Cache.Del(
+		context.Background(),
+		fmt.Sprintf("otp:%s", key),
+	).Err()
+}
+
+func (s *AuthService) GetSignupAttempt(signupAttempt uint) (*model.SignupAttempt, error) {
+	var attempt model.SignupAttempt
+	if err := s.db.Where("id = ?", signupAttempt).First(&attempt).Error; err != nil {
+		return nil, err
+	}
+	return &attempt, nil
+}
+
+func (s *AuthService) CreateVerifiedUser(
+	attempt *model.SignupAttempt,
+	d model.Deployment,
+	otpSecret string,
+) (*model.User, error) {
+	b := &SignUpRequest{
+		FirstName:   attempt.FirstName,
+		LastName:    attempt.LastName,
+		Username:    attempt.Username,
+		Email:       attempt.Email,
+		PhoneNumber: attempt.PhoneNumber,
+	}
+
+	user := s.CreateUser(
+		b,
+		attempt.Password,
+		d.ID,
+		d.AuthSettings.SecondFactorPolicy,
+		otpSecret,
+		true,
+	)
+	return &user, nil
 }
