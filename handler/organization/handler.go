@@ -26,7 +26,7 @@ func (h *Handler) CreateOrganization(c *fiber.Ctx) error {
 	}
 
 	session := handler.GetSession(c)
-	if session.ActiveSignIn == nil {
+	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
@@ -72,7 +72,7 @@ func (h *Handler) CreateOrganization(c *fiber.Ctx) error {
 			ID: uint(snowflake.ID()),
 		},
 		OrganizationID: org.ID,
-		UserID:         session.ActiveSignIn.UserID,
+		UserID:         session.ActiveSignin.UserID,
 		Role:           []*model.OrgnizationRole{ownerRole},
 	}
 
@@ -105,7 +105,7 @@ func (h *Handler) GetOrganization(c *fiber.Ctx) error {
 	orgID := c.Params("id")
 	session := handler.GetSession(c)
 
-	if session.ActiveSignIn == nil {
+	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
@@ -119,7 +119,7 @@ func (h *Handler) GetOrganization(c *fiber.Ctx) error {
 	if err := database.Connection.Where(
 		"organization_id = ? AND user_id = ?",
 		orgID,
-		session.ActiveSignIn.UserID,
+		session.ActiveSignin.UserID,
 	).Preload("Role").First(&membership).Error; err != nil {
 		return handler.SendForbidden(c, nil, "Not a member of this organization")
 	}
@@ -138,7 +138,7 @@ func (h *Handler) UpdateOrganization(c *fiber.Ctx) error {
 	}
 
 	session := handler.GetSession(c)
-	if session.ActiveSignIn == nil {
+	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
@@ -148,7 +148,7 @@ func (h *Handler) UpdateOrganization(c *fiber.Ctx) error {
 	}
 
 	var membership model.OrganizationMembership
-	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignIn.UserID).Preload("Role").First(&membership).Error; err != nil {
+	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).Preload("Role").First(&membership).Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
@@ -178,12 +178,12 @@ func (h *Handler) DeleteOrganization(c *fiber.Ctx) error {
 	orgID := c.Params("id")
 	session := handler.GetSession(c)
 
-	if session.ActiveSignIn == nil {
+	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
 	var membership model.OrganizationMembership
-	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignIn.UserID).Preload("Role").First(&membership).Error; err != nil {
+	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).Preload("Role").First(&membership).Error; err != nil {
 		return handler.SendForbidden(c, nil, "Only organization owner can delete the organization")
 	}
 
@@ -216,12 +216,12 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 	}
 
 	session := handler.GetSession(c)
-	if session.ActiveSignIn == nil {
+	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
 	var membership model.OrganizationMembership
-	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignIn.UserID).Preload("Role").First(&membership).Error; err != nil {
+	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).Preload("Role").First(&membership).Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
@@ -304,12 +304,12 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 	memberID := c.Params("memberId")
 
 	session := handler.GetSession(c)
-	if session.ActiveSignIn == nil {
+	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
 	var membership model.OrganizationMembership
-	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignIn.UserID).Preload("Role").First(&membership).Error; err != nil {
+	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).Preload("Role").First(&membership).Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 

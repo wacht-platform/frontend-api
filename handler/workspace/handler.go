@@ -26,7 +26,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 	}
 
 	session := handler.GetSession(c)
-	if session.ActiveSignIn == nil {
+	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
@@ -34,7 +34,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 	if err := database.Connection.Where(
 		"organization_id = ? AND user_id = ?",
 		b.OrganizationID,
-		session.ActiveSignIn.UserID,
+		session.ActiveSignin.UserID,
 	).First(&orgMembership).Error; err != nil {
 		return handler.SendForbidden(
 			c,
@@ -86,7 +86,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 			ID: uint(snowflake.ID()),
 		},
 		WorkspaceID: workspace.ID,
-		UserID:      session.ActiveSignIn.UserID,
+		UserID:      session.ActiveSignin.UserID,
 		Role:        []*model.WorkspaceRole{ownerRole},
 	}
 
@@ -123,7 +123,7 @@ func (h *Handler) GetWorkspace(c *fiber.Ctx) error {
 	workspaceID := c.Params("id")
 	session := handler.GetSession(c)
 
-	if session.ActiveSignIn == nil {
+	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
@@ -136,7 +136,7 @@ func (h *Handler) GetWorkspace(c *fiber.Ctx) error {
 	if err := database.Connection.Where(
 		"workspace_id = ? AND user_id = ?",
 		workspaceID,
-		session.ActiveSignIn.UserID,
+		session.ActiveSignin.UserID,
 	).Preload("Role").First(&membership).Error; err != nil {
 		return handler.SendForbidden(
 			c,
@@ -159,7 +159,7 @@ func (h *Handler) UpdateWorkspace(c *fiber.Ctx) error {
 	}
 
 	session := handler.GetSession(c)
-	if session.ActiveSignIn == nil {
+	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
@@ -171,7 +171,7 @@ func (h *Handler) UpdateWorkspace(c *fiber.Ctx) error {
 	var membership model.WorkspaceMembership
 	if err := database.Connection.Where("workspace_id = ? AND user_id = ?",
 		workspaceID,
-		session.ActiveSignIn.UserID,
+		session.ActiveSignin.UserID,
 	).
 		Preload("Role").First(&membership).Error; err != nil {
 		return handler.SendForbidden(
@@ -217,7 +217,7 @@ func (h *Handler) DeleteWorkspace(c *fiber.Ctx) error {
 	workspaceID := c.Params("id")
 	session := handler.GetSession(c)
 
-	if session.ActiveSignIn == nil {
+	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
@@ -225,7 +225,7 @@ func (h *Handler) DeleteWorkspace(c *fiber.Ctx) error {
 	if err := database.Connection.Where(
 		"workspace_id = ? AND user_id = ?",
 		workspaceID,
-		session.ActiveSignIn.UserID,
+		session.ActiveSignin.UserID,
 	).
 		Preload("Role").First(&membership).Error; err != nil {
 		return handler.SendForbidden(
@@ -272,12 +272,12 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 	}
 
 	session := handler.GetSession(c)
-	if session.ActiveSignIn == nil {
+	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
 	var membership model.WorkspaceMembership
-	if err := database.Connection.Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignIn.UserID).Preload("Role").First(&membership).Error; err != nil {
+	if err := database.Connection.Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignin.UserID).Preload("Role").First(&membership).Error; err != nil {
 		return handler.SendForbidden(
 			c,
 			nil,
@@ -375,12 +375,12 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 	memberID := c.Params("memberId")
 
 	session := handler.GetSession(c)
-	if session.ActiveSignIn == nil {
+	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
 	var membership model.WorkspaceMembership
-	if err := database.Connection.Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignIn.UserID).Preload("Role").First(&membership).Error; err != nil {
+	if err := database.Connection.Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignin.UserID).Preload("Role").First(&membership).Error; err != nil {
 		return handler.SendForbidden(
 			c,
 			nil,

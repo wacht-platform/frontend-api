@@ -4,7 +4,7 @@ import (
 	"github.com/godruoyi/go-snowflake"
 )
 
-type SignIn struct {
+type Signin struct {
 	Model
 	SessionID uint   `json:"-"              gorm:"index:idx_session_user_id,unique"`
 	UserID    uint   `json:"-"              gorm:"index:idx_session_user_id,unique"`
@@ -13,8 +13,8 @@ type SignIn struct {
 	ExpiredAt string `json:"expired_at"`
 }
 
-func NewSignIn(sessionID, userID uint) *SignIn {
-	return &SignIn{
+func NewSignIn(sessionID, userID uint) *Signin {
+	return &Signin{
 		Model: Model{
 			ID: uint(snowflake.ID()),
 		},

@@ -40,7 +40,7 @@ func AutoMigratePg() error {
 		&model.DeploymentSocialConnection{},
 		&model.SignInAttempt{},
 		&model.SocialConnection{},
-		&model.SignIn{},
+		&model.Signin{},
 		&model.DeploymentKeyPair{},
 		&model.RotatingToken{},
 		&model.UserPhoneNumber{},

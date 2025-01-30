@@ -11,6 +11,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
+	"gorm.io/gorm/clause"
 )
 
 func GetDeployment(c *fiber.Ctx) model.Deployment {
@@ -75,7 +76,7 @@ func getSessionFromCache(id uint) (*model.Session, error) {
 func getSessionAndSetToCache(sessionId uint) *model.Session {
 	session := new(model.Session)
 
-	database.Connection.Where("id = ?", sessionId).First(session)
+	database.Connection.Where("id = ?", sessionId).Preload(clause.Associations).First(session)
 
 	json, err := json.Marshal(session)
 	if err != nil {

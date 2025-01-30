@@ -46,7 +46,7 @@ type SignupAttempt struct {
 	Email          string                                 `json:"email"`
 	Username       string                                 `json:"username"`
 	PhoneNumber    string                                 `json:"phone_number"`
-	Password       string                                 `json:"password"`
+	Password       string                                 `json:"-"`
 	RequiredFields datatypes.JSONSlice[string]            `json:"required_fields"`
 	MissingFields  datatypes.JSONSlice[string]            `json:"missing_fields"`
 	CurrentStep    SignupAttemptStep                      `json:"current_step"`

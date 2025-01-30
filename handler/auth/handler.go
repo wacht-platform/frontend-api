@@ -65,7 +65,7 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 		authenticated = true
 	}
 
-	if !authenticated {
+	if !authenticated && b.Password != "" {
 		return handler.SendUnauthorized(
 			c,
 			nil,
@@ -104,8 +104,8 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 			}
 			signIn.User = &email.User
 
-			session.SignIns = append(session.SignIns, signIn)
-			session.ActiveSignInID = signIn.ID
+			session.Signins = append(session.Signins, signIn)
+			session.ActiveSigninID = signIn.ID
 		}
 
 		session.SigninAttempts = append(session.SigninAttempts, attempt)
@@ -186,9 +186,11 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 				return err
 			}
 
-			session.SignIns = append(session.SignIns, signIn)
-			session.ActiveSignInID = signIn.ID
+			session.Signins = append(session.Signins, signIn)
+			session.ActiveSigninID = signIn.ID
 		}
+
+		handler.RemoveSessionFromCache(session.ID)
 
 		return tx.Save(session).Error
 	})
@@ -211,7 +213,7 @@ func (h *Handler) InitSSO(c *fiber.Ctx) error {
 		return handler.SendBadRequest(
 			c,
 			nil,
-			"sso provider is required",
+			"provider is required",
 			handler.ErrProviderRequired,
 		)
 	}
@@ -344,7 +346,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			return err
 		}
 
-		session.SignIns = append(session.SignIns, signIn)
+		session.Signins = append(session.Signins, signIn)
 		return nil
 	})
 	if err != nil {
@@ -468,7 +470,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 
 		switch attempt.CurrentStep {
 		case model.SignupAttemptStepVerifyEmail:
-			key, err := totp.Generate(totp.GenerateOpts{})
+			key, err := totp.Generate(totp.GenerateOpts{Issuer: "wacht", AccountName: attempt.Email})
 			if err != nil {
 				return handler.SendInternalServerError(
 					c,
@@ -508,7 +510,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 	return handler.SendSuccess[any](c, nil)
 }
 
-func (h *Handler) CompleteVerification(c *fiber.Ctx) error {
+func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 	attemptIdentifier := c.QueryInt("attempt_identifier")
 	identifierType := c.Query("identifier_type")
 	session := handler.GetSession(c)
@@ -536,7 +538,7 @@ func (h *Handler) CompleteVerification(c *fiber.Ctx) error {
 			return handler.SendBadRequest(c, nil, "Sign in attempt already completed")
 		}
 
-		var signin *model.SignIn
+		var signin *model.Signin
 
 		switch attempt.CurrentStep {
 		case model.SignInAttemptStepVerifyEmail, model.SignInAttemptStepVerifyEmailOTP:
@@ -564,8 +566,8 @@ func (h *Handler) CompleteVerification(c *fiber.Ctx) error {
 					signin = model.NewSignIn(session.ID, email.UserID)
 					signin.User = &email.User
 
-					session.SignIns = append(session.SignIns, signin)
-					session.ActiveSignInID = signin.ID
+					session.Signins = append(session.Signins, signin)
+					session.ActiveSigninID = signin.ID
 				} else {
 					attempt.RemainingSteps = attempt.RemainingSteps[1:]
 					attempt.CurrentStep = attempt.RemainingSteps[0]
@@ -580,6 +582,10 @@ func (h *Handler) CompleteVerification(c *fiber.Ctx) error {
 						if err := tx.Create(signin).Error; err != nil {
 							return err
 						}
+					}
+
+					if err := tx.Save(session).Error; err != nil {
+						return err
 					}
 
 					handler.RemoveSessionFromCache(session.ID)
@@ -609,43 +615,46 @@ func (h *Handler) CompleteVerification(c *fiber.Ctx) error {
 
 		d := handler.GetDeployment(c)
 		otpSecret, err := totp.Generate(totp.GenerateOpts{
-			Issuer:      d.Project.Name,
+			Issuer:      "wacht",
 			AccountName: attempt.Email,
 		})
 		if err != nil {
 			return handler.SendInternalServerError(c, err, "Error generating OTP secret")
 		}
 
-		user, err := h.service.CreateVerifiedUser(attempt, d, otpSecret.Secret())
-		if err != nil {
-			return handler.SendInternalServerError(c, err, "Error creating user")
-		}
+		attempt.RemainingSteps = attempt.RemainingSteps[1:]
+		if len(attempt.RemainingSteps) > 0 {
+			attempt.CurrentStep = attempt.RemainingSteps[0]
 
-		signIn := model.NewSignIn(session.ID, user.ID)
-		signIn.User = user
-
-		if err := database.Connection.Transaction(func(tx *gorm.DB) error {
-			if err := tx.Create(user).Error; err != nil {
-				return err
+			if err := database.Connection.Save(attempt).Error; err != nil {
+				return handler.SendInternalServerError(c, err, "Error saving attempt")
+			}
+		} else {
+			attempt.CurrentStep = ""
+			user, err := h.service.CreateVerifiedUser(attempt, d, otpSecret.Secret())
+			if err != nil {
+				return handler.SendInternalServerError(c, err, "Error creating user")
 			}
 
-			if err := tx.Create(signIn).Error; err != nil {
-				return err
+			signIn := model.NewSignIn(session.ID, user.ID)
+			signIn.User = user
+
+			if err := database.Connection.Transaction(func(tx *gorm.DB) error {
+				if err := tx.Create(user).Error; err != nil {
+					return err
+				}
+
+				if err := tx.Create(signIn).Error; err != nil {
+					return err
+				}
+
+				session.Signins = append(session.Signins, signIn)
+				session.ActiveSigninID = signIn.ID
+
+				return tx.Save(session).Error
+			}); err != nil {
+				return handler.SendInternalServerError(c, err, "Something went wrong")
 			}
-
-			session.SignIns = append(session.SignIns, signIn)
-			session.ActiveSignInID = signIn.ID
-
-			attempt.RemainingSteps = attempt.RemainingSteps[1:]
-			if len(attempt.RemainingSteps) > 0 {
-				attempt.CurrentStep = attempt.RemainingSteps[0]
-			} else {
-				attempt.CurrentStep = ""
-			}
-
-			return tx.Save(session).Error
-		}); err != nil {
-			return handler.SendInternalServerError(c, err, "Something went wrong")
 		}
 
 		h.service.DeleteOTPFromRedis(fmt.Sprintf("signup:%d", attempt.ID))

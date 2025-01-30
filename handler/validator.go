@@ -51,6 +51,7 @@ func SendResponse[T any](
 		"message": message,
 		"data":    data,
 		"session": session,
+		"errors":  errors,
 	})
 }
 

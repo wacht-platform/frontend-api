@@ -44,9 +44,9 @@ func (h *Handler) SwitchActiveSignIn(c *fiber.Ctx) error {
 	}
 
 	validSignIn := false
-	for _, signIn := range session.SignIns {
+	for _, signIn := range session.Signins {
 		if signIn.ID == uint(signInId) {
-			session.ActiveSignIn = signIn
+			session.ActiveSignin = signIn
 			validSignIn = true
 			break
 		}
@@ -59,7 +59,7 @@ func (h *Handler) SwitchActiveSignIn(c *fiber.Ctx) error {
 		)
 	}
 
-	session.ActiveSignInID = uint(signInId)
+	session.ActiveSigninID = uint(signInId)
 
 	handler.RemoveSessionFromCache(session.ID)
 
@@ -82,7 +82,7 @@ func (h *Handler) SignOut(c *fiber.Ctx) error {
 			)
 		}
 
-		signIn := new(model.SignIn)
+		signIn := new(model.Signin)
 		count := database.Connection.Where("id = ? AND session_id = ?", signInId, session.ID).
 			First(signIn).
 			RowsAffected
@@ -114,7 +114,7 @@ func (h *Handler) SignOut(c *fiber.Ctx) error {
 	} else {
 		err := database.Connection.Transaction(func(tx *gorm.DB) error {
 			tx.Model(session).Update("active_sign_in_id", 0)
-			tx.Where("session_id = ?", session.ID).Delete(&model.SignIn{})
+			tx.Where("session_id = ?", session.ID).Delete(&model.Signin{})
 			return nil
 		})
 		if err != nil {

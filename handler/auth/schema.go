@@ -5,10 +5,11 @@ import (
 )
 
 type SignInRequest struct {
-	Username string `form:"username"`
-	Email    string `form:"email"`
-	Phone    string `form:"phone"`
-	Password string `form:"password"`
+	Username string             `form:"username"`
+	Email    string             `form:"email"`
+	Phone    string             `form:"phone"`
+	Password string             `form:"password"`
+	Strategy model.SignInMethod `form:"strategy"`
 }
 
 type SignUpRequest struct {
