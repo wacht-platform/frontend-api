@@ -32,8 +32,8 @@ func AutoMigratePg() error {
 	return Connection.AutoMigrate(
 		&model.Project{},
 		&model.Deployment{},
-		&model.OrgSettings{},
-		&model.AuthSettings{},
+		&model.DeploymentOrgSettings{},
+		&model.DeploymentAuthSettings{},
 		&model.User{},
 		&model.Session{},
 		&model.UserEmailAddress{},
@@ -53,6 +53,6 @@ func AutoMigratePg() error {
 		&model.WorkspaceRole{},
 		&model.WorkspaceMembership{},
 		&model.SignupAttempt{},
-		&model.DisplaySettings{},
+		&model.DeploymentDisplaySettings{},
 	)
 }

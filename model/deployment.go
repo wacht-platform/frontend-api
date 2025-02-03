@@ -32,9 +32,9 @@ type Deployment struct {
 	Host              string                       `json:"host"`
 	PublishableKey    string                       `json:"publishable_key"`
 	Secret            string                       `json:"-"`
-	DisplaySettings   DisplaySettings              `json:"display_settings"`
-	OrgSettings       OrgSettings                  `json:"org_settings"`
-	AuthSettings      AuthSettings                 `json:"auth_settings"`
+	DisplaySettings   DeploymentDisplaySettings    `json:"display_settings"`
+	OrgSettings       DeploymentOrgSettings        `json:"org_settings"`
+	AuthSettings      DeploymentAuthSettings       `json:"auth_settings"`
 	SocialConnections []DeploymentSocialConnection `json:"social_connections"`
 	ProjectID         uint                         `json:"project_id"`
 	Project           Project                      `json:"-"`

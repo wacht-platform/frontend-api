@@ -1,6 +1,6 @@
 package model
 
-type OrgSettings struct {
+type DeploymentOrgSettings struct {
 	Model
 	DeploymentID       uint   `json:"deployment_id"`
 	Enabled            bool   `json:"enabled"`

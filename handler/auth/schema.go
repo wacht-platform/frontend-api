@@ -25,10 +25,6 @@ type SSOCallbackResponse struct {
 	Session model.Session `json:"session"`
 }
 
-type AuthMethodsResponse struct {
-	AuthSettings model.AuthSettings `json:"auth_settings"`
-}
-
 type InitSSOResponse struct {
 	OAuthURL string        `json:"oauth_url"`
 	Session  model.Session `json:"session"`
