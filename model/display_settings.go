@@ -58,7 +58,7 @@ func (i *InputConfig) GormDBDataType() string {
 	return "jsonb"
 }
 
-type DisplaySettings struct {
+type DeploymentDisplaySettings struct {
 	Model
 	DeploymentId              uint   `json:"deployment_id"`
 	AppName                   string `json:"app_name"`

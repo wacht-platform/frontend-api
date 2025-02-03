@@ -70,7 +70,7 @@ func (s *AuthService) ValidateUserStatus(user *model.UserEmailAddress) error {
 
 func (s *AuthService) DetermineAuthenticationStep(
 	verified, authenticated, secondFactorEnforced bool,
-	authSettings model.AuthSettings,
+	authSettings model.DeploymentAuthSettings,
 ) ([]model.SignInAttemptStep, bool) {
 	var steps []model.SignInAttemptStep
 	completed := false
@@ -200,7 +200,7 @@ func (s *AuthService) HandleExistingUser(
 	email *model.UserEmailAddress,
 	token *oauth2.Token,
 	attempt *model.SignInAttempt,
-	deploymentSettings model.AuthSettings,
+	deploymentSettings model.DeploymentAuthSettings,
 ) error {
 	var connection model.SocialConnection
 	for _, sc := range email.User.SocialConnections {

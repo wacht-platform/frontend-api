@@ -38,9 +38,7 @@ type SecondFactor string
 
 const (
 	SecondFactorNone          SecondFactor = "none"
-	SecondFactorEmailOTP      SecondFactor = "email_otp"
 	SecondFactorPhoneOTP      SecondFactor = "phone_otp"
-	SecondFactorWeb3Wallet    SecondFactor = "web3_wallet"
 	SecondFactorBackupCode    SecondFactor = "backup_code"
 	SecondFactorAuthenticator SecondFactor = "authenticator"
 )
@@ -145,6 +143,7 @@ type AuthFactorsEnabled struct {
 	EmailPassword    bool `json:"email_password"`
 	UsernamePassword bool `json:"username_password"`
 	EmailOTP         bool `json:"email_otp"`
+	EmailMagicLink   bool `json:"email_magic_link"`
 	PhoneOTP         bool `json:"phone_otp"`
 	Web3Wallet       bool `json:"web3_wallet"`
 	BackupCode       bool `json:"backup_code"`
@@ -177,7 +176,7 @@ func (a *AuthFactorsEnabled) GormDBDataType() string {
 	return "jsonb"
 }
 
-type AuthSettings struct {
+type DeploymentAuthSettings struct {
 	Model
 	EmailAddress           IndividualAuthSettings `json:"email_address"`
 	PhoneNumber            IndividualAuthSettings `json:"phone_number"`
