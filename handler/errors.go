@@ -18,6 +18,8 @@ const (
 	ErrCodeUserDisabled                 = "USER_DISABLED"
 	ErrCodeInvalidCredentials           = "INVALID_CREDENTIALS"
 	ErrCodeEmailExists                  = "EMAIL_EXISTS"
+	ErrCodeUsernameExists               = "USERNAME_EXISTS"
+	ErrCodePhoneNumberExists            = "PHONE_NUMBER_EXISTS"
 	ErrCodeProviderRequired             = "PROVIDER_REQUIRED"
 	ErrCodeCodeRequired                 = "CODE_REQUIRED"
 	ErrCodeVerificationStrategyRequired = "VERIFICATION_STRATEGY_REQUIRED"
@@ -45,6 +47,14 @@ var (
 	ErrEmailExists = Error{
 		Code:    ErrCodeEmailExists,
 		Message: "email address already exists",
+	}
+	ErrUsernameExists = Error{
+		Code:    ErrCodeUsernameExists,
+		Message: "username already exists",
+	}
+	ErrPhoneNumberExists = Error{
+		Code:    ErrCodePhoneNumberExists,
+		Message: "phone number already exists",
 	}
 	ErrProviderRequired = Error{
 		Code:    ErrCodeProviderRequired,

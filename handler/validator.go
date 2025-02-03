@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"fmt"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 )
@@ -60,6 +62,7 @@ func SendSuccess[T any](c *fiber.Ctx, data T) error {
 }
 
 func SendBadRequest(c *fiber.Ctx, data any, message string, errors ...Error) error {
+	fmt.Println(errors)
 	return SendResponse(c, 400, data, message, errors)
 }
 

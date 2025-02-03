@@ -136,9 +136,24 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, err.Error(), handler.ErrBadRequestBody)
 	}
 
+	var errors []handler.Error
+
 	if b.Email != "" && h.service.CheckEmailExists(b.Email) {
-		return handler.SendBadRequest(c, nil, "Email is already registered", handler.ErrEmailExists)
+		errors = append(errors, handler.ErrEmailExists)
 	}
+
+	if b.Username != "" && h.service.CheckUsernameExists(b.Username) {
+		errors = append(errors, handler.ErrUsernameExists)
+	}
+
+	if b.PhoneNumber != "" && h.service.CheckUserphoneExists(b.PhoneNumber) {
+		errors = append(errors, handler.ErrPhoneNumberExists)
+	}
+
+	if len(errors) > 0 {
+		return handler.SendBadRequest(c, nil, "Field errors", errors...)
+	}
+	
 
 	hashedPassword, err := h.service.HashPassword(b.Password)
 	if err != nil {
