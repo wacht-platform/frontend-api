@@ -254,6 +254,12 @@ func (s *AuthService) CheckUsernameExists(username string) bool {
 	return count > 0
 }
 
+func (s *AuthService) CheckUserphoneExists(phone string) bool {
+	var count int64
+	s.db.Model(&model.UserPhoneNumber{}).Where("phone_number = ?", phone).Count(&count)
+	return count > 0
+}
+
 func getOAuthConfig(provider model.SocialConnectionProvider) *oauth2.Config {
 	cred := config.GetDefaultOAuthCredentials(string(provider))
 	conf := &oauth2.Config{
