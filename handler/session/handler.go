@@ -21,8 +21,8 @@ func (h *Handler) GetCurrentSession(c *fiber.Ctx) error {
 
 	session := new(model.Session)
 
-	err := database.Connection.Preload("ActiveSignIn").
-		Preload("SignIns").
+	err := database.Connection.Preload("ActiveSignin").
+		Preload("Signins").
 		Where("id = ?", sessionID).
 		First(session).Error
 	if err != nil {

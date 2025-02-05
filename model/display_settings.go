@@ -60,11 +60,13 @@ func (i *InputConfig) GormDBDataType() string {
 
 type DeploymentDisplaySettings struct {
 	Model
-	DeploymentId              uint   `json:"deployment_id"`
-	AppName                   string `json:"app_name"`
-	PrimaryColor              string `json:"primary_color"`
-	TosPageURL                string `json:"tos_page_url"`
-	PrivacyPolicyURL          string `json:"privacy_policy_url"`
-	SignupTermsStatement      string `json:"signup_terms_statement"`
-	SignupTermsStatementShown bool   `json:"signup_terms_statement_shown"`
+	DeploymentId              uint         `json:"deployment_id"`
+	AppName                   string       `json:"app_name"`
+	PrimaryColor              string       `json:"primary_color"`
+	TosPageURL                string       `json:"tos_page_url"`
+	ButtonConfig              ButtonConfig `json:"button_config"`
+	InputConfig               InputConfig  `json:"input_config"`
+	PrivacyPolicyURL          string       `json:"privacy_policy_url"`
+	SignupTermsStatement      string       `json:"signup_terms_statement"`
+	SignupTermsStatementShown bool         `json:"signup_terms_statement_shown"`
 }
