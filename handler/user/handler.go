@@ -2,10 +2,12 @@ package user
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
+	"github.com/ilabs/wacht-fe/model"
 )
 
 type Handler struct{
@@ -21,44 +23,54 @@ func NewHandler() *Handler {
 
 
 func (h *Handler) GetUser(c *fiber.Ctx) error {
-	fmt.Println("GetUser: Retrieving session from context")
+	log.Println("GetUser: Retrieving session from context")
 	session := handler.GetSession(c)
+	log.Printf("GetUser: Session retrieved, sessionID = %d, ActiveSigninID = %d\n", session.ID, session.ActiveSigninID)
+	log.Println("GetUser: Querying for the active sign-in using session ID and ActiveSigninID")
 
-	if session == nil {
-		fmt.Println("GetUser: Session not found")
-		return handler.SendNotFound(c, nil, "Session not found")
-	}
-
-	fmt.Printf("GetUser: Retrieved session: %+v\n", session)
-
-	fmt.Println("GetUser: Fetching session with ActiveSignin and User details")
-	err := database.Connection.Preload("ActiveSignin.User").
-		Where("id = ?", session.ID).
-		First(session).Error
+	var activeSignin *model.Signin
+	err := database.Connection.
+		Preload("User").
+		Where("session_id = ? AND id = ?", session.ID, session.ActiveSigninID).
+		First(&activeSignin).Error
 
 	if err != nil {
-		fmt.Printf("GetUser: Error fetching session details: %v\n", err)
-		return handler.SendNotFound(c, nil, "Failed to load session details")
+		log.Printf("GetUser: Error finding active sign-in - %v\n", err)
+		return handler.SendNotFound(c, nil, "Active sign-in not found")
+	}
+	log.Printf("GetUser: Active sign-in found: %+v\n", activeSignin)
+
+	log.Println("GetUser: Querying for all sign-ins for the session")
+	var allSignins []*model.Signin
+	err = database.Connection.
+		Preload("User").
+		Where("session_id = ?", session.ID).
+		Find(&allSignins).Error
+
+	if err != nil {
+		log.Printf("GetUser: Error retrieving all sign-ins - %v\n", err)
+		return handler.SendInternalServerError(c, nil, "Failed to retrieve all sign-ins")
 	}
 
-	fmt.Printf("GetUser: Loaded session: %+v\n", session)
+	log.Printf("GetUser: Total sign-ins found for session: %d\n", len(allSignins))
 
-	if session.ActiveSignin == nil {
-		fmt.Println("GetUser: No active sign-in found")
-		return handler.SendNotFound(c, nil, "No active sign-in found")
+	log.Println("GetUser: Preparing response with active sign-in and all sign-ins")
+	response := map[string]interface{}{
+		"active_signin": activeSignin,
+		"all_signins":   allSignins,
 	}
 
-	fmt.Printf("GetUser: Active sign-in found: %+v\n", session.ActiveSignin)
+	log.Printf("GetUser: Response prepared: %+v\n", response)
 
-	if session.ActiveSignin.User == nil {
-		fmt.Println("GetUser: No active sign-in user found")
-		return handler.SendNotFound(c, nil, "No active sign-in user found")
-	}
-
-	fmt.Printf("GetUser: Returning active user: %+v\n", session.ActiveSignin.User)
-
-	return handler.SendSuccess(c, session.ActiveSignin.User)
+	log.Println("GetUser: Returning success response")
+	return handler.SendSuccess(c, response)
 }
+
+
+
+
+
+
 
 
 
