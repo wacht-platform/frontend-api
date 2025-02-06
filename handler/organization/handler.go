@@ -114,7 +114,6 @@ func (h *Handler) GetOrganization(c *fiber.Ctx) error {
 		return handler.SendNotFound(c, nil, "Organization not found")
 	}
 
-	// Check if user is member
 	var membership model.OrganizationMembership
 	if err := database.Connection.Where(
 		"organization_id = ? AND user_id = ?",

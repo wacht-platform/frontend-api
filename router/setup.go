@@ -19,6 +19,7 @@ func setupRoutes(app *fiber.App) {
 	setupSessionRoutes(app)
 	setupOrganizationRoutes(app)
 	setupWorkspaceRoutes(app)
+	setupUserRoutes(app)
 }
 
 func setupMiddleware(app *fiber.App) {

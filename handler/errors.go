@@ -90,7 +90,6 @@ var (
 	}
 )
 
-
 func ErrRequiredField(field string) error {
 	return Error{
 		Code:    ErrCodeRequiredField,

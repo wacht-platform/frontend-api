@@ -1,11 +1,13 @@
 package database
 
 import (
+	"log"
 	"os"
 
 	"github.com/ilabs/wacht-fe/model"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var Connection *gorm.DB
@@ -14,10 +16,10 @@ func InitPgConnection() error {
 	dsn := os.Getenv("DATABASE_URL")
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		SkipDefaultTransaction: true,
-		// PrepareStmt:            true,
-		// Logger: logger.New(log.Default(), logger.Config{
-		// 	LogLevel: logger.Info,
-		// }),
+		PrepareStmt:            true,
+		Logger: logger.New(log.Default(), logger.Config{
+			LogLevel: logger.Silent,
+		}),
 	})
 	if err != nil {
 		return err

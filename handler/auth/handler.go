@@ -115,6 +115,7 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Something went wrong")
 	}
+	c.Locals("session", session.ID)
 
 	return handler.SendSuccess(c, session)
 }
