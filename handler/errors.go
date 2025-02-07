@@ -29,6 +29,7 @@ const (
 	ErrCodeBadRequestBody               = "BAD_REQUEST_BODY"
 	ErrorCodeInternal                   = "INTERNAL"
 	ErrorCodeBadSignInAttempt           = "BAD_SIGN_IN_ATTEMPT"
+	ErrorCodeUserAlreadySignedIn        = "USER_ALREADY_SIGNED_IN"
 )
 
 var (
@@ -87,6 +88,10 @@ var (
 	ErrVerificationStrategyRequired = Error{
 		Code:    ErrCodeVerificationStrategyRequired,
 		Message: "A verification strategy must be specified.",
+	}
+	ErrUserAlreadySignedIn = Error{
+		Code:    ErrorCodeUserAlreadySignedIn,
+		Message: "You are already signed in.",
 	}
 )
 

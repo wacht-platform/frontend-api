@@ -10,6 +10,7 @@ import (
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/utils"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pquerna/otp/totp"
 	"gorm.io/gorm"
 )
@@ -112,6 +113,11 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 
 		return tx.Save(session).Error
 	})
+
+	if err.(*pgconn.PgError).ConstraintName == "idx_session_user_id" {
+		return handler.SendBadRequest(c, nil, "User already signed in", handler.ErrUserAlreadySignedIn)
+	}
+
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Something went wrong")
 	}
@@ -154,7 +160,6 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 	if len(errors) > 0 {
 		return handler.SendBadRequest(c, nil, "Field errors", errors...)
 	}
-	
 
 	hashedPassword, err := h.service.HashPassword(b.Password)
 	if err != nil {
