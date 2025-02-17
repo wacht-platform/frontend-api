@@ -28,8 +28,6 @@ func GetSession(c *fiber.Ctx) *model.Session {
 		session = getSessionAndSetToCache(sessionID)
 	}
 
-	log.Println("session", session)
-
 	return session
 }
 
@@ -76,7 +74,9 @@ func getSessionFromCache(id uint) (*model.Session, error) {
 func getSessionAndSetToCache(sessionId uint) *model.Session {
 	session := new(model.Session)
 
-	database.Connection.Where("id = ?", sessionId).Preload(clause.Associations).First(session)
+	database.Connection.Where("id = ?", sessionId).
+		Preload(clause.Associations).
+		First(session)
 
 	json, err := json.Marshal(session)
 	if err != nil {

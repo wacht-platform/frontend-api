@@ -40,7 +40,9 @@ func NewAuthService() *AuthService {
 	}
 }
 
-func (s *AuthService) FindUserByEmail(email string) (*model.UserEmailAddress, error) {
+func (s *AuthService) FindUserByEmail(
+	email string,
+) (*model.UserEmailAddress, error) {
 	var userEmail model.UserEmailAddress
 	if res := s.db.Where(&model.UserEmailAddress{Email: email}).Joins("User").First(&userEmail); res.RowsAffected == 0 {
 		return nil, handler.ErrUserNotFound
@@ -51,7 +53,9 @@ func (s *AuthService) FindUserByEmail(email string) (*model.UserEmailAddress, er
 	return &userEmail, nil
 }
 
-func (s *AuthService) FindUserByEmailID(emailId uint) (*model.UserEmailAddress, error) {
+func (s *AuthService) FindUserByEmailID(
+	emailId uint,
+) (*model.UserEmailAddress, error) {
 	var userEmail model.UserEmailAddress
 	if res := s.db.Where(&model.UserEmailAddress{Model: model.Model{ID: emailId}}).Joins("User").First(&userEmail); res.RowsAffected == 0 {
 		return nil, handler.ErrUserNotFound
@@ -61,7 +65,9 @@ func (s *AuthService) FindUserByEmailID(emailId uint) (*model.UserEmailAddress, 
 	return &userEmail, nil
 }
 
-func (s *AuthService) ValidateUserStatus(user *model.UserEmailAddress) error {
+func (s *AuthService) ValidateUserStatus(
+	user *model.UserEmailAddress,
+) error {
 	if user.User.Disabled {
 		return handler.ErrUserDisabled
 	}
@@ -79,12 +85,16 @@ func (s *AuthService) DetermineAuthenticationStep(
 		steps = append(steps, model.SignInAttemptStepVerifyEmail)
 	}
 
-	if !authenticated && authSettings.FirstFactor == model.FirstFactorEmailOTP {
+	if !authenticated &&
+		authSettings.FirstFactor == model.FirstFactorEmailOTP {
 		steps = append(steps, model.SignInAttemptStepVerifyEmailOTP)
 	}
 
 	if secondFactorEnforced {
-		steps = append(steps, model.SignInAttemptStepVerifySecondFactor)
+		steps = append(
+			steps,
+			model.SignInAttemptStepVerifySecondFactor,
+		)
 	}
 
 	completed = len(steps) == 0
@@ -112,7 +122,10 @@ func (s *AuthService) CreateSignInAttempt(
 	return attempt
 }
 
-func (s *AuthService) ValidateSignUpRequest(b *SignUpRequest, d model.Deployment) error {
+func (s *AuthService) ValidateSignUpRequest(
+	b *SignUpRequest,
+	d model.Deployment,
+) error {
 	if d.AuthSettings.FirstName.Required && b.FirstName == "" {
 		return handler.ErrRequiredField("First name")
 	}
@@ -166,11 +179,14 @@ func (s *AuthService) CreateUser(
 
 	if b.PhoneNumber != "" {
 		phoneNumberID := uint(snowflake.ID())
-		u.UserPhoneNumbers = append(u.UserPhoneNumbers, &model.UserPhoneNumber{
-			Model:       model.Model{ID: phoneNumberID},
-			PhoneNumber: b.PhoneNumber,
-			Verified:    false,
-		})
+		u.UserPhoneNumbers = append(
+			u.UserPhoneNumbers,
+			&model.UserPhoneNumber{
+				Model:       model.Model{ID: phoneNumberID},
+				PhoneNumber: b.PhoneNumber,
+				Verified:    false,
+			},
+		)
 		u.PrimaryPhoneNumberID = &phoneNumberID
 	}
 
@@ -187,10 +203,10 @@ func (s *AuthService) CreateSocialConnection(
 	return model.SocialConnection{
 		Model:              model.Model{ID: uint(snowflake.ID())},
 		Provider:           provider,
-		EmailAdress:        email,
+		EmailAddress:       email,
 		UserID:             userID,
 		UserEmailAddressID: emailID,
-		AcessToken:         token.AccessToken,
+		AccessToken:        token.AccessToken,
 		RefreshToken:       token.RefreshToken,
 	}
 }
@@ -204,7 +220,8 @@ func (s *AuthService) HandleExistingUser(
 ) error {
 	var connection model.SocialConnection
 	for _, sc := range email.User.SocialConnections {
-		if sc.Provider == attempt.SSOProvider && sc.EmailAdress == email.Email {
+		if sc.Provider == attempt.SSOProvider &&
+			sc.EmailAddress == email.Email {
 			connection = *sc
 			break
 		}
@@ -224,7 +241,10 @@ func (s *AuthService) HandleExistingUser(
 		}
 
 		if attempt.Completed {
-			signIn := model.NewSignIn(attempt.SessionID, email.User.ID)
+			signIn := model.NewSignIn(
+				attempt.SessionID,
+				email.User.ID,
+			)
 			if err := tx.Create(&signIn).Error; err != nil {
 				return err
 			}
@@ -234,7 +254,9 @@ func (s *AuthService) HandleExistingUser(
 	return tx.Save(attempt).Error
 }
 
-func (s *AuthService) VerifyPassword(storedHash, password string) (bool, error) {
+func (s *AuthService) VerifyPassword(
+	storedHash, password string,
+) (bool, error) {
 	return utils.ComparePassword(storedHash, password)
 }
 
@@ -244,23 +266,31 @@ func (s *AuthService) HashPassword(password string) (string, error) {
 
 func (s *AuthService) CheckEmailExists(email string) bool {
 	var count int64
-	s.db.Model(&model.UserEmailAddress{}).Where("email = ?", email).Count(&count)
+	s.db.Model(&model.UserEmailAddress{}).
+		Where("email = ?", email).
+		Count(&count)
 	return count > 0
 }
 
 func (s *AuthService) CheckUsernameExists(username string) bool {
 	var count int64
-	s.db.Model(&model.User{}).Where("username = ?", username).Count(&count)
+	s.db.Model(&model.User{}).
+		Where("username = ?", username).
+		Count(&count)
 	return count > 0
 }
 
 func (s *AuthService) CheckUserphoneExists(phone string) bool {
 	var count int64
-	s.db.Model(&model.UserPhoneNumber{}).Where("phone_number = ?", phone).Count(&count)
+	s.db.Model(&model.UserPhoneNumber{}).
+		Where("phone_number = ?", phone).
+		Count(&count)
 	return count > 0
 }
 
-func getOAuthConfig(provider model.SocialConnectionProvider) *oauth2.Config {
+func getOAuthConfig(
+	provider model.SocialConnectionProvider,
+) *oauth2.Config {
 	cred := config.GetDefaultOAuthCredentials(string(provider))
 	conf := &oauth2.Config{
 		ClientID:     cred.ClientID,
@@ -303,7 +333,9 @@ func (s *AuthService) CheckIdentifierAvailability(
 	return false, errors.New("invalid identifier type")
 }
 
-func (s *AuthService) GetSignInAttempt(signInAttempt uint) (model.SignInAttempt, error) {
+func (s *AuthService) GetSignInAttempt(
+	signInAttempt uint,
+) (model.SignInAttempt, error) {
 	var attempt model.SignInAttempt
 	if err := s.db.Where("id = ?", signInAttempt).First(&attempt).Error; err != nil {
 		log.Println(err, signInAttempt)
@@ -320,7 +352,10 @@ func (s *AuthService) PawnedPassword(password string) (bool, error) {
 	prefix := strings.ToUpper(hash[:5])
 	suffix := strings.ToUpper(hash[5:])
 
-	url := fmt.Sprintf("https://api.pwnedpasswords.com/range/%s", prefix)
+	url := fmt.Sprintf(
+		"https://api.pwnedpasswords.com/range/%s",
+		prefix,
+	)
 	resp, err := http.Get(url)
 	if err != nil {
 		return false, fmt.Errorf("failed to query HIBP API: %w", err)
@@ -333,7 +368,10 @@ func (s *AuthService) PawnedPassword(password string) (bool, error) {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return false, fmt.Errorf("failed to read HIBP API response: %w", err)
+		return false, fmt.Errorf(
+			"failed to read HIBP API response: %w",
+			err,
+		)
 	}
 
 	hashes := strings.Split(string(body), "\n")
@@ -364,14 +402,18 @@ func (s *AuthService) ValidatePassword(password string) error {
 		return ErrInvalidPassword
 	}
 
-	hasSymbol := regexp.MustCompile(`[!@#$%^&*(),.?":{}|<>]`).MatchString(password)
+	hasSymbol := regexp.MustCompile(`[!@#$%^&*(),.?":{}|<>]`).
+		MatchString(password)
 	if !hasSymbol {
 		return ErrInvalidPassword
 	}
 	return nil
 }
 
-func (s *AuthService) SendEmailOTPVerification(email string, otp string) error {
+func (s *AuthService) SendEmailOTPVerification(
+	email string,
+	otp string,
+) error {
 	smtpHost := "smtp.zeptomail.in"
 	smtpPort := "587"
 	username := "emailapikey"
@@ -400,7 +442,10 @@ func (s *AuthService) SendEmailOTPVerification(email string, otp string) error {
   </div>
   `, otp)
 
-	fromstr := fmt.Sprintf("From: Security Notifications <%s>\r\n", from)
+	fromstr := fmt.Sprintf(
+		"From: Security Notifications <%s>\r\n",
+		from,
+	)
 	subject := "Subject: Your OTP Code\r\n"
 	contentType := "MIME-Version: 1.0\r\nContent-Type: text/html; charset=\"UTF-8\"\r\n\r\n"
 	msg := []byte(fromstr + subject + contentType + htmlBody)
@@ -409,7 +454,11 @@ func (s *AuthService) SendEmailOTPVerification(email string, otp string) error {
 	err := smtp.SendMail(smtpServer, auth, from, []string{email}, msg)
 
 	if err != nil {
-		return fmt.Errorf("failed to send email to %s: %w", email, err)
+		return fmt.Errorf(
+			"failed to send email to %s: %w",
+			email,
+			err,
+		)
 	}
 
 	return nil
@@ -468,7 +517,8 @@ func (s *AuthService) CreateSignupAttempt(
 	if d.AuthSettings.VerificationPolicy.Email && b.Email != "" {
 		steps = append(steps, model.SignupAttemptStepVerifyEmail)
 	}
-	if d.AuthSettings.VerificationPolicy.PhoneNumber && b.PhoneNumber != "" {
+	if d.AuthSettings.VerificationPolicy.PhoneNumber &&
+		b.PhoneNumber != "" {
 		steps = append(steps, model.SignupAttemptStepVerifyPhone)
 	}
 
@@ -499,7 +549,7 @@ const (
 	otpExpirationTime = 5 * time.Minute
 )
 
-func (s *AuthService) StoreOTPInRedis(key string, otp string) error {
+func (s *AuthService) StoreOTPInCache(key string, otp string) error {
 	return database.Cache.Set(
 		context.Background(),
 		fmt.Sprintf("otp:%s", key),
@@ -522,7 +572,9 @@ func (s *AuthService) DeleteOTPFromRedis(key string) error {
 	).Err()
 }
 
-func (s *AuthService) GetSignupAttempt(signupAttempt uint) (*model.SignupAttempt, error) {
+func (s *AuthService) GetSignupAttempt(
+	signupAttempt uint,
+) (*model.SignupAttempt, error) {
 	var attempt model.SignupAttempt
 	if err := s.db.Where("id = ?", signupAttempt).First(&attempt).Error; err != nil {
 		return nil, err
@@ -547,7 +599,7 @@ func (s *AuthService) CreateVerifiedUser(
 		b,
 		attempt.Password,
 		d.ID,
-		d.AuthSettings.SecondFactorPolicy,
+		model.SecondFactorPolicyNone,
 		otpSecret,
 		true,
 	)

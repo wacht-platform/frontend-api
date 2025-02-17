@@ -39,10 +39,10 @@ func (ct VerificationStrategy) GormDBDataType() string {
 
 type UserEmailAddress struct {
 	Model
-	DeploymentID         uint                 `json:"-" gorm:"index:idx_deployment_user_email_address_email,unique"`
+	DeploymentID         uint                 `json:"-"                           gorm:"index:idx_deployment_user_email_address_email,unique"`
 	UserID               uint                 `json:"-"`
 	User                 User                 `json:"-"`
-	Email                string               `json:"email" gorm:"index:idx_user_email_address_email;index:idx_deployment_user_email_address_email,unique"`
+	Email                string               `json:"email"                       gorm:"index:idx_user_email_address_email;index:idx_deployment_user_email_address_email,unique"`
 	IsPrimary            bool                 `json:"is_primary"`
 	Verified             bool                 `json:"verified"`
 	VerifiedAt           time.Time            `json:"verified_at"`
@@ -72,19 +72,20 @@ type User struct {
 	LastName                       string                  `json:"last_name"`
 	Username                       string                  `json:"username"`
 	Password                       string                  `json:"-"`
+	LastPasswordResetAt            time.Time               `json:"last_password_reset_at"`
 	SchemaVersion                  SchemaVersion           `json:"schema_version"`
 	Disabled                       bool                    `json:"disabled"`
 	PrimaryEmailAddressID          *uint                   `json:"primary_email_address_id"`
 	PrimaryPhoneNumberID           *uint                   `json:"primary_phone_number_id"`
 	SecondFactorPolicy             SecondFactorPolicy      `json:"second_factor_policy"`
-	UserEmailAddresses             []*UserEmailAddress     `json:"user_email_addresses" gorm:"constraint:OnDelete:CASCADE;"`
-	UserPhoneNumbers               []*UserPhoneNumber      `json:"user_phone_numbers" gorm:"constraint:OnDelete:CASCADE;"`
+	UserEmailAddresses             []*UserEmailAddress     `json:"user_email_addresses"         gorm:"constraint:OnDelete:CASCADE;"`
+	UserPhoneNumbers               []*UserPhoneNumber      `json:"user_phone_numbers"           gorm:"constraint:OnDelete:CASCADE;"`
 	SocialConnections              []*SocialConnection     `json:"social_connections,omitempty" gorm:"constraint:OnDelete:CASCADE;"`
-	SignIns                        []*Signin               `json:"-" gorm:"constraint:OnDelete:CASCADE;"`
+	SignIns                        []*Signin               `json:"-"                            gorm:"constraint:OnDelete:CASCADE;"`
 	ActiveOrganizationMembershipID *uint                   `json:"active_organization_id"`
-	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization" gorm:"constraint:OnDelete:CASCADE;"`
+	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization"          gorm:"constraint:OnDelete:CASCADE;"`
 	ActiveWorkspaceMembershipID    *uint                   `json:"active_workspace_id"`
-	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace" gorm:"constraint:OnDelete:CASCADE;"`
+	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace"             gorm:"constraint:OnDelete:CASCADE;"`
 	DeploymentID                   uint                    `json:"-"`
 	PublicMetadata                 datatypes.JSONMap       `json:"public_metadata"`
 	PrivateMetadata                datatypes.JSONMap       `json:"-"`

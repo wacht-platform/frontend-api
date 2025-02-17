@@ -61,20 +61,40 @@ func SendSuccess[T any](c *fiber.Ctx, data T) error {
 	return SendResponse(c, 200, data, "", nil)
 }
 
-func SendBadRequest(c *fiber.Ctx, data any, message string, errors ...Error) error {
+func SendBadRequest(
+	c *fiber.Ctx,
+	data any,
+	message string,
+	errors ...Error,
+) error {
 	fmt.Println(errors)
 	return SendResponse(c, 400, data, message, errors)
 }
 
-func SendUnauthorized(c *fiber.Ctx, data any, message string, errors ...Error) error {
+func SendUnauthorized(
+	c *fiber.Ctx,
+	data any,
+	message string,
+	errors ...Error,
+) error {
 	return SendResponse(c, 401, data, message, errors)
 }
 
-func SendForbidden(c *fiber.Ctx, data any, message string, errors ...Error) error {
+func SendForbidden(
+	c *fiber.Ctx,
+	data any,
+	message string,
+	errors ...Error,
+) error {
 	return SendResponse(c, 403, data, message, errors)
 }
 
-func SendNotFound(c *fiber.Ctx, data any, message string, errors ...Error) error {
+func SendNotFound(
+	c *fiber.Ctx,
+	data any,
+	message string,
+	errors ...Error,
+) error {
 	return SendResponse(c, 404, data, message, errors)
 }
 

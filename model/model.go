@@ -8,11 +8,10 @@ import (
 )
 
 type Model struct {
-	ID        uint           `gorm:"primarykey" json:"-"`
-	IDStr     string         `gorm:"-"          json:"id"`
-	CreatedAt time.Time      `                  json:"created_at"`
-	UpdatedAt time.Time      `                  json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index"      json:"deleted_at,omitempty"`
+	ID        uint      `gorm:"primarykey" json:"-"`
+	IDStr     string    `gorm:"-"          json:"id"`
+	CreatedAt time.Time `                  json:"created_at"`
+	UpdatedAt time.Time `                  json:"updated_at"`
 }
 
 func (m *Model) BeforeCreate(tx *gorm.DB) error {

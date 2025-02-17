@@ -92,7 +92,11 @@ func (h *Handler) CreateOrganization(c *fiber.Ctx) error {
 		return nil
 	})
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to create organization")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to create organization",
+		)
 	}
 
 	return handler.SendSuccess(c, fiber.Map{
@@ -120,7 +124,11 @@ func (h *Handler) GetOrganization(c *fiber.Ctx) error {
 		orgID,
 		session.ActiveSignin.UserID,
 	).Preload("Role").First(&membership).Error; err != nil {
-		return handler.SendForbidden(c, nil, "Not a member of this organization")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Not a member of this organization",
+		)
 	}
 
 	return handler.SendSuccess(c, fiber.Map{
@@ -148,7 +156,11 @@ func (h *Handler) UpdateOrganization(c *fiber.Ctx) error {
 
 	var membership model.OrganizationMembership
 	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).Preload("Role").First(&membership).Error; err != nil {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Insufficient permissions",
+		)
 	}
 
 	hasPermission := false
@@ -160,12 +172,20 @@ func (h *Handler) UpdateOrganization(c *fiber.Ctx) error {
 	}
 
 	if !hasPermission {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Insufficient permissions",
+		)
 	}
 
 	org.Name = b.Name
 	if err := database.Connection.Save(&org).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to update organization")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to update organization",
+		)
 	}
 
 	return handler.SendSuccess(c, fiber.Map{
@@ -183,7 +203,11 @@ func (h *Handler) DeleteOrganization(c *fiber.Ctx) error {
 
 	var membership model.OrganizationMembership
 	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).Preload("Role").First(&membership).Error; err != nil {
-		return handler.SendForbidden(c, nil, "Only organization owner can delete the organization")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Only organization owner can delete the organization",
+		)
 	}
 
 	isOwner := false
@@ -195,11 +219,19 @@ func (h *Handler) DeleteOrganization(c *fiber.Ctx) error {
 	}
 
 	if !isOwner {
-		return handler.SendForbidden(c, nil, "Only organization owner can delete the organization")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Only organization owner can delete the organization",
+		)
 	}
 
 	if err := database.Connection.Delete(&model.Organization{}, orgID).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to delete organization")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to delete organization",
+		)
 	}
 
 	return handler.SendSuccess(c, fiber.Map{
@@ -221,7 +253,11 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 
 	var membership model.OrganizationMembership
 	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).Preload("Role").First(&membership).Error; err != nil {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Insufficient permissions",
+		)
 	}
 
 	hasPermission := false
@@ -233,7 +269,11 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 	}
 
 	if !hasPermission {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Insufficient permissions",
+		)
 	}
 
 	var userEmail model.UserEmailAddress
@@ -247,7 +287,11 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 		orgID,
 		userEmail.UserID,
 	).First(&existingMembership).Error; err == nil {
-		return handler.SendBadRequest(c, nil, "User is already a member")
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"User is already a member",
+		)
 	}
 
 	// Create role for the new member
@@ -290,7 +334,11 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 		return nil
 	})
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to add member")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to add member",
+		)
 	}
 
 	return handler.SendSuccess(c, fiber.Map{
@@ -309,7 +357,11 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 
 	var membership model.OrganizationMembership
 	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).Preload("Role").First(&membership).Error; err != nil {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Insufficient permissions",
+		)
 	}
 
 	hasPermission := false
@@ -321,11 +373,19 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 	}
 
 	if !hasPermission {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Insufficient permissions",
+		)
 	}
 
 	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, memberID).Delete(&model.OrganizationMembership{}).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to remove member")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to remove member",
+		)
 	}
 
 	return handler.SendSuccess(c, fiber.Map{

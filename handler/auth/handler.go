@@ -38,21 +38,42 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 	email, err := h.service.FindUserByEmail(b.Email)
 	if err != nil {
 		if err == handler.ErrUserNotFound {
-			return handler.SendNotFound(c, nil, err.Error(), handler.ErrUserNotFound)
+			return handler.SendNotFound(
+				c,
+				nil,
+				err.Error(),
+				handler.ErrUserNotFound,
+			)
 		}
-		return handler.SendInternalServerError(c, err, "Something went wrong")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Something went wrong",
+		)
 	}
 
 	if err := h.service.ValidateUserStatus(email); err != nil {
-		return handler.SendForbidden(c, nil, err.Error(), handler.ErrUserDisabled)
+		return handler.SendForbidden(
+			c,
+			nil,
+			err.Error(),
+			handler.ErrUserDisabled,
+		)
 	}
 
 	authenticated := false
 
 	if b.Password != "" {
-		match, err := h.service.VerifyPassword(email.User.Password, b.Password)
+		match, err := h.service.VerifyPassword(
+			email.User.Password,
+			b.Password,
+		)
 		if err != nil {
-			return handler.SendInternalServerError(c, err, "Error comparing password")
+			return handler.SendInternalServerError(
+				c,
+				err,
+				"Error comparing password",
+			)
 		}
 
 		if !match {
@@ -109,19 +130,31 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 			session.ActiveSigninID = signIn.ID
 		}
 
-		session.SigninAttempts = append(session.SigninAttempts, attempt)
+		session.SigninAttempts = append(
+			session.SigninAttempts,
+			attempt,
+		)
 
 		return tx.Save(session).Error
 	})
 
-	if err.(*pgconn.PgError).ConstraintName == "idx_session_user_id" {
-		return handler.SendBadRequest(c, nil, "User already signed in", handler.ErrUserAlreadySignedIn)
+	if err != nil &&
+		err.(*pgconn.PgError).ConstraintName == "idx_session_user_id" {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"User already signed in",
+			handler.ErrUserAlreadySignedIn,
+		)
 	}
 
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Something went wrong")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Something went wrong",
+		)
 	}
-	c.Locals("session", session.ID)
 
 	return handler.SendSuccess(c, session)
 }
@@ -140,7 +173,12 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 
 	if err := h.service.ValidateSignUpRequest(b, d); err != nil {
-		return handler.SendBadRequest(c, nil, err.Error(), handler.ErrBadRequestBody)
+		return handler.SendBadRequest(
+			c,
+			nil,
+			err.Error(),
+			handler.ErrBadRequestBody,
+		)
 	}
 
 	var errors []handler.Error
@@ -153,22 +191,40 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 		errors = append(errors, handler.ErrUsernameExists)
 	}
 
-	if b.PhoneNumber != "" && h.service.CheckUserphoneExists(b.PhoneNumber) {
+	if b.PhoneNumber != "" &&
+		h.service.CheckUserphoneExists(b.PhoneNumber) {
 		errors = append(errors, handler.ErrPhoneNumberExists)
 	}
 
 	if len(errors) > 0 {
-		return handler.SendBadRequest(c, nil, "Field errors", errors...)
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Field errors",
+			errors...)
 	}
 
 	hashedPassword, err := h.service.HashPassword(b.Password)
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Error hashing password")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Error hashing password",
+		)
 	}
 
-	attempt, err := h.service.CreateSignupAttempt(b, hashedPassword, session, d)
+	attempt, err := h.service.CreateSignupAttempt(
+		b,
+		hashedPassword,
+		session,
+		d,
+	)
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Error creating signup attempt")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Error creating signup attempt",
+		)
 	}
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
@@ -176,7 +232,10 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 			return err
 		}
 
-		session.SignupAttempts = append(session.SignupAttempts, attempt)
+		session.SignupAttempts = append(
+			session.SignupAttempts,
+			attempt,
+		)
 
 		if len(attempt.RemainingSteps) == 0 {
 			otpSecret, err := totp.Generate(totp.GenerateOpts{
@@ -217,7 +276,11 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 	})
 
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Something went wrong")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Something went wrong",
+		)
 	}
 
 	return handler.SendSuccess(c, session)
@@ -249,11 +312,18 @@ func (h *Handler) InitSSO(c *fiber.Ctx) error {
 		if err := tx.Create(attempt).Error; err != nil {
 			return err
 		}
-		session.SigninAttempts = append(session.SigninAttempts, attempt)
+		session.SigninAttempts = append(
+			session.SigninAttempts,
+			attempt,
+		)
 		return nil
 	})
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Something went wrong")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Something went wrong",
+		)
 	}
 
 	url := utils.GenerateVerificationUrl(provider, *attempt)
@@ -269,7 +339,12 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 
 	if code == "" {
-		return handler.SendBadRequest(c, nil, "code is not present in uri", handler.ErrCodeRequired)
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"code is not present in uri",
+			handler.ErrCodeRequired,
+		)
 	}
 
 	var attempt model.SignInAttempt
@@ -293,15 +368,24 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		)
 	}
 
-	user, err := utils.ExchangeTokenForUser(token, attempt.SSOProvider)
+	user, err := utils.ExchangeTokenForUser(
+		token,
+		attempt.SSOProvider,
+	)
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to get user info")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to get user info",
+		)
 	}
 
 	var email model.UserEmailAddress
 	exists := database.Connection.Joins(
 		"User",
-		database.Connection.Where(&model.User{DeploymentID: deployment.ID}),
+		database.Connection.Where(
+			&model.User{DeploymentID: deployment.ID},
+		),
 	).Preload("User.SocialConnections").
 		Where("email = ?", user.Email).First(&email).RowsAffected > 0
 
@@ -321,13 +405,19 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			AccountName: user.Email,
 		})
 		if err != nil {
-			return handler.SendInternalServerError(c, err, "Error generating OTP secret")
+			return handler.SendInternalServerError(
+				c,
+				err,
+				"Error generating OTP secret",
+			)
 		}
 
 		primaryAddressID := uint(snowflake.ID())
 
 		u := model.User{
-			Model:                 model.Model{ID: uint(snowflake.ID())},
+			Model: model.Model{
+				ID: uint(snowflake.ID()),
+			},
 			SchemaVersion:         model.SchemaVersionV1,
 			SecondFactorPolicy:    deployment.AuthSettings.SecondFactorPolicy,
 			DeploymentID:          deployment.ID,
@@ -371,7 +461,11 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		return nil
 	})
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Something went wrong")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Something went wrong",
+		)
 	}
 
 	return handler.SendSuccess(c, session)
@@ -380,9 +474,16 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 func (h *Handler) CheckIdentifierAvailability(c *fiber.Ctx) error {
 	identifier := c.Query("identifier")
 	identifierType := c.Query("type")
-	exists, err := h.service.CheckIdentifierAvailability(identifier, identifierType)
+	exists, err := h.service.CheckIdentifierAvailability(
+		identifier,
+		identifierType,
+	)
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Something went wrong")
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Something went wrong",
+		)
 	}
 	return handler.SendSuccess(c, fiber.Map{
 		"exists": exists,
@@ -413,7 +514,9 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 	}
 
 	if identifierType == "signin" {
-		attempt, err := h.service.GetSignInAttempt(uint(attemptIdentifier))
+		attempt, err := h.service.GetSignInAttempt(
+			uint(attemptIdentifier),
+		)
 		if err != nil {
 			return handler.SendInternalServerError(
 				c,
@@ -434,7 +537,9 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 
 		switch attempt.CurrentStep {
 		case model.SignInAttemptStepVerifyEmailOTP:
-			email, err := h.service.FindUserByEmailID(attempt.IdentifierID)
+			email, err := h.service.FindUserByEmailID(
+				attempt.IdentifierID,
+			)
 			if err != nil {
 				return handler.SendInternalServerError(
 					c,
@@ -444,7 +549,8 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			if attempt.CurrentStep == model.SignInAttemptStepVerifyEmailOTP && email.Verified {
+			if attempt.CurrentStep == model.SignInAttemptStepVerifyEmailOTP &&
+				email.Verified {
 				return handler.SendBadRequest(
 					c,
 					nil,
@@ -453,7 +559,10 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			code, err := totp.GenerateCode(email.User.OtpSecret, time.Now())
+			code, err := totp.GenerateCode(
+				email.User.OtpSecret,
+				time.Now(),
+			)
 			if err != nil {
 				return handler.SendInternalServerError(
 					c,
@@ -463,7 +572,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			if err := h.service.StoreOTPInRedis(fmt.Sprintf("signin:%d", attempt.ID), code); err != nil {
+			if err := h.service.StoreOTPInCache(fmt.Sprintf("signin:%d", attempt.ID), code); err != nil {
 				return handler.SendInternalServerError(
 					c,
 					err,
@@ -511,7 +620,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			if err := h.service.StoreOTPInRedis(fmt.Sprintf("signup:%d", attempt.ID), code); err != nil {
+			if err := h.service.StoreOTPInCache(fmt.Sprintf("signup:%d", attempt.ID), code); err != nil {
 				return handler.SendInternalServerError(
 					c,
 					err,
@@ -551,34 +660,66 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 	}
 
 	if identifierType == "signin" {
-		attempt, err := h.service.GetSignInAttempt(uint(attemptIdentifier))
+		attempt, err := h.service.GetSignInAttempt(
+			uint(attemptIdentifier),
+		)
 		if err != nil {
-			return handler.SendInternalServerError(c, err, "Error fetching sign in attempt")
+			return handler.SendInternalServerError(
+				c,
+				err,
+				"Error fetching sign in attempt",
+			)
 		}
 		if attempt.Completed {
-			return handler.SendBadRequest(c, nil, "Sign in attempt already completed")
+			return handler.SendBadRequest(
+				c,
+				nil,
+				"Sign in attempt already completed",
+			)
 		}
 
 		var signin *model.Signin
 
 		switch attempt.CurrentStep {
-		case model.SignInAttemptStepVerifyEmail, model.SignInAttemptStepVerifyEmailOTP:
+		case model.SignInAttemptStepVerifyEmail,
+			model.SignInAttemptStepVerifyEmailOTP:
 			{
-				email, err := h.service.FindUserByEmailID(attempt.IdentifierID)
+				email, err := h.service.FindUserByEmailID(
+					attempt.IdentifierID,
+				)
 				if err != nil {
-					return handler.SendInternalServerError(c, err, "Error fetching user")
+					return handler.SendInternalServerError(
+						c,
+						err,
+						"Error fetching user",
+					)
 				}
-				if attempt.CurrentStep == model.SignInAttemptStepVerifyEmailOTP && email.Verified {
-					return handler.SendBadRequest(c, nil, "Email already verified")
+				if attempt.CurrentStep == model.SignInAttemptStepVerifyEmailOTP &&
+					email.Verified {
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"Email already verified",
+					)
 				}
 
-				storedOTP, err := h.service.GetOTPFromRedis(fmt.Sprintf("signin:%d", attempt.ID))
+				storedOTP, err := h.service.GetOTPFromRedis(
+					fmt.Sprintf("signin:%d", attempt.ID),
+				)
 				if err != nil {
-					return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"Invalid or expired OTP",
+					)
 				}
 
 				if storedOTP != b.VerificationCode {
-					return handler.SendBadRequest(c, nil, "Invalid OTP")
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"Invalid OTP",
+					)
 				}
 
 				if len(attempt.RemainingSteps) == 1 {
@@ -613,10 +754,16 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 
 					return tx.Save(attempt).Error
 				}); err != nil {
-					return handler.SendInternalServerError(c, err, "Something went wrong")
+					return handler.SendInternalServerError(
+						c,
+						err,
+						"Something went wrong",
+					)
 				}
 
-				h.service.DeleteOTPFromRedis(fmt.Sprintf("signin:%d", attempt.ID))
+				h.service.DeleteOTPFromRedis(
+					fmt.Sprintf("signin:%d", attempt.ID),
+				)
 			}
 		}
 	} else {
