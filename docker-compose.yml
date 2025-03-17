@@ -2,7 +2,7 @@ version: '3'
 
 services:
   frontend-service:
-    image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest
+    image: public.ecr.aws/u3p8w9o1/wacht-services/frontend-service:latest
     restart: always
     ports:
       - "3000:3000"
