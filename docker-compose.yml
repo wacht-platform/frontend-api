@@ -5,6 +5,6 @@ services:
     image: public.ecr.aws/u3p8w9o1/wacht-services/frontend-service:latest
     restart: always
     ports:
-      - "3000:3000"
+      - "3000:80"
     environment:
       - NODE_ENV=production
