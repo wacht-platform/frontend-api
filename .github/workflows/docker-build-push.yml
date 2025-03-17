@@ -82,7 +82,6 @@ jobs:
     - name: Deploy to server ${{ matrix.host }}
       run: |
         ssh -o StrictHostKeyChecking=no ${{ env.SSH_USERNAME }}@${{ matrix.host }} '
-          # Check if Docker is installed, if not install it
           if ! command -v docker &> /dev/null; then
             echo "Docker not found, installing..."
             curl -fsSL https://get.docker.com -o get-docker.sh
@@ -90,7 +89,6 @@ jobs:
             sudo usermod -aG docker $USER
           fi
           
-          # Check if Docker Compose is installed, if not install it
           if ! command -v docker compose &> /dev/null; then
             echo "Docker Compose not found, installing..."
             DOCKER_CONFIG=${DOCKER_CONFIG:-$HOME/.docker}
@@ -99,19 +97,10 @@ jobs:
             chmod +x $DOCKER_CONFIG/cli-plugins/docker-compose
           fi
           
-          # Navigate to deployment directory
           cd ${{ env.DEPLOY_PATH }}
           
-          # Create environment variables file for docker-compose
-          cat > .env << EOL
-          ECR_REGISTRY=${{ env.ECR_REGISTRY }}
-          ECR_REPOSITORY=${{ env.ECR_REPOSITORY }}
-          EOL
-          
-          # Pull the latest image (no login needed for public repositories)
           docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
           
-          # Deploy using docker-compose
           docker compose down
           docker compose up -d
         ' 
