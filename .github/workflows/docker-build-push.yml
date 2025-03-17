@@ -12,6 +12,8 @@ env:
   SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
   SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
   DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
 jobs:
   build:
@@ -89,22 +91,44 @@ jobs:
           fi
           
           # Check if Docker Compose is installed, if not install it
-          if ! command -v docker-compose &> /dev/null; then
+          if ! command -v docker compose &> /dev/null; then
             echo "Docker Compose not found, installing..."
-            sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.3/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-            sudo chmod +x /usr/local/bin/docker-compose
+            DOCKER_CONFIG=${DOCKER_CONFIG:-$HOME/.docker}
+            mkdir -p $DOCKER_CONFIG/cli-plugins
+            curl -SL https://github.com/docker/compose/releases/download/v2.33.1/docker-compose-linux-x86_64 -o $DOCKER_CONFIG/cli-plugins/docker-compose
+            chmod +x $DOCKER_CONFIG/cli-plugins/docker-compose
           fi
           
-          # Navigate to deployment directory
+          # Check if AWS CLI is installed, if not install it
+          if ! command -v aws &> /dev/null; then
+            echo "AWS CLI not found, installing..."
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            sudo apt-get update && sudo apt-get install -y unzip
+            unzip awscliv2.zip
+            sudo ./aws/install
+            rm -rf aws awscliv2.zip
+          fi
+          
+          # Configure AWS credentials
+          mkdir -p ~/.aws
+          cat > ~/.aws/credentials << EOL
+[default]
+aws_access_key_id=${{ env.AWS_ACCESS_KEY_ID }}
+aws_secret_access_key=${{ env.AWS_SECRET_ACCESS_KEY }}
+EOL
+
+          cat > ~/.aws/config << EOL
+[default]
+region=us-east-1
+output=json
+EOL
+          
           cd ${{ env.DEPLOY_PATH }}
           
-          # Login to ECR
-          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/u3p8w9o1
+          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
           
-          # Pull the latest image
           docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
           
-          # Deploy using docker-compose
-          docker-compose down
-          docker-compose up -d
+          docker compose down
+          docker compose up -d
         ' 
