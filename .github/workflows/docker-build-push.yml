@@ -70,14 +70,24 @@ jobs:
         
     - name: Prepare docker-compose file
       run: |
-        # Replace environment variables in the docker-compose file
-        export ECR_REGISTRY=${{ env.ECR_REGISTRY }}
-        export ECR_REPOSITORY=${{ env.ECR_REPOSITORY }}
-        envsubst < docker-compose.yml > docker-compose.processed.yml
+        # Create docker-compose file with environment variables from secrets
+        cat > docker-compose.yml << EOL
+version: '3'
+
+services:
+  frontend-service:
+    image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      ${{ secrets.CONTAINER_ENV }}
+EOL
         
     - name: Copy docker-compose file to server
       run: |
-        scp -o StrictHostKeyChecking=no docker-compose.processed.yml ${{ env.SSH_USERNAME }}@${{ matrix.host }}:${{ env.DEPLOY_PATH }}/docker-compose.yml
+        scp -o StrictHostKeyChecking=no docker-compose.yml ${{ env.SSH_USERNAME }}@${{ matrix.host }}:${{ env.DEPLOY_PATH }}/docker-compose.yml
         
     - name: Deploy to server ${{ matrix.host }}
       run: |
@@ -100,8 +110,6 @@ jobs:
           cd ${{ env.DEPLOY_PATH }}
           
           docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
-
-          rm .env
           
           docker compose down
           docker compose up -d
