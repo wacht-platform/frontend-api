@@ -3,22 +3,28 @@ package user
 import (
 	"context"
 	"fmt"
+	"mime/multipart"
 	"net/smtp"
 	"time"
 
 	"github.com/ilabs/wacht-fe/database"
+	"github.com/ilabs/wacht-fe/service"
 	"gorm.io/gorm"
 )
 
 const otpExpirationTime = 5 * time.Minute
 
 type UserService struct {
-	db *gorm.DB
+	db  *gorm.DB
+	sns *service.SnsService
+	s3  *service.S3Service
 }
 
 func NewUserService() *UserService {
 	return &UserService{
-		db: database.Connection,
+		db:  database.Connection,
+		sns: service.NewSnsService(),
+		s3:  service.NewS3Service(),
 	}
 }
 
@@ -97,4 +103,28 @@ func (s *UserService) SendEmailOTPVerification(
 	}
 
 	return nil
+}
+
+func (s *UserService) SendSmsOTPVerification(
+	phone string,
+	otp string,
+) error {
+	message := fmt.Sprintf("Your Wacht verification code is: %s. This code will expire in 5 minutes.", otp)
+
+	return s.sns.SendSMS(phone, message)
+}
+
+func (s *UserService) UploadProfilePicture(
+	userID uint,
+	file *multipart.FileHeader,
+) error {
+	bucket := "wacht-cdn"
+	key := fmt.Sprintf("%d/%s", userID, file.Filename)
+
+	reader, err := file.Open()
+	if err != nil {
+		return err
+	}
+
+	return s.s3.UploadFile(bucket, key, reader)
 }

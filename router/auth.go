@@ -26,5 +26,5 @@ func setupAuthRoutes(app *fiber.App) {
 		"/attempt-verification",
 		authHandler.AttemptVerification,
 	)
-
+	router.Get("/temp", authHandler.Temp)
 }

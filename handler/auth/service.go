@@ -4,10 +4,10 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/smtp"
 	"regexp"
@@ -15,11 +15,13 @@ import (
 	"time"
 
 	"github.com/godruoyi/go-snowflake"
+	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/config"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/utils"
+	"github.com/ua-parser/uap-go/uaparser"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/facebook"
 	"golang.org/x/oauth2/github"
@@ -338,7 +340,6 @@ func (s *AuthService) GetSignInAttempt(
 ) (model.SignInAttempt, error) {
 	var attempt model.SignInAttempt
 	if err := s.db.Where("id = ?", signInAttempt).First(&attempt).Error; err != nil {
-		log.Println(err, signInAttempt)
 		return model.SignInAttempt{}, err
 	}
 	return attempt, nil
@@ -604,4 +605,57 @@ func (s *AuthService) CreateVerifiedUser(
 		true,
 	)
 	return &user, nil
+}
+
+func (s *AuthService) CreateSignin(
+	userID uint,
+	sessionID uint,
+	ctx *fiber.Ctx,
+) *model.Signin {
+	signIn := model.NewSignIn(sessionID, userID)
+	ua := ctx.Get("User-Agent")
+
+	var ip string
+	if len(ctx.IPs()) > 0 {
+		ip = ctx.IPs()[0]
+	} else {
+		ip = ctx.IP()
+	}
+
+	resp, err := http.Get("http://ip-api.com/json/" + ip + "?fields=status,message,continent,continentCode,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query")
+
+	if err != nil {
+		return signIn
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+		return signIn
+	}
+
+	var ipLocation IPLocation
+	err = json.Unmarshal(body, &ipLocation)
+
+	if err != nil {
+		return signIn
+	}
+
+	if ipLocation.Status != "success" {
+		return signIn
+	}
+
+	parsedUa := uaparser.NewFromSaved().Parse(ua)
+
+	signIn.Browser = parsedUa.UserAgent.Family
+	signIn.Device = parsedUa.Device.Family
+	signIn.City = ipLocation.City
+	signIn.Region = ipLocation.RegionName
+	signIn.Country = ipLocation.Country
+	signIn.CountryCode = ipLocation.CountryCode
+	signIn.RegionCode = ipLocation.Region
+
+	return signIn
 }

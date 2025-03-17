@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"errors"
+	"log"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -54,6 +56,7 @@ func handleNewSession(
 			deployment.KepPair,
 			tx,
 		)
+
 		if err != nil {
 			return err
 		}
@@ -138,6 +141,9 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token) error {
 		sessionID,
 		rotatingTokenID,
 	)
+
+	log.Println("rotatingToken", rotatingToken, rotatingTokenID)
+
 	if err != nil {
 		return handler.SendUnauthorized(c, err, "Invalid session")
 	}
@@ -179,7 +185,8 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token) error {
 }
 
 func extractTokenClaims(token jwt.Token) (uint, uint, error) {
-	var sessionID, rotatingTokenID float64
+	var sessionID float64
+	var rotatingTokenID string
 
 	if err := token.Get("sess", &sessionID); err != nil {
 		return 0, 0, err
@@ -189,7 +196,12 @@ func extractTokenClaims(token jwt.Token) (uint, uint, error) {
 		return 0, 0, err
 	}
 
-	return uint(sessionID), uint(rotatingTokenID), nil
+	rotatingTokenIDUint, err := strconv.ParseUint(rotatingTokenID, 10, 64)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return uint(sessionID), uint(rotatingTokenIDUint), nil
 }
 
 func validateRotatingToken(

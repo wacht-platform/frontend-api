@@ -5,6 +5,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/ilabs/wacht-fe/model"
@@ -36,7 +37,7 @@ func SignJWT(
 		IssuedAt(time.Now()).
 		NotBefore(time.Now()).
 		Claim("sess", sessionID).
-		Claim("rotating_token", rotatingToken.ID).
+		Claim("rotating_token", strconv.FormatUint(uint64(rotatingToken.ID), 10)).
 		Build()
 	if err != nil {
 		return "", err

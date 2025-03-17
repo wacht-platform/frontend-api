@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"time"
 
+	"github.com/lib/pq"
 	"gorm.io/datatypes"
 )
 
@@ -57,7 +58,7 @@ const (
 	SchemaVersionV2 SchemaVersion = "v2"
 )
 
-func (s *SchemaVersion) Scan(value interface{}) error {
+func (s *SchemaVersion) Scan(value any) error {
 	*s = SchemaVersion(value.(string))
 	return nil
 }
@@ -66,29 +67,51 @@ func (s SchemaVersion) Value() (driver.Value, error) {
 	return string(s), nil
 }
 
+type UserAvailability string
+
+const (
+	UserAvailabilityAvailable UserAvailability = "available"
+	UserAvailabilityBusy      UserAvailability = "busy"
+	UserAvailabilityAway      UserAvailability = "away"
+)
+
+func (u *UserAvailability) Scan(value any) error {
+	*u = UserAvailability(value.(string))
+	return nil
+}
+
+func (u UserAvailability) Value() (driver.Value, error) {
+	return string(u), nil
+}
+
 type User struct {
 	Model
 	FirstName                      string                  `json:"first_name"`
+	HasProfilePicture              bool                    `json:"has_profile_picture"`
+	ProfilePictureURL              string                  `json:"profile_picture_url"`
 	LastName                       string                  `json:"last_name"`
 	Username                       string                  `json:"username"`
 	Password                       string                  `json:"-"`
+	Availability                   UserAvailability        `json:"availability" gorm:"default:away"`
 	LastPasswordResetAt            time.Time               `json:"last_password_reset_at"`
 	SchemaVersion                  SchemaVersion           `json:"schema_version"`
 	Disabled                       bool                    `json:"disabled"`
-	PrimaryEmailAddressID          *uint                   `json:"primary_email_address_id"`
-	PrimaryPhoneNumberID           *uint                   `json:"primary_phone_number_id"`
+	PrimaryEmailAddressID          *uint                   `json:"primary_email_address_id,string"`
+	PrimaryPhoneNumberID           *uint                   `json:"primary_phone_number_id,string"`
 	SecondFactorPolicy             SecondFactorPolicy      `json:"second_factor_policy"`
 	UserEmailAddresses             []*UserEmailAddress     `json:"user_email_addresses"         gorm:"constraint:OnDelete:CASCADE;"`
 	UserPhoneNumbers               []*UserPhoneNumber      `json:"user_phone_numbers"           gorm:"constraint:OnDelete:CASCADE;"`
+	UserAuthenticator              *UserAuthenticator      `json:"user_authenticator"          gorm:"constraint:OnDelete:CASCADE;"`
 	SocialConnections              []*SocialConnection     `json:"social_connections,omitempty" gorm:"constraint:OnDelete:CASCADE;"`
 	SignIns                        []*Signin               `json:"-"                            gorm:"constraint:OnDelete:CASCADE;"`
-	ActiveOrganizationMembershipID *uint                   `json:"active_organization_id"`
+	ActiveOrganizationMembershipID *uint                   `json:"active_organization_id,string"`
 	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization"          gorm:"constraint:OnDelete:CASCADE;"`
-	ActiveWorkspaceMembershipID    *uint                   `json:"active_workspace_id"`
+	ActiveWorkspaceMembershipID    *uint                   `json:"active_workspace_id,string"`
 	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace"             gorm:"constraint:OnDelete:CASCADE;"`
 	DeploymentID                   uint                    `json:"-"`
 	PublicMetadata                 datatypes.JSONMap       `json:"public_metadata"`
 	PrivateMetadata                datatypes.JSONMap       `json:"-"`
 	OtpSecret                      string                  `json:"-"`
-	BackupCodes                    []string                `json:"-"                            gorm:"type:text[]"`
+	BackupCodesGenerated           bool                    `json:"backup_codes_generated"`
+	BackupCodes                    pq.StringArray          `json:"-"                            gorm:"type:text[]"`
 }

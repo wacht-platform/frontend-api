@@ -830,3 +830,10 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 
 	return handler.SendSuccess(c, session)
 }
+
+func (h *Handler) Temp(c *fiber.Ctx) error {
+	h.service.CreateSignin(1, 1, c)
+	return handler.SendSuccess(c, fiber.Map{
+		"user_agent": c.Get("User-Agent"),
+	})
+}

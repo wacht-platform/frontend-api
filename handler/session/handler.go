@@ -22,7 +22,15 @@ func (h *Handler) GetCurrentSession(c *fiber.Ctx) error {
 	session := new(model.Session)
 
 	err := database.Connection.Preload("ActiveSignin").
+		Preload("ActiveSignin.User").
+		Preload("ActiveSignin.User.UserEmailAddresses").
+		Preload("ActiveSignin.User.UserPhoneNumbers").
+		Preload("ActiveSignin.User.SocialConnections").
 		Preload("Signins").
+		Preload("Signins.User").
+		Preload("Signins.User.UserEmailAddresses").
+		Preload("Signins.User.UserPhoneNumbers").
+		Preload("Signins.User.SocialConnections").
 		Where("id = ?", sessionID).
 		First(session).Error
 	if err != nil {
@@ -73,7 +81,7 @@ func (h *Handler) SignOut(c *fiber.Ctx) error {
 
 	signInIdStr := c.Query("sign_in_id")
 
-	if signInIdStr == "" {
+	if signInIdStr != "" {
 		signInId, err := strconv.ParseUint(signInIdStr, 10, 64)
 		if err != nil {
 			return fiber.NewError(
@@ -97,7 +105,7 @@ func (h *Handler) SignOut(c *fiber.Ctx) error {
 		err = database.Connection.Transaction(
 			func(tx *gorm.DB) error {
 				tx.Delete(signIn)
-				tx.Model(session).Update("active_sign_in_id", 0)
+				tx.Model(session).Update("active_sign_in_id", nil)
 				return nil
 			},
 		)
@@ -113,7 +121,7 @@ func (h *Handler) SignOut(c *fiber.Ctx) error {
 		return handler.SendSuccess(c, session)
 	} else {
 		err := database.Connection.Transaction(func(tx *gorm.DB) error {
-			tx.Model(session).Update("active_sign_in_id", 0)
+			tx.Model(session).Update("active_sign_in_id", nil)
 			tx.Where("session_id = ?", session.ID).Delete(&model.Signin{})
 			return nil
 		})

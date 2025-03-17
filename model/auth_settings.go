@@ -186,7 +186,8 @@ type DeploymentAuthSettings struct {
 	Password               IndividualAuthSettings `json:"password"`
 	BackupCode             IndividualAuthSettings `json:"backup_code"`
 	Web3Wallet             IndividualAuthSettings `json:"web3_wallet"`
-	PasswordPolicy         IndividualAuthSettings `json:"password_policy"`
+	MagicLink              IndividualAuthSettings `json:"magic_link"`
+	Passkey                IndividualAuthSettings `json:"passkey"`
 	AuthFactorsEnabled     AuthFactorsEnabled     `json:"auth_factors_enabled"`
 	VerificationPolicy     VerificationPolicy     `json:"verification_policy"`
 	SecondFactorPolicy     SecondFactorPolicy     `json:"second_factor_policy"`

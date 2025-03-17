@@ -2,12 +2,13 @@ package model
 
 import (
 	"github.com/godruoyi/go-snowflake"
+	"gorm.io/gorm"
 )
 
 type Signin struct {
 	Model
-	SessionID    uint   `json:"-"              gorm:"index:idx_session_user_id,unique"`
-	UserID       uint   `json:"-"              gorm:"index:idx_session_user_id,unique"`
+	SessionID    uint   `json:"session_id"              gorm:"index:idx_session_user_id,unique"`
+	UserID       uint   `json:"user_id"              gorm:"index:idx_session_user_id,unique"`
 	User         *User  `json:"user,omitempty"`
 	ExpiresAt    string `json:"expires_at"`
 	LastActiveAt string `json:"last_active_at"`
@@ -29,4 +30,8 @@ func NewSignIn(sessionID, userID uint) *Signin {
 		SessionID: sessionID,
 		UserID:    userID,
 	}
+}
+
+func (s *Signin) LoadUser(db *gorm.DB) {
+	db.Preload("User").First(s)
 }

@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"github.com/godruoyi/go-snowflake"
+)
 
 type RotatingToken struct {
 	Model
@@ -17,6 +21,9 @@ func NewRotatingToken(
 	validUntil time.Time,
 ) *RotatingToken {
 	return &RotatingToken{
+		Model: Model{
+			ID: uint(snowflake.ID()),
+		},
 		SessionID:  sessionID,
 		ValidUntil: validUntil,
 	}

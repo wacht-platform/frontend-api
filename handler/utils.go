@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
-	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -51,8 +49,6 @@ func getSessionFromCache(id uint) (*model.Session, error) {
 		return nil, v.Err()
 	}
 
-	log.Println(v.Val())
-
 	if v.Val() == "" {
 		return nil, fmt.Errorf("session not found")
 	}
@@ -61,12 +57,6 @@ func getSessionFromCache(id uint) (*model.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	sessionID, err := strconv.ParseUint(session.IDStr, 10, 32)
-	if err != nil {
-		return nil, err
-	}
-	session.ID = uint(sessionID)
 
 	return &session, nil
 }

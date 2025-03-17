@@ -56,5 +56,6 @@ func AutoMigratePg() error {
 		&model.WorkspaceMembership{},
 		&model.SignupAttempt{},
 		&model.DeploymentDisplaySettings{},
+		&model.UserAuthenticator{},
 	)
 }

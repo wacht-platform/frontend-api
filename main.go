@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	config.LoadEnv()
+	config.Init()
 
 	err := database.InitConnection()
 	if err != nil {

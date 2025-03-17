@@ -14,3 +14,12 @@ type UpdateUserSchema struct {
 type AddUserEmailAddressSchema struct {
 	Email string `json:"email" validate:"required,email"`
 }
+
+type AddUserPhoneNumberSchema struct {
+	PhoneNumber string `json:"phone_number" validate:"required"`
+}
+
+type VerifyAuthenticatorSchema struct {
+	AuthenticatorID string   `json:"authenticator_id" validate:"required"`
+	Codes           []string `json:"codes" validate:"required,min=2,max=2"`
+}
