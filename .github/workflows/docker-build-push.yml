@@ -69,21 +69,21 @@ jobs:
         ssh -o StrictHostKeyChecking=no ${{ env.SSH_USERNAME }}@${{ matrix.host }} "mkdir -p ${{ env.DEPLOY_PATH }}"
         
     - name: Prepare docker-compose file
+      env:
+        CONTAINER_ENV: ${{ secrets.CONTAINER_ENV }}
       run: |
-        # Create docker-compose file with environment variables from secrets
-        cat > docker-compose.yml << EOL
-version: '3'
-
-services:
-  frontend-service:
-    image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
-    restart: always
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      ${{ secrets.CONTAINER_ENV }}
-EOL
+        # Create a temporary file with the base docker-compose content
+        cp docker-compose.yml docker-compose.temp.yml
+        
+        # Append environment variables with proper indentation
+        if [ ! -z "$CONTAINER_ENV" ]; then
+          echo "$CONTAINER_ENV" | while read -r line; do
+            echo "      - $line" >> docker-compose.temp.yml
+          done
+        fi
+        
+        # Replace the original with the modified version
+        mv docker-compose.temp.yml docker-compose.yml
         
     - name: Copy docker-compose file to server
       run: |
