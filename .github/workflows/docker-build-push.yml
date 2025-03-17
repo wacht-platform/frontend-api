@@ -100,6 +100,8 @@ jobs:
           cd ${{ env.DEPLOY_PATH }}
           
           docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+
+          rm .env
           
           docker compose down
           docker compose up -d
