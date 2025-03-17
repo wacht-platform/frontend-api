@@ -9,6 +9,9 @@ env:
   AWS_REGION: ap-south-1
   ECR_REPOSITORY: wacht-services/frontend-service
   ECR_REGISTRY: public.ecr.aws/u3p8w9o1
+  SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+  SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+  DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
 
 jobs:
   build:
@@ -39,3 +42,62 @@ jobs:
         # Also tag as latest
         docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest 
+        
+  deploy:
+    name: Deploy to Servers
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        host: 
+          - "144.24.106.248"
+          - "140.245.8.148"
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ env.SSH_KEY }}
+    
+    - name: Create deployment directory on server
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ env.SSH_USERNAME }}@${{ matrix.host }} "mkdir -p ${{ env.DEPLOY_PATH }}"
+        
+    - name: Copy docker-compose file to server
+      run: |
+        scp -o StrictHostKeyChecking=no docker-compose.yml ${{ env.SSH_USERNAME }}@${{ matrix.host }}:${{ env.DEPLOY_PATH }}/docker-compose.yml
+        
+    - name: Deploy to server ${{ matrix.host }}
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ env.SSH_USERNAME }}@${{ matrix.host }} '
+          # Check if Docker is installed, if not install it
+          if ! command -v docker &> /dev/null; then
+            echo "Docker not found, installing..."
+            curl -fsSL https://get.docker.com -o get-docker.sh
+            sudo sh get-docker.sh
+            sudo usermod -aG docker $USER
+          fi
+          
+          # Check if Docker Compose is installed, if not install it
+          if ! command -v docker-compose &> /dev/null; then
+            echo "Docker Compose not found, installing..."
+            sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.3/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            sudo chmod +x /usr/local/bin/docker-compose
+          fi
+          
+          # Navigate to deployment directory
+          cd ${{ env.DEPLOY_PATH }}
+          
+          # Login to ECR
+          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/u3p8w9o1
+          
+          # Pull the latest image
+          docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+          
+          # Deploy using docker-compose
+          docker-compose down
+          docker-compose up -d
+        ' 
