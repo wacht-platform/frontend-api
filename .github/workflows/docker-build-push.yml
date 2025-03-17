@@ -99,36 +99,19 @@ jobs:
             chmod +x $DOCKER_CONFIG/cli-plugins/docker-compose
           fi
           
-          # Check if AWS CLI is installed, if not install it
-          if ! command -v aws &> /dev/null; then
-            echo "AWS CLI not found, installing..."
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            sudo apt-get update && sudo apt-get install -y unzip
-            unzip awscliv2.zip
-            sudo ./aws/install
-            rm -rf aws awscliv2.zip
-          fi
-          
-          # Configure AWS credentials
-          mkdir -p ~/.aws
-          cat > ~/.aws/credentials << EOL
-[default]
-aws_access_key_id=${{ env.AWS_ACCESS_KEY_ID }}
-aws_secret_access_key=${{ env.AWS_SECRET_ACCESS_KEY }}
-EOL
-
-          cat > ~/.aws/config << EOL
-[default]
-region=us-east-1
-output=json
-EOL
-          
+          # Navigate to deployment directory
           cd ${{ env.DEPLOY_PATH }}
           
-          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
+          # Create environment variables file for docker-compose
+          cat > .env << EOL
+          ECR_REGISTRY=${{ env.ECR_REGISTRY }}
+          ECR_REPOSITORY=${{ env.ECR_REPOSITORY }}
+          EOL
           
+          # Pull the latest image (no login needed for public repositories)
           docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
           
+          # Deploy using docker-compose
           docker compose down
           docker compose up -d
         ' 
