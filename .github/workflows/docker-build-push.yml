@@ -66,9 +66,16 @@ jobs:
       run: |
         ssh -o StrictHostKeyChecking=no ${{ env.SSH_USERNAME }}@${{ matrix.host }} "mkdir -p ${{ env.DEPLOY_PATH }}"
         
+    - name: Prepare docker-compose file
+      run: |
+        # Replace environment variables in the docker-compose file
+        export ECR_REGISTRY=${{ env.ECR_REGISTRY }}
+        export ECR_REPOSITORY=${{ env.ECR_REPOSITORY }}
+        envsubst < docker-compose.yml > docker-compose.processed.yml
+        
     - name: Copy docker-compose file to server
       run: |
-        scp -o StrictHostKeyChecking=no docker-compose.yml ${{ env.SSH_USERNAME }}@${{ matrix.host }}:${{ env.DEPLOY_PATH }}/docker-compose.yml
+        scp -o StrictHostKeyChecking=no docker-compose.processed.yml ${{ env.SSH_USERNAME }}@${{ matrix.host }}:${{ env.DEPLOY_PATH }}/docker-compose.yml
         
     - name: Deploy to server ${{ matrix.host }}
       run: |
