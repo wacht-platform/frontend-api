@@ -33,7 +33,7 @@ func corsSettings() cors.Config {
 	corsSetting := cors.ConfigDefault
 
 	// if os.Getenv("MODE") == "staging" {
-	corsSetting.AllowHeaders = "X-Development-Session"
+	corsSetting.AllowHeaders = "X-Development-Session,Content-Type"
 	corsSetting.ExposeHeaders = "X-Development-Session"
 	// }
 
