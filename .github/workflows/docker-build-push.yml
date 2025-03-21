@@ -48,7 +48,7 @@ jobs:
   deploy:
     name: Deploy to Servers
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubicloud-standard-2
     strategy:
       matrix:
         host: 
@@ -68,23 +68,21 @@ jobs:
       run: |
         ssh -o StrictHostKeyChecking=no ${{ env.SSH_USERNAME }}@${{ matrix.host }} "mkdir -p ${{ env.DEPLOY_PATH }}"
         
-    - name: Prepare docker-compose file
+    - name: Prepare env file
       env:
         CONTAINER_ENV: ${{ secrets.CONTAINER_ENV }}
       run: |
-        # Create a temporary file with the base docker-compose content
-        cp docker-compose.yml docker-compose.temp.yml
-        
-        # Append environment variables with proper indentation
+        touch .env
         if [ ! -z "$CONTAINER_ENV" ]; then
           echo "$CONTAINER_ENV" | while read -r line; do
-            echo "      - $line" >> docker-compose.temp.yml
+            echo "$line" >> .env
           done
         fi
         
-        # Replace the original with the modified version
-        mv docker-compose.temp.yml docker-compose.yml
-        
+    - name: Copy env file to server
+      run: |
+        scp -o StrictHostKeyChecking=no .env ${{ env.SSH_USERNAME }}@${{ matrix.host }}:${{ env.DEPLOY_PATH }}/.env
+
     - name: Copy docker-compose file to server
       run: |
         scp -o StrictHostKeyChecking=no docker-compose.yml ${{ env.SSH_USERNAME }}@${{ matrix.host }}:${{ env.DEPLOY_PATH }}/docker-compose.yml

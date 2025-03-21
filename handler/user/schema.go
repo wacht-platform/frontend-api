@@ -21,5 +21,5 @@ type AddUserPhoneNumberSchema struct {
 
 type VerifyAuthenticatorSchema struct {
 	AuthenticatorID string   `json:"authenticator_id" validate:"required"`
-	Codes           []string `json:"codes" validate:"required,min=2,max=2"`
+	Codes           []string `json:"codes"            validate:"required,min=2,max=2"`
 }

@@ -93,7 +93,6 @@ func (s *UserService) SendEmailOTPVerification(
 
 	smtpServer := fmt.Sprintf("%s:%s", smtpHost, smtpPort)
 	err := smtp.SendMail(smtpServer, auth, from, []string{email}, msg)
-
 	if err != nil {
 		return fmt.Errorf(
 			"failed to send email to %s: %w",
@@ -109,7 +108,10 @@ func (s *UserService) SendSmsOTPVerification(
 	phone string,
 	otp string,
 ) error {
-	message := fmt.Sprintf("Your Wacht verification code is: %s. This code will expire in 5 minutes.", otp)
+	message := fmt.Sprintf(
+		"Your Wacht verification code is: %s. This code will expire in 5 minutes.",
+		otp,
+	)
 
 	return s.sns.SendSMS(phone, message)
 }

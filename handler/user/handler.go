@@ -36,7 +36,6 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 		Preload("ActiveSignin.User.UserAuthenticator").
 		Where("id = ?", session.ID).
 		First(session).Error
-
 	if err != nil {
 		log.Println(err)
 		return handler.SendInternalServerError(
@@ -66,7 +65,7 @@ func (h *Handler) UpdateUser(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, verr, "Bad request body")
 	}
 
-	var updates = make(map[string]any)
+	updates := make(map[string]any)
 
 	if b.FirstName != "" {
 		updates["first_name"] = b.FirstName
@@ -494,7 +493,6 @@ func (h *Handler) PreparePhoneVerification(c *fiber.Ctx) error {
 	}
 
 	err = h.service.SendSmsOTPVerification(phoneNumber.PhoneNumber, code)
-
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,
@@ -677,10 +675,15 @@ func (h *Handler) VerifyAuthenticator(c *fiber.Ctx) error {
 	log.Println("First code", firstCode)
 	log.Println("Second code", secondCode)
 
-	valid, err := totp.ValidateCustom(firstCode, authenticator.TotpSecret, time.Now().Add(-time.Second*30), totp.ValidateOpts{
-		Period: 30,
-		Digits: otp.DigitsSix,
-	})
+	valid, err := totp.ValidateCustom(
+		firstCode,
+		authenticator.TotpSecret,
+		time.Now().Add(-time.Second*30),
+		totp.ValidateOpts{
+			Period: 30,
+			Digits: otp.DigitsSix,
+		},
+	)
 	if err != nil {
 		log.Println("Failed to validate first code", err)
 		return handler.SendInternalServerError(
@@ -698,10 +701,15 @@ func (h *Handler) VerifyAuthenticator(c *fiber.Ctx) error {
 		)
 	}
 
-	valid, err = totp.ValidateCustom(secondCode, authenticator.TotpSecret, time.Now(), totp.ValidateOpts{
-		Period: 30,
-		Digits: otp.DigitsSix,
-	})
+	valid, err = totp.ValidateCustom(
+		secondCode,
+		authenticator.TotpSecret,
+		time.Now(),
+		totp.ValidateOpts{
+			Period: 30,
+			Digits: otp.DigitsSix,
+		},
+	)
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,
@@ -833,8 +841,13 @@ func (h *Handler) GetUserSignins(c *fiber.Ctx) error {
 	}
 
 	var signins []model.Signin
-	if err := database.Connection.Where("user_id = ?", session.ActiveSignin.UserID).Find(&signins).Error; err != nil {
-		return handler.SendInternalServerError(c, nil, "Failed to get user sessions", handler.ErrInternal)
+	if err := database.Connection.Where("user_id = ? AND expires_at > ?", session.ActiveSignin.UserID, time.Now()).Find(&signins).Error; err != nil {
+		return handler.SendInternalServerError(
+			c,
+			nil,
+			"Failed to get user sessions",
+			handler.ErrInternal,
+		)
 	}
 
 	return handler.SendSuccess(c, signins)
@@ -870,7 +883,11 @@ func (h *Handler) UploadProfilePicture(c *fiber.Ctx) error {
 		)
 	}
 
-	user.ProfilePictureURL = fmt.Sprintf("http://cdn.wacht.tech/%d/%s", session.ActiveSignin.UserID, file.Filename)
+	user.ProfilePictureURL = fmt.Sprintf(
+		"http://cdn.wacht.tech/%d/%s",
+		session.ActiveSignin.UserID,
+		file.Filename,
+	)
 	user.HasProfilePicture = true
 	if err := database.Connection.Save(&user).Error; err != nil {
 		return handler.SendInternalServerError(
@@ -879,5 +896,36 @@ func (h *Handler) UploadProfilePicture(c *fiber.Ctx) error {
 			"Failed to save user",
 		)
 	}
-	return handler.SendSuccess(c, "Profile picture uploaded successfully")
+	return handler.SendSuccess[any](c, nil)
+}
+
+func (h *Handler) SignOutFromSession(c *fiber.Ctx) error {
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
+	}
+
+	signinID := c.Params("id")
+	if signinID == "" {
+		return handler.SendBadRequest(c, nil, "Signin ID is required")
+	}
+
+	signin := model.Signin{}
+	if err := database.Connection.Where("id = ? AND user_id = ?", signinID, session.ActiveSignin.UserID).First(&signin).Error; err != nil {
+		return handler.SendBadRequest(c, nil, "Failed to find signin")
+	}
+
+	signin.ExpiresAt = time.Now().Format(time.RFC3339)
+	if err := database.Connection.Save(&signin).Error; err != nil {
+		return handler.SendInternalServerError(
+			c,
+			nil,
+			"Failed to sign out from session",
+			handler.ErrInternal,
+		)
+	}
+
+	handler.RemoveSessionFromCache(session.ID)
+
+	return handler.SendSuccess[any](c, nil)
 }

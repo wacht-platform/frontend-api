@@ -453,7 +453,6 @@ func (s *AuthService) SendEmailOTPVerification(
 
 	smtpServer := fmt.Sprintf("%s:%s", smtpHost, smtpPort)
 	err := smtp.SendMail(smtpServer, auth, from, []string{email}, msg)
-
 	if err != nil {
 		return fmt.Errorf(
 			"failed to send email to %s: %w",
@@ -622,8 +621,9 @@ func (s *AuthService) CreateSignin(
 		ip = ctx.IP()
 	}
 
-	resp, err := http.Get("http://ip-api.com/json/" + ip + "?fields=status,message,continent,continentCode,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query")
-
+	resp, err := http.Get(
+		"http://ip-api.com/json/" + ip + "?fields=status,message,continent,continentCode,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query",
+	)
 	if err != nil {
 		return signIn
 	}
@@ -631,14 +631,12 @@ func (s *AuthService) CreateSignin(
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
-
 	if err != nil {
 		return signIn
 	}
 
 	var ipLocation IPLocation
 	err = json.Unmarshal(body, &ipLocation)
-
 	if err != nil {
 		return signIn
 	}
@@ -656,6 +654,8 @@ func (s *AuthService) CreateSignin(
 	signIn.Country = ipLocation.Country
 	signIn.CountryCode = ipLocation.CountryCode
 	signIn.RegionCode = ipLocation.Region
+	signIn.IpAddress = ip
+	signIn.LastActiveAt = time.Now().Format(time.RFC3339)
 
 	return signIn
 }

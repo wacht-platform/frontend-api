@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -25,6 +26,12 @@ const (
 func SetSessionMiddleware(c *fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 	sessionToken := getSessionToken(c)
+
+	path := c.Path()
+
+	if strings.HasPrefix(path, "/.well") {
+		return c.Next()
+	}
 
 	if sessionToken == "" {
 		return handleNewSession(c, deployment)
@@ -56,7 +63,6 @@ func handleNewSession(
 			deployment.KepPair,
 			tx,
 		)
-
 		if err != nil {
 			return err
 		}

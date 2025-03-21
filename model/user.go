@@ -92,26 +92,26 @@ type User struct {
 	LastName                       string                  `json:"last_name"`
 	Username                       string                  `json:"username"`
 	Password                       string                  `json:"-"`
-	Availability                   UserAvailability        `json:"availability" gorm:"default:away"`
+	Availability                   UserAvailability        `json:"availability"                    gorm:"default:away"`
 	LastPasswordResetAt            time.Time               `json:"last_password_reset_at"`
 	SchemaVersion                  SchemaVersion           `json:"schema_version"`
 	Disabled                       bool                    `json:"disabled"`
 	PrimaryEmailAddressID          *uint                   `json:"primary_email_address_id,string"`
 	PrimaryPhoneNumberID           *uint                   `json:"primary_phone_number_id,string"`
 	SecondFactorPolicy             SecondFactorPolicy      `json:"second_factor_policy"`
-	UserEmailAddresses             []*UserEmailAddress     `json:"user_email_addresses"         gorm:"constraint:OnDelete:CASCADE;"`
-	UserPhoneNumbers               []*UserPhoneNumber      `json:"user_phone_numbers"           gorm:"constraint:OnDelete:CASCADE;"`
-	UserAuthenticator              *UserAuthenticator      `json:"user_authenticator"          gorm:"constraint:OnDelete:CASCADE;"`
-	SocialConnections              []*SocialConnection     `json:"social_connections,omitempty" gorm:"constraint:OnDelete:CASCADE;"`
-	SignIns                        []*Signin               `json:"-"                            gorm:"constraint:OnDelete:CASCADE;"`
+	UserEmailAddresses             []*UserEmailAddress     `json:"user_email_addresses"            gorm:"constraint:OnDelete:CASCADE;"`
+	UserPhoneNumbers               []*UserPhoneNumber      `json:"user_phone_numbers"              gorm:"constraint:OnDelete:CASCADE;"`
+	UserAuthenticator              *UserAuthenticator      `json:"user_authenticator"              gorm:"constraint:OnDelete:CASCADE;"`
+	SocialConnections              []*SocialConnection     `json:"social_connections,omitempty"    gorm:"constraint:OnDelete:CASCADE;"`
+	SignIns                        []*Signin               `json:"-"                               gorm:"constraint:OnDelete:CASCADE;"`
 	ActiveOrganizationMembershipID *uint                   `json:"active_organization_id,string"`
-	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization"          gorm:"constraint:OnDelete:CASCADE;"`
+	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization"             gorm:"constraint:OnDelete:CASCADE;"`
 	ActiveWorkspaceMembershipID    *uint                   `json:"active_workspace_id,string"`
-	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace"             gorm:"constraint:OnDelete:CASCADE;"`
+	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace"                gorm:"constraint:OnDelete:CASCADE;"`
 	DeploymentID                   uint                    `json:"-"`
 	PublicMetadata                 datatypes.JSONMap       `json:"public_metadata"`
 	PrivateMetadata                datatypes.JSONMap       `json:"-"`
 	OtpSecret                      string                  `json:"-"`
 	BackupCodesGenerated           bool                    `json:"backup_codes_generated"`
-	BackupCodes                    pq.StringArray          `json:"-"                            gorm:"type:text[]"`
+	BackupCodes                    pq.StringArray          `json:"-"                               gorm:"type:text[]"`
 }

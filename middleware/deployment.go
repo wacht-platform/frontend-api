@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
@@ -8,6 +10,13 @@ import (
 
 func SetDeploymentMiddleware(c *fiber.Ctx) error {
 	host := c.Hostname()
+
+	path := c.Path()
+
+	if strings.HasPrefix(path, "/.well") {
+		return c.Next()
+	}
+
 	deployment := new(model.Deployment)
 	err := database.Connection.Where("host = ?", host).
 		Joins("OrgSettings").

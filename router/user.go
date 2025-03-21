@@ -58,4 +58,5 @@ func setupUserRoutes(app *fiber.App) {
 
 	router.Post("/backup-codes", userHandler.GenerateBackupCodes)
 	router.Post("/signins", userHandler.GetUserSignins)
+	router.Patch("/signins/:id/signout", userHandler.SignOutFromSession)
 }
