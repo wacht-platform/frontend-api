@@ -63,10 +63,16 @@ type DeploymentDisplaySettings struct {
 	DeploymentId              uint         `json:"deployment_id"`
 	AppName                   string       `json:"app_name"`
 	PrimaryColor              string       `json:"primary_color"`
-	TosPageURL                string       `json:"tos_page_url"`
 	ButtonConfig              ButtonConfig `json:"button_config"`
 	InputConfig               InputConfig  `json:"input_config"`
 	PrivacyPolicyURL          string       `json:"privacy_policy_url"`
+	TosPageURL                string       `json:"tos_page_url"`
+	SignInPageURL             string       `json:"sign_in_page_url"`
+	SignUpPageURL             string       `json:"sign_up_page_url"`
+	AfterSignOutOnePageURL    string       `json:"after_sign_out_one_page_url"`
+	AfterSignOutAllPageURL    string       `json:"after_sign_out_all_page_url"`
+	FaviconImageURL           string       `json:"favicon_image_url"`
+	LogoImageURL              string       `json:"logo_image_url"`
 	SignupTermsStatement      string       `json:"signup_terms_statement"`
 	SignupTermsStatementShown bool         `json:"signup_terms_statement_shown"`
 }

@@ -30,7 +30,6 @@ type Deployment struct {
 	Model
 	MaintenanceMode   bool                         `json:"maintenance_mode"`
 	Host              string                       `json:"host"`
-	PublishableKey    string                       `json:"publishable_key"`
 	Secret            string                       `json:"-"`
 	DisplaySettings   DeploymentDisplaySettings    `json:"display_settings"`
 	OrgSettings       DeploymentOrgSettings        `json:"org_settings"`
