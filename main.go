@@ -8,10 +8,12 @@ import (
 	"github.com/ilabs/wacht-fe/config"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/router"
+    "github.com/godruoyi/go-snowflake"
 )
 
 func main() {
 	config.Init()
+    snowflake.SetStartTime(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
 
 	err := database.InitConnection()
 	if err != nil {
