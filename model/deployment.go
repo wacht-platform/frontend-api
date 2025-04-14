@@ -34,6 +34,7 @@ type Deployment struct {
 	DisplaySettings   DeploymentDisplaySettings    `json:"display_settings"`
 	OrgSettings       DeploymentOrgSettings        `json:"org_settings"`
 	AuthSettings      DeploymentAuthSettings       `json:"auth_settings"`
+	Restrictions      DeploymentRestrictions       `json:"restrictions"`
 	SocialConnections []DeploymentSocialConnection `json:"social_connections"`
 	ProjectID         uint                         `json:"project_id"`
 	Project           Project                      `json:"-"`

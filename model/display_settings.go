@@ -25,7 +25,7 @@ func (b ButtonConfig) Value() (driver.Value, error) {
 }
 
 func (b *ButtonConfig) GormDataType() string {
-	return "json"
+	return "jsonb"
 }
 
 func (b *ButtonConfig) GormDBDataType() string {
@@ -51,7 +51,7 @@ func (i InputConfig) Value() (driver.Value, error) {
 }
 
 func (i *InputConfig) GormDataType() string {
-	return "json"
+	return "jsonb"
 }
 
 func (i *InputConfig) GormDBDataType() string {

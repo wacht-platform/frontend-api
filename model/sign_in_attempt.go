@@ -56,7 +56,7 @@ func (e *Error) Value() (driver.Value, error) {
 }
 
 func (e *Error) GormDataType() string {
-	return "json"
+	return "jsonb"
 }
 
 func (e *Error) GormDBDataType() string {

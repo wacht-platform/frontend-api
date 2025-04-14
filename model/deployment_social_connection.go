@@ -78,7 +78,7 @@ func (o *OauthCredentials) Value() (driver.Value, error) {
 }
 
 func (o *OauthCredentials) GormDataType() string {
-	return "json"
+	return "jsonb"
 }
 
 func (a *OauthCredentials) GormDBDataType() string {
@@ -87,9 +87,8 @@ func (a *OauthCredentials) GormDBDataType() string {
 
 type DeploymentSocialConnection struct {
 	Model
-	DeploymentID      uint                     `json:"deployment_id"`
-	Provider          SocialConnectionProvider `json:"provider"`
-	Enabled           bool                     `json:"enabled"`
-	UserDefinedScopes []string                 `json:"user_defined_scopes" gorm:"type:text[]"`
-	Credentials       *OauthCredentials        `json:"-"`
+	DeploymentID uint                     `json:"deployment_id" gorm:"index:idx_deployment_id_social_connection_provider,unique"`
+	Provider     SocialConnectionProvider `json:"provider" gorm:"index:idx_deployment_id_social_connection_provider,unique"`
+	Enabled      bool                     `json:"enabled"`
+	Credentials  *OauthCredentials        `json:"-"`
 }

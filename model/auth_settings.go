@@ -101,7 +101,7 @@ func (i *IndividualAuthSettings) Value() (driver.Value, error) {
 }
 
 func (i *IndividualAuthSettings) GormDataType() string {
-	return "json"
+	return "jsonb"
 }
 
 func (i *IndividualAuthSettings) GormDBDataType() string {
@@ -132,7 +132,7 @@ func (v *VerificationPolicy) Value() (driver.Value, error) {
 }
 
 func (v *VerificationPolicy) GormDataType() string {
-	return "json"
+	return "jsonb"
 }
 
 func (v *VerificationPolicy) GormDBDataType() string {
@@ -169,25 +169,209 @@ func (a *AuthFactorsEnabled) Value() (driver.Value, error) {
 }
 
 func (a *AuthFactorsEnabled) GormDataType() string {
-	return "json"
+	return "jsonb"
 }
 
 func (a *AuthFactorsEnabled) GormDBDataType() string {
 	return "jsonb"
 }
 
+type EmailSettings struct {
+	Enabled                      bool `json:"enabled"`
+	Required                     bool `json:"required"`
+	VerifySignup                 bool `json:"verify_signup,omitempty"`
+	OtpVerificationAllowed       bool `json:"otp_verification_allowed,omitempty"`
+	MagicLinkVerificationAllowed bool `json:"magic_link_verification_allowed,omitempty"`
+}
+
+func (e *EmailSettings) Scan(src any) error {
+	bytes, ok := src.([]byte)
+	if !ok {
+		return errors.New(fmt.Sprint("Failed to unmarshal JSONB value:", src))
+	}
+	result := EmailSettings{}
+	err := json.Unmarshal(bytes, &result)
+	*e = result
+	return err
+}
+
+func (e *EmailSettings) Value() (driver.Value, error) {
+	return json.Marshal(e)
+}
+
+func (e *EmailSettings) GormDataType() string {
+	return "jsonb"
+}
+
+func (e *EmailSettings) GormDBDataType() string {
+	return "jsonb"
+}
+
+type PhoneSettings struct {
+	Enabled                     bool `json:"enabled"`
+	Required                    bool `json:"required"`
+	VerifySignup                bool `json:"verify_signup,omitempty"`
+	SmsVerificationAllowed      bool `json:"sms_verification_allowed,omitempty"`
+	WhatsappVerificationAllowed bool `json:"whatsapp_verification_allowed,omitempty"`
+}
+
+func (p *PhoneSettings) Scan(src any) error {
+	bytes, ok := src.([]byte)
+	if !ok {
+		return errors.New(fmt.Sprint("Failed to unmarshal JSONB value:", src))
+	}
+	result := PhoneSettings{}
+	err := json.Unmarshal(bytes, &result)
+	*p = result
+	return err
+}
+
+func (p *PhoneSettings) Value() (driver.Value, error) {
+	return json.Marshal(p)
+}
+
+func (p *PhoneSettings) GormDataType() string {
+	return "jsonb"
+}
+
+func (p *PhoneSettings) GormDBDataType() string {
+	return "jsonb"
+}
+
+type UsernameSettings struct {
+	Enabled   bool  `json:"enabled"`
+	Required  bool  `json:"required"`
+	MinLength uint8 `json:"min_length,omitempty"`
+	MaxLength uint8 `json:"max_length,omitempty"`
+}
+
+func (u *UsernameSettings) Scan(src any) error {
+	bytes, ok := src.([]byte)
+	if !ok {
+		return errors.New(fmt.Sprint("Failed to unmarshal JSONB value:", src))
+	}
+	result := UsernameSettings{}
+	err := json.Unmarshal(bytes, &result)
+	*u = result
+	return err
+}
+
+func (u *UsernameSettings) Value() (driver.Value, error) {
+	return json.Marshal(u)
+}
+
+func (u *UsernameSettings) GormDataType() string {
+	return "jsonb"
+}
+
+func (u *UsernameSettings) GormDBDataType() string {
+	return "jsonb"
+}
+
+type PasswordSettings struct {
+	Enabled            bool  `json:"enabled"`
+	MinLength          uint8 `json:"min_length,omitempty"`
+	RequireLowercase   bool  `json:"require_lowercase,omitempty"`
+	RequireUppercase   bool  `json:"require_uppercase,omitempty"`
+	RequireNumber      bool  `json:"require_number,omitempty"`
+	RequireSpecialChar bool  `json:"require_special,omitempty"`
+}
+
+func (p *PasswordSettings) Scan(src any) error {
+	bytes, ok := src.([]byte)
+	if !ok {
+		return errors.New(fmt.Sprint("Failed to unmarshal JSONB value:", src))
+	}
+	result := PasswordSettings{}
+	err := json.Unmarshal(bytes, &result)
+	*p = result
+	return err
+}
+
+func (p *PasswordSettings) Value() (driver.Value, error) {
+	return json.Marshal(p)
+}
+
+func (p *PasswordSettings) GormDataType() string {
+	return "jsonb"
+}
+
+func (p *PasswordSettings) GormDBDataType() string {
+	return "jsonb"
+}
+
+type EmailLinkSettings struct {
+	Enabled           bool `json:"enabled"`
+	RequireSameDevice bool `json:"require_same_device"`
+}
+
+func (e *EmailLinkSettings) Scan(src any) error {
+	bytes, ok := src.([]byte)
+	if !ok {
+		if src == nil {
+			return nil
+		}
+		return errors.New(fmt.Sprint("Failed to unmarshal JSONB value:", src))
+	}
+	result := EmailLinkSettings{}
+	err := json.Unmarshal(bytes, &result)
+	*e = result
+	return err
+}
+
+func (e *EmailLinkSettings) Value() (driver.Value, error) {
+	return json.Marshal(e)
+}
+
+func (e *EmailLinkSettings) GormDataType() string {
+	return "jsonb"
+}
+
+func (e *EmailLinkSettings) GormDBDataType() string {
+	return "jsonb"
+}
+
+type PasskeySettings struct {
+	Enabled       bool `json:"enabled"`
+	AllowAutofill bool `json:"allow_autofill"`
+}
+
+func (p *PasskeySettings) Scan(src any) error {
+	bytes, ok := src.([]byte)
+	if !ok {
+		if src == nil {
+			return nil
+		}
+		return errors.New(fmt.Sprint("Failed to unmarshal JSONB value:", src))
+	}
+	result := PasskeySettings{}
+	err := json.Unmarshal(bytes, &result)
+	*p = result
+	return err
+}
+
+func (p *PasskeySettings) Value() (driver.Value, error) {
+	return json.Marshal(p)
+}
+
+func (p *PasskeySettings) GormDataType() string {
+	return "jsonb"
+}
+
+func (p *PasskeySettings) GormDBDataType() string {
+	return "jsonb"
+}
+
 type DeploymentAuthSettings struct {
 	Model
-	EmailAddress           IndividualAuthSettings `json:"email_address"`
-	PhoneNumber            IndividualAuthSettings `json:"phone_number"`
-	Username               IndividualAuthSettings `json:"username"`
+	EmailAddress           EmailSettings          `json:"email_address"`
+	PhoneNumber            PhoneSettings          `json:"phone_number"`
+	Username               UsernameSettings       `json:"username"`
 	FirstName              IndividualAuthSettings `json:"first_name"`
 	LastName               IndividualAuthSettings `json:"last_name"`
-	Password               IndividualAuthSettings `json:"password"`
-	BackupCode             IndividualAuthSettings `json:"backup_code"`
-	Web3Wallet             IndividualAuthSettings `json:"web3_wallet"`
-	MagicLink              IndividualAuthSettings `json:"magic_link"`
-	Passkey                IndividualAuthSettings `json:"passkey"`
+	Password               PasswordSettings       `json:"password"`
+	MagicLink              *EmailLinkSettings     `json:"magic_link"`
+	Passkey                *PasskeySettings       `json:"passkey"`
 	AuthFactorsEnabled     AuthFactorsEnabled     `json:"auth_factors_enabled"`
 	VerificationPolicy     VerificationPolicy     `json:"verification_policy"`
 	SecondFactorPolicy     SecondFactorPolicy     `json:"second_factor_policy"`

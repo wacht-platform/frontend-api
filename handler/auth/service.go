@@ -140,9 +140,6 @@ func (s *AuthService) ValidateSignUpRequest(
 	if d.AuthSettings.Username.Required && b.Username == "" {
 		return handler.ErrRequiredField("Username")
 	}
-	if d.AuthSettings.Password.Required && b.Password == "" {
-		return handler.ErrRequiredField("Password")
-	}
 	if d.AuthSettings.PhoneNumber.Required && b.PhoneNumber == "" {
 		return handler.ErrRequiredField("Phone number")
 	}
