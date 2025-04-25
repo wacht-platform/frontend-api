@@ -44,7 +44,7 @@ func SignJWT(
 	}
 
 	privateKeyBlock, _ := pem.Decode([]byte(keypair.PrivateKey))
-	privateKey, err := x509.ParsePKCS1PrivateKey(
+	privateKey, err := x509.ParsePKCS8PrivateKey(
 		privateKeyBlock.Bytes,
 	)
 	if err != nil {
@@ -55,7 +55,7 @@ func SignJWT(
 		return "", err
 	}
 
-	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.RS256(), privateKey))
+	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.ES256(), privateKey))
 
 	return string(signed), err
 }
@@ -66,7 +66,7 @@ func VerifyJWT(
 	iss string,
 ) (jwt.Token, error) {
 	publicKeyBlock, _ := pem.Decode([]byte(keypair.PublicKey))
-	publicKey, err := x509.ParsePKCS1PublicKey(publicKeyBlock.Bytes)
+	publicKey, err := x509.ParsePKIXPublicKey(publicKeyBlock.Bytes)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func ParseJWT(
 	iss string,
 ) (jwt.Token, error) {
 	publicKeyBlock, _ := pem.Decode([]byte(keypair.PublicKey))
-	publicKey, err := x509.ParsePKCS1PublicKey(publicKeyBlock.Bytes)
+	publicKey, err := x509.ParsePKIXPublicKey(publicKeyBlock.Bytes)
 	if err != nil {
 		return nil, err
 	}
