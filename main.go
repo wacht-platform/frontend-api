@@ -21,9 +21,9 @@ func main() {
 		log.Fatal("Error connecting to database: ", err)
 	}
 
-	if err = database.AutoMigratePg(); err != nil {
-		log.Fatal("Error migrating database: ", err)
-	}
+	// if err = database.AutoMigratePg(); err != nil {
+	// 	log.Fatal("Error migrating database: ", err)
+	// }
 
 	app := fiber.New(fiber.Config{
 		JSONEncoder: json.Marshal,
