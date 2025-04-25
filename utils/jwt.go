@@ -73,7 +73,7 @@ func VerifyJWT(
 
 	token, err := jwt.Parse(
 		[]byte(j),
-		jwt.WithKey(jwa.RS256(), publicKey),
+		jwt.WithKey(jwa.ES256(), publicKey),
 		jwt.WithVerify(true),
 		jwt.WithIssuer(fmt.Sprintf("https://%s", iss)),
 	)
@@ -97,7 +97,7 @@ func ParseJWT(
 
 	token, err := jwt.ParseInsecure(
 		[]byte(j),
-		jwt.WithKey(jwa.RS256(), publicKey),
+		jwt.WithKey(jwa.ES256(), publicKey),
 		jwt.WithIssuer(fmt.Sprintf("https://%s", iss)),
 	)
 	if err != nil {
