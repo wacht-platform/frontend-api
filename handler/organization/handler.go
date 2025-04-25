@@ -37,53 +37,17 @@ func (h *Handler) CreateOrganization(c *fiber.Ctx) error {
 		Name: b.Name,
 	}
 
-	ownerRole := &model.OrgnizationRole{
-		Model: model.Model{
-			ID: uint(snowflake.ID()),
-		},
-		Name: "organization:owner",
-		Permissions: []*model.OrganizationPermissions{
-			{
-				Model: model.Model{
-					ID: uint(snowflake.ID()),
-				},
-				Permission: "all",
-			},
-		},
-	}
-
-	memberRole := &model.OrgnizationRole{
-		Model: model.Model{
-			ID: uint(snowflake.ID()),
-		},
-		Name: "organization:member",
-		Permissions: []*model.OrganizationPermissions{
-			{
-				Model: model.Model{
-					ID: uint(snowflake.ID()),
-				},
-				Permission: "read",
-			},
-		},
-	}
-
 	membership := model.OrganizationMembership{
 		Model: model.Model{
 			ID: uint(snowflake.ID()),
 		},
 		OrganizationID: org.ID,
 		UserID:         session.ActiveSignin.UserID,
-		Role:           []*model.OrgnizationRole{ownerRole},
+		Role:           []*model.DeploymentOrganizationRole{},
 	}
 
 	err := database.Connection.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&org).Error; err != nil {
-			return err
-		}
-		if err := tx.Create(&ownerRole).Error; err != nil {
-			return err
-		}
-		if err := tx.Create(&memberRole).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&membership).Error; err != nil {
@@ -294,40 +258,16 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 		)
 	}
 
-	// Create role for the new member
-	role := &model.OrgnizationRole{
-		Model: model.Model{
-			ID: uint(snowflake.ID()),
-		},
-		Name: "organization:" + b.Role,
-	}
-
-	switch b.Role {
-	case "owner":
-		role.Permissions = []*model.OrganizationPermissions{{
-			Model:      model.Model{ID: uint(snowflake.ID())},
-			Permission: "all",
-		}}
-	case "member":
-		role.Permissions = []*model.OrganizationPermissions{{
-			Model:      model.Model{ID: uint(snowflake.ID())},
-			Permission: "read",
-		}}
-	}
-
 	newMembership := model.OrganizationMembership{
 		Model: model.Model{
 			ID: uint(snowflake.ID()),
 		},
 		OrganizationID: uint(snowflake.ID()),
 		UserID:         userEmail.UserID,
-		Role:           []*model.OrgnizationRole{role},
+		Role:           []*model.DeploymentOrganizationRole{},
 	}
 
 	err := database.Connection.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&role).Error; err != nil {
-			return err
-		}
 		if err := tx.Create(&newMembership).Error; err != nil {
 			return err
 		}

@@ -18,7 +18,7 @@ func SetDeploymentMiddleware(c *fiber.Ctx) error {
 	}
 
 	deployment := new(model.Deployment)
-	err := database.Connection.Where("host = ?", host).
+	err := database.Connection.Where("backend_host = ?", host).
 		Joins("OrgSettings").
 		Joins("AuthSettings").
 		Joins("KepPair").

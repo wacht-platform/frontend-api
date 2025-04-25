@@ -58,7 +58,7 @@ func handleNewSession(
 		var err error
 		token, err = utils.SignJWT(
 			session.ID,
-			deployment.Host,
+			deployment.BackendHost,
 			time.Now().Add(sessionDuration),
 			deployment.KepPair,
 			tx,
@@ -95,14 +95,14 @@ func handleExistingSession(
 	token, err := utils.VerifyJWT(
 		sessionToken,
 		deployment.KepPair,
-		deployment.Host,
+		deployment.BackendHost,
 	)
 
 	if errors.Is(err, jwt.TokenExpiredError()) {
 		token, err = utils.ParseJWT(
 			sessionToken,
 			deployment.KepPair,
-			deployment.Host,
+			deployment.BackendHost,
 		)
 		if err != nil {
 			return handler.SendUnauthorized(c, err, "Invalid session")
@@ -167,7 +167,7 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token) error {
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
 		token, err = utils.SignJWT(
 			sessionID,
-			deployment.Host,
+			deployment.BackendHost,
 			time.Now().Add(sessionDuration),
 			deployment.KepPair,
 			tx,

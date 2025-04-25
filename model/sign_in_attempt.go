@@ -67,14 +67,14 @@ type SignInAttempt struct {
 	Model
 	UserID         uint                                   `json:"-"`
 	IdentifierID   uint                                   `json:"-"`
-	SessionID      uint                                   `json:"session_id"`
-	Method         SignInMethod                           `json:"method"`
+	SessionID      uint                                   `json:"session_id" gorm:"not null"`
+	Method         SignInMethod                           `json:"method" gorm:"not null"`
 	SSOProvider    SocialConnectionProvider               `json:"sso_provider"`
-	ExpiresAt      time.Time                              `json:"expires_at"`
-	CurrentStep    SignInAttemptStep                      `json:"current_step"`
-	RemainingSteps datatypes.JSONSlice[SignInAttemptStep] `json:"remaining_steps"`
-	Completed      bool                                   `json:"completed"`
-	Errored        bool                                   `json:"errored"`
+	ExpiresAt      time.Time                              `json:"expires_at" gorm:"not null"`
+	CurrentStep    SignInAttemptStep                      `json:"current_step" gorm:"not null"`
+	RemainingSteps datatypes.JSONSlice[SignInAttemptStep] `json:"remaining_steps" gorm:"not null"`
+	Completed      bool                                   `json:"completed" gorm:"not null"`
+	Errored        bool                                   `json:"errored" gorm:"not null"`
 	Errors         datatypes.JSONSlice[Error]             `json:"errors"`
 }
 

@@ -3,6 +3,6 @@ package model
 type Project struct {
 	Model
 	Deployments []Deployment
-	Name        string
-	ImageURL    string
+	Name        string `gorm:"not null"`
+	ImageURL    string `gorm:"not null"`
 }

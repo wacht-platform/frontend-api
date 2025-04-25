@@ -8,8 +8,8 @@ import (
 
 type RotatingToken struct {
 	Model
-	SessionID  uint
-	ValidUntil time.Time
+	SessionID  uint      `json:"session_id" gorm:"not null"`
+	ValidUntil time.Time `json:"valid_until" gorm:"not null"`
 }
 
 func (r *RotatingToken) IsValid() bool {

@@ -34,32 +34,6 @@ func (f FirstFactor) GormDBDataType() string {
 	return "text"
 }
 
-type SecondFactor string
-
-const (
-	SecondFactorNone          SecondFactor = "none"
-	SecondFactorPhoneOTP      SecondFactor = "phone_otp"
-	SecondFactorBackupCode    SecondFactor = "backup_code"
-	SecondFactorAuthenticator SecondFactor = "authenticator"
-)
-
-func (s *SecondFactor) Scan(value any) error {
-	*s = SecondFactor(value.([]byte))
-	return nil
-}
-
-func (s *SecondFactor) Value() (driver.Value, error) {
-	return string(*s), nil
-}
-
-func (s SecondFactor) GormDataType() string {
-	return "text"
-}
-
-func (s SecondFactor) GormDBDataType() string {
-	return "text"
-}
-
 type SecondFactorPolicy string
 
 const (
@@ -362,22 +336,52 @@ func (p *PasskeySettings) GormDBDataType() string {
 	return "jsonb"
 }
 
+type MultiSessionSupport struct {
+	Enabled               bool `json:"enabled"`
+	MaxAccountsPerSession uint `json:"max_accounts_per_session"`
+	MaxSessionsPerAccount uint `json:"max_sessions_per_account"`
+}
+
+func (m *MultiSessionSupport) Scan(src any) error {
+	bytes, ok := src.([]byte)
+	if !ok {
+		return errors.New(fmt.Sprint("Failed to unmarshal JSONB value:", src))
+	}
+	result := MultiSessionSupport{}
+	err := json.Unmarshal(bytes, &result)
+	*m = result
+	return err
+}
+
+func (m *MultiSessionSupport) Value() (driver.Value, error) {
+	return json.Marshal(m)
+}
+
+func (m *MultiSessionSupport) GormDataType() string {
+	return "jsonb"
+}
+
+func (m *MultiSessionSupport) GormDBDataType() string {
+	return "jsonb"
+}
+
 type DeploymentAuthSettings struct {
 	Model
-	EmailAddress           EmailSettings          `json:"email_address"`
-	PhoneNumber            PhoneSettings          `json:"phone_number"`
-	Username               UsernameSettings       `json:"username"`
-	FirstName              IndividualAuthSettings `json:"first_name"`
-	LastName               IndividualAuthSettings `json:"last_name"`
-	Password               PasswordSettings       `json:"password"`
-	MagicLink              *EmailLinkSettings     `json:"magic_link"`
-	Passkey                *PasskeySettings       `json:"passkey"`
-	AuthFactorsEnabled     AuthFactorsEnabled     `json:"auth_factors_enabled"`
-	VerificationPolicy     VerificationPolicy     `json:"verification_policy"`
-	SecondFactorPolicy     SecondFactorPolicy     `json:"second_factor_policy"`
-	FirstFactor            FirstFactor            `json:"first_factor"`
-	SecondFactor           SecondFactor           `json:"second_factor"`
-	AlternateFirstFactors  []FirstFactor          `json:"alternate_first_factors"  gorm:"type:text[]"`
-	AlternateSecondFactors []SecondFactor         `json:"alternate_second_factors" gorm:"type:text[]"`
-	DeploymentID           uint                   `json:"deployment_id"`
+	EmailAddress           EmailSettings          `json:"email_address" gorm:"not null"`
+	PhoneNumber            PhoneSettings          `json:"phone_number" gorm:"not null"`
+	Username               UsernameSettings       `json:"username" gorm:"not null"`
+	FirstName              IndividualAuthSettings `json:"first_name" gorm:"not null"`
+	LastName               IndividualAuthSettings `json:"last_name" gorm:"not null"`
+	Password               PasswordSettings       `json:"password" gorm:"not null"`
+	MagicLink              *EmailLinkSettings     `json:"magic_link" gorm:"not null"`
+	Passkey                *PasskeySettings       `json:"passkey" gorm:"not null"`
+	AuthFactorsEnabled     AuthFactorsEnabled     `json:"auth_factors_enabled" gorm:"not null"`
+	VerificationPolicy     VerificationPolicy     `json:"verification_policy" gorm:"not null"`
+	SecondFactorPolicy     SecondFactorPolicy     `json:"second_factor_policy" gorm:"not null"`
+	FirstFactor            FirstFactor            `json:"first_factor" gorm:"not null"`
+	SessionTokenLifetime   uint                   `json:"session_token_lifetime" gorm:"not null"`
+	SessionValidityPeriod  uint                   `json:"session_validity_period" gorm:"not null"`
+	SessionInactiveTimeout uint                   `json:"session_inactive_timeout" gorm:"not null"`
+	MultiSessionSupport    MultiSessionSupport    `json:"multi_session_support" gorm:"not null"`
+	DeploymentID           uint                   `json:"deployment_id" gorm:"not null;index"`
 }

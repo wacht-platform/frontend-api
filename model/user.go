@@ -44,8 +44,8 @@ type UserEmailAddress struct {
 	UserID               uint                 `json:"-"`
 	User                 User                 `json:"-"`
 	Email                string               `json:"email"                       gorm:"index:idx_user_email_address_email;index:idx_deployment_user_email_address_email,unique"`
-	IsPrimary            bool                 `json:"is_primary"`
-	Verified             bool                 `json:"verified"`
+	IsPrimary            bool                 `json:"is_primary" gorm:"not null"`
+	Verified             bool                 `json:"verified" gorm:"not null"`
 	VerifiedAt           time.Time            `json:"verified_at"`
 	VerificationStrategy VerificationStrategy `json:"verification_strategy"`
 	SocialConnection     *SocialConnection    `json:"social_connection,omitempty"`
@@ -86,19 +86,19 @@ func (u UserAvailability) Value() (driver.Value, error) {
 
 type User struct {
 	Model
-	FirstName                      string                  `json:"first_name"`
-	HasProfilePicture              bool                    `json:"has_profile_picture"`
-	ProfilePictureURL              string                  `json:"profile_picture_url"`
-	LastName                       string                  `json:"last_name"`
-	Username                       string                  `json:"username"`
+	FirstName                      string                  `json:"first_name" gorm:"not null"`
+	HasProfilePicture              bool                    `json:"has_profile_picture" gorm:"not null"`
+	ProfilePictureURL              string                  `json:"profile_picture_url" gorm:"not null"`
+	LastName                       string                  `json:"last_name" gorm:"not null"`
+	Username                       string                  `json:"username" gorm:"not null"`
 	Password                       string                  `json:"-"`
-	Availability                   UserAvailability        `json:"availability"                    gorm:"default:away"`
+	Availability                   UserAvailability        `json:"availability"                    gorm:"default:away;not null"`
 	LastPasswordResetAt            time.Time               `json:"last_password_reset_at"`
-	SchemaVersion                  SchemaVersion           `json:"schema_version"`
-	Disabled                       bool                    `json:"disabled"`
-	PrimaryEmailAddressID          *uint                   `json:"primary_email_address_id,string"`
-	PrimaryPhoneNumberID           *uint                   `json:"primary_phone_number_id,string"`
-	SecondFactorPolicy             SecondFactorPolicy      `json:"second_factor_policy"`
+	SchemaVersion                  SchemaVersion           `json:"schema_version" gorm:"not null"`
+	Disabled                       bool                    `json:"disabled" gorm:"not null"`
+	PrimaryEmailAddressID          *uint                   `json:"primary_email_address_id,string" gorm:"not null"`
+	PrimaryPhoneNumberID           *uint                   `json:"primary_phone_number_id,string" gorm:"not null"`
+	SecondFactorPolicy             SecondFactorPolicy      `json:"second_factor_policy" gorm:"not null"`
 	UserEmailAddresses             []*UserEmailAddress     `json:"user_email_addresses"            gorm:"constraint:OnDelete:CASCADE;"`
 	UserPhoneNumbers               []*UserPhoneNumber      `json:"user_phone_numbers"              gorm:"constraint:OnDelete:CASCADE;"`
 	UserAuthenticator              *UserAuthenticator      `json:"user_authenticator"              gorm:"constraint:OnDelete:CASCADE;"`
@@ -108,10 +108,10 @@ type User struct {
 	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization"             gorm:"constraint:OnDelete:CASCADE;"`
 	ActiveWorkspaceMembershipID    *uint                   `json:"active_workspace_id,string"`
 	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace"                gorm:"constraint:OnDelete:CASCADE;"`
-	DeploymentID                   uint                    `json:"-"`
-	PublicMetadata                 datatypes.JSONMap       `json:"public_metadata"`
-	PrivateMetadata                datatypes.JSONMap       `json:"-"`
-	OtpSecret                      string                  `json:"-"`
-	BackupCodesGenerated           bool                    `json:"backup_codes_generated"`
+	DeploymentID                   uint                    `json:"-"                               gorm:"not null"`
+	PublicMetadata                 datatypes.JSONMap       `json:"public_metadata"                 gorm:"not null"`
+	PrivateMetadata                datatypes.JSONMap       `json:"-"                               gorm:"not null"`
+	OtpSecret                      string                  `json:"-"                               gorm:"not null"`
+	BackupCodesGenerated           bool                    `json:"backup_codes_generated"          gorm:"not null"`
 	BackupCodes                    pq.StringArray          `json:"-"                               gorm:"type:text[]"`
 }
