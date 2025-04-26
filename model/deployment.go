@@ -33,7 +33,7 @@ type Deployment struct {
 	FrontendHost      string                       `json:"frontend_host" gorm:"not null"`
 	MailFromHost      string                       `json:"mail_from_host" gorm:"not null"`
 	PublishableKey    string                       `json:"publishable_key" gorm:"not null"`
-	DisplaySettings   DeploymentDisplaySettings    `json:"display_settings"`
+	UISettings        DeploymentUISettings         `json:"ui_settings"`
 	OrgSettings       DeploymentB2bSettings        `json:"org_settings"`
 	AuthSettings      DeploymentAuthSettings       `json:"auth_settings"`
 	Restrictions      DeploymentRestrictions       `json:"restrictions"`

@@ -58,7 +58,7 @@ func (d *DarkModeSettings) GormDBDataType() string {
 	return "jsonb"
 }
 
-type DeploymentDisplaySettings struct {
+type DeploymentUISettings struct {
 	Model
 	DeploymentID                           uint              `json:"deployment_id" gorm:"not null;index"`
 	AppName                                string            `json:"app_name" gorm:"not null"`

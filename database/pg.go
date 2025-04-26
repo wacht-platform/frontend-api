@@ -51,7 +51,7 @@ func AutoMigratePg() error {
 		&model.DeploymentWorkspaceRole{},
 		&model.WorkspaceMembership{},
 		&model.SignupAttempt{},
-		&model.DeploymentDisplaySettings{},
+		&model.DeploymentUISettings{},
 		&model.UserAuthenticator{},
 		&model.DeploymentRestrictions{},
 		&model.DeploymentJwtTemplate{},
