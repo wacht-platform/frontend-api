@@ -493,6 +493,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 	attemptIdentifier := c.QueryInt("attempt_identifier")
 	identifierType := c.Query("identifier_type")
 	strategy := c.Query("strategy")
+	deployment := handler.GetDeployment(c)
 
 	if attemptIdentifier == 0 {
 		return handler.SendBadRequest(
@@ -580,7 +581,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			h.service.SendEmailOTPVerification(email.Email, code)
+			h.service.SendEmailOTPVerification(email.Email, code, deployment)
 		case model.SignInAttemptStepVerifyPhoneOTP:
 			return handler.SendSuccess[any](c, nil)
 		default:
@@ -628,7 +629,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			h.service.SendEmailOTPVerification(attempt.Email, code)
+			h.service.SendEmailOTPVerification(attempt.Email, code, deployment)
 		case model.SignupAttemptStepVerifyPhone:
 			return handler.SendSuccess[any](c, nil)
 		default:

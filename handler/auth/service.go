@@ -9,11 +9,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/smtp"
+	"os"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/aymerick/raymond"
 	"github.com/godruoyi/go-snowflake"
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/config"
@@ -22,6 +23,7 @@ import (
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/ua-parser/uap-go/uaparser"
+	"github.com/wneessen/go-mail"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/facebook"
 	"golang.org/x/oauth2/github"
@@ -411,54 +413,53 @@ func (s *AuthService) ValidatePassword(password string) error {
 func (s *AuthService) SendEmailOTPVerification(
 	email string,
 	otp string,
+	deployment model.Deployment,
 ) error {
-	smtpHost := "smtp.zeptomail.in"
-	smtpPort := "587"
-	username := "emailapikey"
-	password := "PHtE6r1cR7rsgmEsoEMI4vPsRMWlZ41/r75kK1EWstkUA6NRGE0H+dt9kmPkoxopA6NGEvKZyNlgsrLK5rmDIT7qMjtEWWqyqK3sx/VYSPOZsbq6x00VtFoedELVU4TodNJj0Czfs97bNA=="
-	from := "notifications@wacht.tech"
+	smtpHost := "email-smtp.ap-south-1.amazonaws.com"
+	username := os.Getenv("SES_SMTP_USERNAME")
+	password := os.Getenv("SES_SMTP_PASSWORD")
+	from := deployment.EmailTemplates.VerificationCodeTemplate.TemplateFrom
 
-	auth := smtp.PlainAuth("", username, password, smtpHost)
-
-	htmlBody := fmt.Sprintf(`
-  <div style="font-family: Helvetica, Arial, sans-serif; max-width: 90%%; margin: auto; line-height: 1.6; color: #333; padding: 20px; box-sizing: border-box;">
-    <div style="margin: auto; padding: 20px; background: #f9f9f9; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);">
-      <div style="border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
-        <a href="#" style="font-size: 1.5em; color: #000; text-decoration: none; font-weight: bold;">Intellinesia</a>
-      </div>
-      <p style="font-size: 1.2em; margin-bottom: 10px;">Hi,</p>
-      <p style="margin-bottom: 20px;">Thank you for choosing Wacht. Use the following OTP to complete your Sign Up procedures. OTP is valid for 5 minutes:</p>
-      <h2 style="background: #000; color: #fff; padding: 10px 20px; border-radius: 5px; display: inline-block; margin: 0 auto;">%s</h2>
-      <p style="font-size: 1em; margin-top: 20px;">Regards,<br><strong>Wacht</strong></p>
-      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-      <div style="text-align: right; color: #aaa; font-size: 0.9em; line-height: 1.4;">
-        <p style="margin: 0;">Intellinesia LTD</p>
-        <p style="margin: 0;">Kolkata</p>
-        <p style="margin: 0;">India</p>
-      </div>
-    </div>
-  </div>
-  `, otp)
-
-	fromstr := fmt.Sprintf(
-		"From: Security Notifications <%s>\r\n",
-		from,
-	)
-	subject := "Subject: Your OTP Code\r\n"
-	contentType := "MIME-Version: 1.0\r\nContent-Type: text/html; charset=\"UTF-8\"\r\n\r\n"
-	msg := []byte(fromstr + subject + contentType + htmlBody)
-
-	smtpServer := fmt.Sprintf("%s:%s", smtpHost, smtpPort)
-	err := smtp.SendMail(smtpServer, auth, from, []string{email}, msg)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to send email to %s: %w",
-			email,
-			err,
-		)
+	ctx := map[string]string{
+		"app_name": deployment.UISettings.AppName,
+		"app_logo": fmt.Sprintf("<img src=\"%s\" alt=\"%s\" />", deployment.UISettings.LogoImageURL, deployment.UISettings.AppName),
+		"code":     otp,
 	}
 
-	return nil
+	subject, err := raymond.Render(deployment.EmailTemplates.VerificationCodeTemplate.TemplateSubject, ctx)
+	if err != nil {
+		return err
+	}
+
+	tpl := fmt.Sprintf(`<html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>%s</title></head><body>%s</body></html>`, subject, deployment.EmailTemplates.VerificationCodeTemplate.TemplateData)
+
+	htmlBody, err := raymond.Render(tpl, ctx)
+	if err != nil {
+		return err
+	}
+
+	message := mail.NewMsg()
+	mail.WithNoDefaultUserAgent()(message)
+	message.From(from)
+	message.To(email)
+	message.Subject(subject)
+	message.SetBodyString(mail.TypeTextHTML, htmlBody)
+
+	smtpClient, err := mail.NewClient(
+		smtpHost,
+		mail.WithPort(2587),
+		mail.WithSMTPAuth(mail.SMTPAuthPlain),
+		mail.WithUsername(username),
+		mail.WithPassword(password),
+	)
+
+	if err != nil {
+		return err
+	}
+
+	err = smtpClient.DialAndSend(message)
+
+	return err
 }
 
 func (s *AuthService) CreateSignupAttempt(
