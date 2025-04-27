@@ -415,7 +415,7 @@ func (s *AuthService) SendEmailOTPVerification(
 	otp string,
 	deployment model.Deployment,
 ) error {
-	smtpHost := "email-smtp.ap-south-1.amazonaws.com"
+	smtpHost := os.Getenv("SES_SMTP_HOST")
 	username := os.Getenv("SES_SMTP_USERNAME")
 	password := os.Getenv("SES_SMTP_PASSWORD")
 	from := deployment.EmailTemplates.VerificationCodeTemplate.TemplateFrom
