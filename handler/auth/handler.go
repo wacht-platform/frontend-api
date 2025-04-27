@@ -581,7 +581,13 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			h.service.SendEmailOTPVerification(email.Email, code, deployment)
+			if err := h.service.SendEmailOTPVerification(email.Email, code, deployment); err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error sending email OTP verification",
+				)
+			}
 		case model.SignInAttemptStepVerifyPhoneOTP:
 			return handler.SendSuccess[any](c, nil)
 		default:
@@ -629,7 +635,13 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			h.service.SendEmailOTPVerification(attempt.Email, code, deployment)
+			if err := h.service.SendEmailOTPVerification(attempt.Email, code, deployment); err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error sending email OTP verification",
+				)
+			}
 		case model.SignupAttemptStepVerifyPhone:
 			return handler.SendSuccess[any](c, nil)
 		default:

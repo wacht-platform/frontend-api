@@ -418,11 +418,11 @@ func (s *AuthService) SendEmailOTPVerification(
 	smtpHost := os.Getenv("SES_SMTP_HOST")
 	username := os.Getenv("SES_SMTP_USERNAME")
 	password := os.Getenv("SES_SMTP_PASSWORD")
-	from := deployment.EmailTemplates.VerificationCodeTemplate.TemplateFrom
+	from := fmt.Sprintf("%s@%s", deployment.EmailTemplates.VerificationCodeTemplate.TemplateFrom, deployment.MailFromHost)
 
 	ctx := map[string]string{
 		"app_name": deployment.UISettings.AppName,
-		"app_logo": fmt.Sprintf("<img src=\"%s\" alt=\"%s\" />", deployment.UISettings.LogoImageURL, deployment.UISettings.AppName),
+		"app_logo": deployment.UISettings.LogoImageURL,
 		"code":     otp,
 	}
 
