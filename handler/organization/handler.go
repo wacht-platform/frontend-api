@@ -19,42 +19,62 @@ func NewHandler() *Handler {
 	}
 }
 
-func (h *Handler) CreateOrganization(c *fiber.Ctx) error {
-	b, verr := handler.Validate[CreateOrgRequest](c)
+func (h *Handler) CreateOrganization(
+	c *fiber.Ctx,
+) error {
+	b, verr := handler.Validate[CreateOrgRequest](
+		c,
+	)
 	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+		return handler.SendBadRequest(
+			c,
+			verr,
+			"Bad request body",
+		)
 	}
 
-	session := handler.GetSession(c)
+	session := handler.GetSession(
+		c,
+	)
 	if session.ActiveSignin == nil {
-		return handler.SendUnauthorized(c, nil, "No active sign in")
+		return handler.SendUnauthorized(
+			c,
+			nil,
+			"No active sign in",
+		)
 	}
 
 	org := model.Organization{
 		Model: model.Model{
-			ID: uint(snowflake.ID()),
+			ID: uint(
+				snowflake.ID(),
+			),
 		},
 		Name: b.Name,
 	}
 
 	membership := model.OrganizationMembership{
 		Model: model.Model{
-			ID: uint(snowflake.ID()),
+			ID: uint(
+				snowflake.ID(),
+			),
 		},
 		OrganizationID: org.ID,
 		UserID:         session.ActiveSignin.UserID,
 		Role:           []*model.DeploymentOrganizationRole{},
 	}
 
-	err := database.Connection.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&org).Error; err != nil {
-			return err
-		}
-		if err := tx.Create(&membership).Error; err != nil {
-			return err
-		}
-		return nil
-	})
+	err := database.Connection.Transaction(
+		func(tx *gorm.DB) error {
+			if err := tx.Create(&org).Error; err != nil {
+				return err
+			}
+			if err := tx.Create(&membership).Error; err != nil {
+				return err
+			}
+			return nil
+		},
+	)
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,
@@ -63,59 +83,48 @@ func (h *Handler) CreateOrganization(c *fiber.Ctx) error {
 		)
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"organization": org,
-		"membership":   membership,
-	})
+	return handler.SendSuccess(
+		c,
+		fiber.Map{
+			"organization": org,
+			"membership":   membership,
+		},
+	)
 }
 
-func (h *Handler) GetOrganization(c *fiber.Ctx) error {
+func (h *Handler) UpdateOrganization(
+	c *fiber.Ctx,
+) error {
 	orgID := c.Params("id")
-	session := handler.GetSession(c)
-
-	if session.ActiveSignin == nil {
-		return handler.SendUnauthorized(c, nil, "No active sign in")
-	}
-
-	var org model.Organization
-	if err := database.Connection.First(&org, orgID).Error; err != nil {
-		return handler.SendNotFound(c, nil, "Organization not found")
-	}
-
-	var membership model.OrganizationMembership
-	if err := database.Connection.Where(
-		"organization_id = ? AND user_id = ?",
-		orgID,
-		session.ActiveSignin.UserID,
-	).Preload("Role").First(&membership).Error; err != nil {
-		return handler.SendForbidden(
+	b, verr := handler.Validate[UpdateOrgRequest](
+		c,
+	)
+	if verr != nil {
+		return handler.SendBadRequest(
 			c,
-			nil,
-			"Not a member of this organization",
+			verr,
+			"Bad request body",
 		)
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"organization": org,
-		"membership":   membership,
-	})
-}
-
-func (h *Handler) UpdateOrganization(c *fiber.Ctx) error {
-	orgID := c.Params("id")
-	b, verr := handler.Validate[UpdateOrgRequest](c)
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
-	}
-
-	session := handler.GetSession(c)
+	session := handler.GetSession(
+		c,
+	)
 	if session.ActiveSignin == nil {
-		return handler.SendUnauthorized(c, nil, "No active sign in")
+		return handler.SendUnauthorized(
+			c,
+			nil,
+			"No active sign in",
+		)
 	}
 
 	var org model.Organization
 	if err := database.Connection.First(&org, orgID).Error; err != nil {
-		return handler.SendNotFound(c, nil, "Organization not found")
+		return handler.SendNotFound(
+			c,
+			nil,
+			"Organization not found",
+		)
 	}
 
 	var membership model.OrganizationMembership
@@ -152,17 +161,28 @@ func (h *Handler) UpdateOrganization(c *fiber.Ctx) error {
 		)
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"organization": org,
-	})
+	return handler.SendSuccess(
+		c,
+		fiber.Map{
+			"organization": org,
+		},
+	)
 }
 
-func (h *Handler) DeleteOrganization(c *fiber.Ctx) error {
+func (h *Handler) DeleteOrganization(
+	c *fiber.Ctx,
+) error {
 	orgID := c.Params("id")
-	session := handler.GetSession(c)
+	session := handler.GetSession(
+		c,
+	)
 
 	if session.ActiveSignin == nil {
-		return handler.SendUnauthorized(c, nil, "No active sign in")
+		return handler.SendUnauthorized(
+			c,
+			nil,
+			"No active sign in",
+		)
 	}
 
 	var membership model.OrganizationMembership
@@ -198,21 +218,38 @@ func (h *Handler) DeleteOrganization(c *fiber.Ctx) error {
 		)
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"success": true,
-	})
+	return handler.SendSuccess(
+		c,
+		fiber.Map{
+			"success": true,
+		},
+	)
 }
 
-func (h *Handler) InviteMember(c *fiber.Ctx) error {
+func (h *Handler) InviteMember(
+	c *fiber.Ctx,
+) error {
 	orgID := c.Params("id")
-	b, verr := handler.Validate[InviteMemberRequest](c)
+	b, verr := handler.Validate[InviteMemberRequest](
+		c,
+	)
 	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+		return handler.SendBadRequest(
+			c,
+			verr,
+			"Bad request body",
+		)
 	}
 
-	session := handler.GetSession(c)
+	session := handler.GetSession(
+		c,
+	)
 	if session.ActiveSignin == nil {
-		return handler.SendUnauthorized(c, nil, "No active sign in")
+		return handler.SendUnauthorized(
+			c,
+			nil,
+			"No active sign in",
+		)
 	}
 
 	var membership model.OrganizationMembership
@@ -242,7 +279,11 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 
 	var userEmail model.UserEmailAddress
 	if err := database.Connection.Where("email = ?", b.Email).First(&userEmail).Error; err != nil {
-		return handler.SendNotFound(c, nil, "User not found")
+		return handler.SendNotFound(
+			c,
+			nil,
+			"User not found",
+		)
 	}
 
 	var existingMembership model.OrganizationMembership
@@ -260,19 +301,25 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 
 	newMembership := model.OrganizationMembership{
 		Model: model.Model{
-			ID: uint(snowflake.ID()),
+			ID: uint(
+				snowflake.ID(),
+			),
 		},
-		OrganizationID: uint(snowflake.ID()),
-		UserID:         userEmail.UserID,
-		Role:           []*model.DeploymentOrganizationRole{},
+		OrganizationID: uint(
+			snowflake.ID(),
+		),
+		UserID: userEmail.UserID,
+		Role:   []*model.DeploymentOrganizationRole{},
 	}
 
-	err := database.Connection.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&newMembership).Error; err != nil {
-			return err
-		}
-		return nil
-	})
+	err := database.Connection.Transaction(
+		func(tx *gorm.DB) error {
+			if err := tx.Create(&newMembership).Error; err != nil {
+				return err
+			}
+			return nil
+		},
+	)
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,
@@ -281,18 +328,31 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 		)
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"membership": newMembership,
-	})
+	return handler.SendSuccess(
+		c,
+		fiber.Map{
+			"membership": newMembership,
+		},
+	)
 }
 
-func (h *Handler) RemoveMember(c *fiber.Ctx) error {
+func (h *Handler) RemoveMember(
+	c *fiber.Ctx,
+) error {
 	orgID := c.Params("id")
-	memberID := c.Params("memberId")
+	memberID := c.Params(
+		"memberId",
+	)
 
-	session := handler.GetSession(c)
+	session := handler.GetSession(
+		c,
+	)
 	if session.ActiveSignin == nil {
-		return handler.SendUnauthorized(c, nil, "No active sign in")
+		return handler.SendUnauthorized(
+			c,
+			nil,
+			"No active sign in",
+		)
 	}
 
 	var membership model.OrganizationMembership
@@ -328,7 +388,10 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 		)
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"success": true,
-	})
+	return handler.SendSuccess(
+		c,
+		fiber.Map{
+			"success": true,
+		},
+	)
 }

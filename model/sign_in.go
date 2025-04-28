@@ -10,7 +10,7 @@ type Signin struct {
 	SessionID    uint   `json:"session_id"     gorm:"index:idx_session_user_id,unique"`
 	UserID       uint   `json:"user_id"        gorm:"index:idx_session_user_id,unique"`
 	User         *User  `json:"user,omitempty"`
-	ExpiresAt    string `json:"expires_at" gorm:"not null"`
+	ExpiresAt    string `json:"expires_at"     gorm:"not null"`
 	LastActiveAt string `json:"last_active_at" gorm:"not null"`
 	IpAddress    string `json:"ip_address"`
 	Browser      string `json:"browser"`

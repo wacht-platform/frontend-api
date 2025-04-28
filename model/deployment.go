@@ -28,11 +28,11 @@ func (m DeploymentMode) GormDBDataType() string {
 
 type Deployment struct {
 	Model
-	MaintenanceMode   bool                         `json:"maintenance_mode" gorm:"not null"`
-	BackendHost       string                       `json:"backend_host" gorm:"not null"`
-	FrontendHost      string                       `json:"frontend_host" gorm:"not null"`
-	MailFromHost      string                       `json:"mail_from_host" gorm:"not null"`
-	PublishableKey    string                       `json:"publishable_key" gorm:"not null"`
+	MaintenanceMode   bool                         `json:"maintenance_mode"   gorm:"not null"`
+	BackendHost       string                       `json:"backend_host"       gorm:"not null"`
+	FrontendHost      string                       `json:"frontend_host"      gorm:"not null"`
+	MailFromHost      string                       `json:"mail_from_host"     gorm:"not null"`
+	PublishableKey    string                       `json:"publishable_key"    gorm:"not null"`
 	UISettings        DeploymentUISettings         `json:"ui_settings"`
 	OrgSettings       DeploymentB2bSettings        `json:"org_settings"`
 	AuthSettings      DeploymentAuthSettings       `json:"auth_settings"`
@@ -43,9 +43,9 @@ type Deployment struct {
 	OrgRoles          []DeploymentOrganizationRole `json:"-"`
 	EmailTemplates    *DeploymentEmailTemplate     `json:"email_templates"`
 	SmsTemplates      *DeploymentSmsTemplate       `json:"sms_templates"`
-	ProjectID         uint                         `json:"project_id" gorm:"not null"`
+	ProjectID         uint                         `json:"project_id"         gorm:"not null"`
 	Project           Project                      `json:"-"`
-	Mode              DeploymentMode               `json:"mode" gorm:"not null"`
+	Mode              DeploymentMode               `json:"mode"               gorm:"not null"`
 	KepPair           DeploymentKeyPair            `json:"-"`
 }
 

@@ -5,7 +5,9 @@ import (
 	"github.com/ilabs/wacht-fe/handler/auth"
 )
 
-func setupAuthRoutes(app *fiber.App) {
+func setupAuthRoutes(
+	app *fiber.App,
+) {
 	authHandler := auth.NewHandler()
 	router := app.Group("/auth")
 
@@ -13,17 +15,7 @@ func setupAuthRoutes(app *fiber.App) {
 	router.Post("/signup", authHandler.SignUp)
 	router.Post("/oauth2/init", authHandler.InitSSO)
 	router.Get("/oauth2/callback", authHandler.SSOCallback)
-	router.Get(
-		"/identifier-availability",
-		authHandler.CheckIdentifierAvailability,
-	)
-
-	router.Post(
-		"/prepare-verification",
-		authHandler.PrepareVerification,
-	)
-	router.Post(
-		"/attempt-verification",
-		authHandler.AttemptVerification,
-	)
+	router.Get("/identifier-availability", authHandler.CheckIdentifierAvailability)
+	router.Post("/prepare-verification", authHandler.PrepareVerification)
+	router.Post("/attempt-verification", authHandler.AttemptVerification)
 }

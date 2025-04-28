@@ -367,21 +367,21 @@ func (m *MultiSessionSupport) GormDBDataType() string {
 
 type DeploymentAuthSettings struct {
 	Model
-	EmailAddress           EmailSettings          `json:"email_address" gorm:"not null"`
-	PhoneNumber            PhoneSettings          `json:"phone_number" gorm:"not null"`
-	Username               UsernameSettings       `json:"username" gorm:"not null"`
-	FirstName              IndividualAuthSettings `json:"first_name" gorm:"not null"`
-	LastName               IndividualAuthSettings `json:"last_name" gorm:"not null"`
-	Password               PasswordSettings       `json:"password" gorm:"not null"`
-	MagicLink              *EmailLinkSettings     `json:"magic_link" gorm:"not null"`
-	Passkey                *PasskeySettings       `json:"passkey" gorm:"not null"`
-	AuthFactorsEnabled     AuthFactorsEnabled     `json:"auth_factors_enabled" gorm:"not null"`
-	VerificationPolicy     VerificationPolicy     `json:"verification_policy" gorm:"not null"`
-	SecondFactorPolicy     SecondFactorPolicy     `json:"second_factor_policy" gorm:"not null"`
-	FirstFactor            FirstFactor            `json:"first_factor" gorm:"not null"`
-	SessionTokenLifetime   uint                   `json:"session_token_lifetime" gorm:"not null"`
-	SessionValidityPeriod  uint                   `json:"session_validity_period" gorm:"not null"`
+	EmailAddress           EmailSettings          `json:"email_address"            gorm:"not null"`
+	PhoneNumber            PhoneSettings          `json:"phone_number"             gorm:"not null"`
+	Username               UsernameSettings       `json:"username"                 gorm:"not null"`
+	FirstName              IndividualAuthSettings `json:"first_name"               gorm:"not null"`
+	LastName               IndividualAuthSettings `json:"last_name"                gorm:"not null"`
+	Password               PasswordSettings       `json:"password"                 gorm:"not null"`
+	MagicLink              *EmailLinkSettings     `json:"magic_link"               gorm:"not null"`
+	Passkey                *PasskeySettings       `json:"passkey"                  gorm:"not null"`
+	AuthFactorsEnabled     AuthFactorsEnabled     `json:"auth_factors_enabled"     gorm:"not null"`
+	VerificationPolicy     VerificationPolicy     `json:"verification_policy"      gorm:"not null"`
+	SecondFactorPolicy     SecondFactorPolicy     `json:"second_factor_policy"     gorm:"not null"`
+	FirstFactor            FirstFactor            `json:"first_factor"             gorm:"not null"`
+	SessionTokenLifetime   uint                   `json:"session_token_lifetime"   gorm:"not null"`
+	SessionValidityPeriod  uint                   `json:"session_validity_period"  gorm:"not null"`
 	SessionInactiveTimeout uint                   `json:"session_inactive_timeout" gorm:"not null"`
-	MultiSessionSupport    MultiSessionSupport    `json:"multi_session_support" gorm:"not null"`
-	DeploymentID           uint                   `json:"deployment_id" gorm:"not null;index"`
+	MultiSessionSupport    MultiSessionSupport    `json:"multi_session_support"    gorm:"not null"`
+	DeploymentID           uint                   `json:"deployment_id"            gorm:"not null;index"`
 }

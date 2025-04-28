@@ -40,10 +40,10 @@ func (c *CustomSigningKey) GormDBDataType() string {
 
 type DeploymentJwtTemplate struct {
 	Model
-	Name             string           `json:"name" gorm:"not null"`
-	TokenLifetime    int64            `json:"token_lifetime" gorm:"not null"`
+	Name             string           `json:"name"               gorm:"not null"`
+	TokenLifetime    int64            `json:"token_lifetime"     gorm:"not null"`
 	AllowedClockSkew int64            `json:"allowed_clock_skew" gorm:"not null"`
 	CustomSigningKey CustomSigningKey `json:"custom_sign_key"`
-	Template         datatypes.JSON   `json:"template" gorm:"not null"`
-	DeploymentID     uint             `json:"deployment_id" gorm:"not null;index"`
+	Template         datatypes.JSON   `json:"template"           gorm:"not null"`
+	DeploymentID     uint             `json:"deployment_id"      gorm:"not null;index"`
 }

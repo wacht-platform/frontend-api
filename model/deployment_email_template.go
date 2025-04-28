@@ -37,16 +37,16 @@ func (e *EmailTemplate) GormDBDataType() string {
 
 type DeploymentEmailTemplate struct {
 	Model
-	DeploymentID                uint          `json:"deployment_id" gorm:"not null;index"`
-	OrganizationInviteTemplate  EmailTemplate `json:"organization_invite_template" gorm:"not null"`
-	VerificationCodeTemplate    EmailTemplate `json:"verification_code_template" gorm:"not null"`
-	ResetPasswordCodeTemplate   EmailTemplate `json:"reset_password_code_template" gorm:"not null"`
-	PrimaryEmailChangeTemplate  EmailTemplate `json:"primary_email_change_template" gorm:"not null"`
-	PasswordChangeTemplate      EmailTemplate `json:"password_change_template" gorm:"not null"`
-	PasswordRemoveTemplate      EmailTemplate `json:"password_remove_template" gorm:"not null"`
+	DeploymentID                uint          `json:"deployment_id"                    gorm:"not null;index"`
+	OrganizationInviteTemplate  EmailTemplate `json:"organization_invite_template"     gorm:"not null"`
+	VerificationCodeTemplate    EmailTemplate `json:"verification_code_template"       gorm:"not null"`
+	ResetPasswordCodeTemplate   EmailTemplate `json:"reset_password_code_template"     gorm:"not null"`
+	PrimaryEmailChangeTemplate  EmailTemplate `json:"primary_email_change_template"    gorm:"not null"`
+	PasswordChangeTemplate      EmailTemplate `json:"password_change_template"         gorm:"not null"`
+	PasswordRemoveTemplate      EmailTemplate `json:"password_remove_template"         gorm:"not null"`
 	SignInFromNewDeviceTemplate EmailTemplate `json:"sign_in_from_new_device_template" gorm:"not null"`
-	MagicLinkTemplate           EmailTemplate `json:"magic_link_template" gorm:"not null"`
-	WaitlistSignupTemplate      EmailTemplate `json:"waitlist_signup_template" gorm:"not null"`
-	WaitlistInviteTemplate      EmailTemplate `json:"waitlist_invite_template" gorm:"not null"`
-	WorkspaceInviteTemplate     EmailTemplate `json:"workspace_invite_template" gorm:"not null"`
+	MagicLinkTemplate           EmailTemplate `json:"magic_link_template"              gorm:"not null"`
+	WaitlistSignupTemplate      EmailTemplate `json:"waitlist_signup_template"         gorm:"not null"`
+	WaitlistInviteTemplate      EmailTemplate `json:"waitlist_invite_template"         gorm:"not null"`
+	WorkspaceInviteTemplate     EmailTemplate `json:"workspace_invite_template"        gorm:"not null"`
 }

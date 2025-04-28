@@ -8,12 +8,14 @@ import (
 
 type RotatingToken struct {
 	Model
-	SessionID  uint      `json:"session_id" gorm:"not null"`
+	SessionID  uint      `json:"session_id"  gorm:"not null"`
 	ValidUntil time.Time `json:"valid_until" gorm:"not null"`
 }
 
 func (r *RotatingToken) IsValid() bool {
-	return r.ValidUntil.After(time.Now())
+	return r.ValidUntil.After(
+		time.Now(),
+	)
 }
 
 func NewRotatingToken(
@@ -22,7 +24,9 @@ func NewRotatingToken(
 ) *RotatingToken {
 	return &RotatingToken{
 		Model: Model{
-			ID: uint(snowflake.ID()),
+			ID: uint(
+				snowflake.ID(),
+			),
 		},
 		SessionID:  sessionID,
 		ValidUntil: validUntil,

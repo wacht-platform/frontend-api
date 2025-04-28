@@ -44,8 +44,8 @@ type UserEmailAddress struct {
 	UserID               uint                 `json:"-"`
 	User                 User                 `json:"-"`
 	Email                string               `json:"email"                       gorm:"index:idx_user_email_address_email;index:idx_deployment_user_email_address_email,unique"`
-	IsPrimary            bool                 `json:"is_primary" gorm:"not null"`
-	Verified             bool                 `json:"verified" gorm:"not null"`
+	IsPrimary            bool                 `json:"is_primary"                  gorm:"not null"`
+	Verified             bool                 `json:"verified"                    gorm:"not null"`
 	VerifiedAt           time.Time            `json:"verified_at"`
 	VerificationStrategy VerificationStrategy `json:"verification_strategy"`
 	SocialConnection     *SocialConnection    `json:"social_connection,omitempty"`
@@ -86,19 +86,19 @@ func (u UserAvailability) Value() (driver.Value, error) {
 
 type User struct {
 	Model
-	FirstName                      string                  `json:"first_name" gorm:"not null"`
-	HasProfilePicture              bool                    `json:"has_profile_picture" gorm:"not null"`
-	ProfilePictureURL              string                  `json:"profile_picture_url" gorm:"not null"`
-	LastName                       string                  `json:"last_name" gorm:"not null"`
-	Username                       string                  `json:"username" gorm:"not null"`
+	FirstName                      string                  `json:"first_name"                      gorm:"not null"`
+	HasProfilePicture              bool                    `json:"has_profile_picture"             gorm:"not null"`
+	ProfilePictureURL              string                  `json:"profile_picture_url"             gorm:"not null"`
+	LastName                       string                  `json:"last_name"                       gorm:"not null"`
+	Username                       string                  `json:"username"                        gorm:"not null"`
 	Password                       string                  `json:"-"`
 	Availability                   UserAvailability        `json:"availability"                    gorm:"default:away;not null"`
 	LastPasswordResetAt            time.Time               `json:"last_password_reset_at"`
-	SchemaVersion                  SchemaVersion           `json:"schema_version" gorm:"not null"`
-	Disabled                       bool                    `json:"disabled" gorm:"not null"`
-	PrimaryEmailAddressID          *uint                   `json:"primary_email_address_id,string" gorm:"not null"`
-	PrimaryPhoneNumberID           *uint                   `json:"primary_phone_number_id,string" gorm:"not null"`
-	SecondFactorPolicy             SecondFactorPolicy      `json:"second_factor_policy" gorm:"not null"`
+	SchemaVersion                  SchemaVersion           `json:"schema_version"                  gorm:"not null"`
+	Disabled                       bool                    `json:"disabled"                        gorm:"not null"`
+	PrimaryEmailAddressID          *uint                   `json:"primary_email_address_id,string"`
+	PrimaryPhoneNumberID           *uint                   `json:"primary_phone_number_id,string"`
+	SecondFactorPolicy             SecondFactorPolicy      `json:"second_factor_policy"            gorm:"not null"`
 	UserEmailAddresses             []*UserEmailAddress     `json:"user_email_addresses"            gorm:"constraint:OnDelete:CASCADE;"`
 	UserPhoneNumbers               []*UserPhoneNumber      `json:"user_phone_numbers"              gorm:"constraint:OnDelete:CASCADE;"`
 	UserAuthenticator              *UserAuthenticator      `json:"user_authenticator"              gorm:"constraint:OnDelete:CASCADE;"`

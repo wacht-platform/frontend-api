@@ -14,6 +14,7 @@ import (
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
+	"gorm.io/gorm/clause"
 )
 
 type Handler struct {
@@ -928,4 +929,74 @@ func (h *Handler) SignOutFromSession(c *fiber.Ctx) error {
 	handler.RemoveSessionFromCache(session.ID)
 
 	return handler.SendSuccess[any](c, nil)
+}
+
+func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(
+			c,
+			nil,
+			"Unauthorized",
+		)
+	}
+
+	memberships := []model.OrganizationMembership{}
+	if err := database.Connection.Where(
+		"user_id = ?",
+		session.ActiveSignin.UserID,
+	).Preload(
+		clause.Associations,
+	).Find(&memberships).Error; err != nil {
+		return handler.SendInternalServerError(
+			c,
+			nil,
+			"Failed to get user organization memberships",
+		)
+	}
+
+	return handler.SendSuccess(
+		c,
+		memberships,
+	)
+}
+
+func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(
+			c,
+			nil,
+			"Unauthorized",
+		)
+	}
+
+	memberships := []model.WorkspaceMembership{}
+	query := database.Connection.Where(
+		"user_id = ?",
+		session.ActiveSignin.UserID,
+	).Preload(
+		clause.Associations,
+	)
+
+	orgID := c.Query("org_id")
+	if orgID != "" {
+		query = query.Where(
+			"organization_id = ?",
+			orgID,
+		)
+	}
+
+	if err := query.Find(&memberships).Error; err != nil {
+		return handler.SendInternalServerError(
+			c,
+			nil,
+			"Failed to get user workspace memberships",
+		)
+	}
+
+	return handler.SendSuccess(
+		c,
+		memberships,
+	)
 }

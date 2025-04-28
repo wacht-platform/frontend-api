@@ -5,8 +5,15 @@ import (
 	"github.com/ilabs/wacht-fe/handler"
 )
 
-func GetDeployment(c *fiber.Ctx) error {
-	deployment := handler.GetDeployment(c)
+func GetDeployment(
+	c *fiber.Ctx,
+) error {
+	deployment := handler.GetDeployment(
+		c,
+	)
 
-	return handler.SendSuccess(c, deployment)
+	return handler.SendSuccess(
+		c,
+		deployment,
+	)
 }

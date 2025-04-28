@@ -16,10 +16,14 @@ func NewHandler() *Handler {
 	return &Handler{}
 }
 
-func (h *Handler) GetCurrentSession(c *fiber.Ctx) error {
+func (h *Handler) GetCurrentSession(
+	c *fiber.Ctx,
+) error {
 	sessionID := c.Locals("session").(uint)
 
-	session := new(model.Session)
+	session := new(
+		model.Session,
+	)
 
 	err := database.Connection.Preload("ActiveSignin").
 		Preload("ActiveSignin.User").
@@ -32,18 +36,34 @@ func (h *Handler) GetCurrentSession(c *fiber.Ctx) error {
 		Preload("Signins.User.UserPhoneNumbers").
 		Preload("Signins.User.SocialConnections").
 		Where("id = ?", sessionID).
-		First(session).Error
+		First(session).
+		Error
 	if err != nil {
-		return handler.SendNotFound(c, nil, "Session not found")
+		return handler.SendNotFound(
+			c,
+			nil,
+			"Session not found",
+		)
 	}
 
-	return handler.SendSuccess(c, session)
+	return handler.SendSuccess(
+		c,
+		session,
+	)
 }
 
-func (h *Handler) SwitchActiveSignIn(c *fiber.Ctx) error {
-	session := handler.GetSession(c)
+func (h *Handler) SwitchActiveSignIn(
+	c *fiber.Ctx,
+) error {
+	session := handler.GetSession(
+		c,
+	)
 
-	signInId, err := strconv.ParseUint(c.Query("sign_in_id"), 10, 64)
+	signInId, err := strconv.ParseUint(
+		c.Query("sign_in_id"),
+		10,
+		64,
+	)
 	if err != nil {
 		return fiber.NewError(
 			fiber.StatusBadRequest,
@@ -53,7 +73,9 @@ func (h *Handler) SwitchActiveSignIn(c *fiber.Ctx) error {
 
 	validSignIn := false
 	for _, signIn := range session.Signins {
-		if signIn.ID == uint(signInId) {
+		if signIn.ID == uint(
+			signInId,
+		) {
 			session.ActiveSignin = signIn
 			validSignIn = true
 			break
@@ -67,22 +89,41 @@ func (h *Handler) SwitchActiveSignIn(c *fiber.Ctx) error {
 		)
 	}
 
-	session.ActiveSigninID = uint(signInId)
+	session.ActiveSigninID = uint(
+		signInId,
+	)
 
-	handler.RemoveSessionFromCache(session.ID)
+	handler.RemoveSessionFromCache(
+		session.ID,
+	)
 
-	database.Connection.Save(session)
+	database.Connection.Save(
+		session,
+	)
 
-	return handler.SendSuccess(c, session)
+	return handler.SendSuccess(
+		c,
+		session,
+	)
 }
 
-func (h *Handler) SignOut(c *fiber.Ctx) error {
-	session := handler.GetSession(c)
+func (h *Handler) SignOut(
+	c *fiber.Ctx,
+) error {
+	session := handler.GetSession(
+		c,
+	)
 
-	signInIdStr := c.Query("sign_in_id")
+	signInIdStr := c.Query(
+		"sign_in_id",
+	)
 
 	if signInIdStr != "" {
-		signInId, err := strconv.ParseUint(signInIdStr, 10, 64)
+		signInId, err := strconv.ParseUint(
+			signInIdStr,
+			10,
+			64,
+		)
 		if err != nil {
 			return fiber.NewError(
 				fiber.StatusBadRequest,
@@ -90,7 +131,9 @@ func (h *Handler) SignOut(c *fiber.Ctx) error {
 			)
 		}
 
-		signIn := new(model.Signin)
+		signIn := new(
+			model.Signin,
+		)
 		count := database.Connection.Where("id = ? AND session_id = ?", signInId, session.ID).
 			First(signIn).
 			RowsAffected
@@ -104,8 +147,11 @@ func (h *Handler) SignOut(c *fiber.Ctx) error {
 
 		err = database.Connection.Transaction(
 			func(tx *gorm.DB) error {
-				tx.Delete(signIn)
-				tx.Model(session).Update("active_sign_in_id", nil)
+				tx.Delete(
+					signIn,
+				)
+				tx.Model(session).
+					Update("active_sign_in_id", nil)
 				return nil
 			},
 		)
@@ -117,8 +163,13 @@ func (h *Handler) SignOut(c *fiber.Ctx) error {
 			)
 		}
 
-		handler.RemoveSessionFromCache(session.ID)
-		return handler.SendSuccess(c, session)
+		handler.RemoveSessionFromCache(
+			session.ID,
+		)
+		return handler.SendSuccess(
+			c,
+			session,
+		)
 	} else {
 		err := database.Connection.Transaction(func(tx *gorm.DB) error {
 			tx.Model(session).Update("active_sign_in_id", nil)
