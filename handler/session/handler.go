@@ -21,9 +21,7 @@ func (h *Handler) GetCurrentSession(
 ) error {
 	sessionID := c.Locals("session").(uint)
 
-	session := new(
-		model.Session,
-	)
+	session := new(model.Session)
 
 	err := database.Connection.Preload("ActiveSignin").
 		Preload("ActiveSignin.User").
@@ -183,4 +181,94 @@ func (h *Handler) SignOut(
 		handler.RemoveSessionFromCache(session.ID)
 		return handler.SendSuccess(c, session)
 	}
+}
+
+func (h *Handler) SwitchOrganization(
+	c *fiber.Ctx,
+) error {
+	session := handler.GetSession(c)
+	orgID := c.Query("organization_id")
+
+	if session.ActiveSignin == nil {
+		return fiber.NewError(fiber.StatusBadRequest, "No active sign in")
+	}
+
+	if orgID == "" {
+		session.ActiveSignin.User.ActiveOrganizationMembershipID = nil
+		database.Connection.Save(session.ActiveSignin.User)
+		session.ActiveSignin.ActiveOrganizationID = nil
+		database.Connection.Save(session.ActiveSignin)
+		handler.RemoveSessionFromCache(session.ID)
+		return handler.SendSuccess(c, session)
+	}
+
+	orgIDUint, err := strconv.ParseUint(orgID, 10, 64)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "Invalid org ID")
+	}
+
+	membership := new(model.OrganizationMembership)
+	count := database.Connection.
+		Model(&model.OrganizationMembership{}).
+		Where("user_id = ? AND organization_id = ?", session.ActiveSignin.UserID, orgIDUint).
+		First(membership).
+		RowsAffected
+	if count == 0 {
+		return fiber.NewError(fiber.StatusBadRequest, "You are not a member of this organization")
+	}
+
+	session.ActiveSignin.User.ActiveOrganizationMembershipID = &membership.ID
+	session.ActiveSignin.ActiveOrganizationID = &membership.OrganizationID
+	database.Connection.Save(session.ActiveSignin.User)
+	database.Connection.Save(session.ActiveSignin)
+	handler.RemoveSessionFromCache(session.ID)
+
+	return handler.SendSuccess(c, session)
+}
+
+func (h *Handler) SwitchWorkspace(
+	c *fiber.Ctx,
+) error {
+	session := handler.GetSession(c)
+	workspaceID := c.Query("workspace_id")
+
+	if session.ActiveSignin == nil {
+		return fiber.NewError(fiber.StatusBadRequest, "No active sign in")
+	}
+
+	if workspaceID == "" {
+		session.ActiveSignin.User.ActiveWorkspaceMembershipID = nil
+		session.ActiveSignin.User.ActiveOrganizationMembershipID = nil
+		database.Connection.Save(session.ActiveSignin.User)
+		session.ActiveSignin.ActiveWorkspaceID = nil
+		session.ActiveSignin.ActiveOrganizationID = nil
+		database.Connection.Save(session.ActiveSignin)
+		handler.RemoveSessionFromCache(session.ID)
+		return handler.SendSuccess(c, session)
+	}
+
+	workspaceIDUint, err := strconv.ParseUint(workspaceID, 10, 64)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "Invalid workspace ID")
+	}
+
+	membership := new(model.WorkspaceMembership)
+	count := database.Connection.
+		Model(&model.WorkspaceMembership{}).
+		Where("user_id = ? AND workspace_id = ?", session.ActiveSignin.UserID, workspaceIDUint).
+		Joins("Organization").
+		First(membership).RowsAffected
+	if count == 0 {
+		return fiber.NewError(fiber.StatusBadRequest, "You are not a member of this workspace")
+	}
+
+	session.ActiveSignin.User.ActiveWorkspaceMembershipID = &membership.ID
+	session.ActiveSignin.User.ActiveOrganizationMembershipID = &membership.OrganizationMembershipID
+	session.ActiveSignin.ActiveWorkspaceID = &membership.WorkspaceID
+	session.ActiveSignin.ActiveOrganizationID = &membership.OrganizationID
+	database.Connection.Save(session.ActiveSignin.User)
+	database.Connection.Save(session.ActiveSignin)
+	handler.RemoveSessionFromCache(session.ID)
+
+	return handler.SendSuccess(c, session)
 }

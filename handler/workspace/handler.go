@@ -51,36 +51,6 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 		Description: b.Description,
 	}
 
-	// ownerRole := &model.WorkspaceRole{
-	// 	Model: model.Model{
-	// 		ID: uint(snowflake.ID()),
-	// 	},
-	// 	Name: "workspace:owner",
-	// 	Permissions: []*model.WorkspaceRolePermissions{
-	// 		{
-	// 			Model: model.Model{
-	// 				ID: uint(snowflake.ID()),
-	// 			},
-	// 			Permission: "all",
-	// 		},
-	// 	},
-	// }
-
-	// memberRole := &model.WorkspaceRole{
-	// 	Model: model.Model{
-	// 		ID: uint(snowflake.ID()),
-	// 	},
-	// 	Name: "workspace:member",
-	// 	Permissions: []*model.WorkspaceRolePermissions{
-	// 		{
-	// 			Model: model.Model{
-	// 				ID: uint(snowflake.ID()),
-	// 			},
-	// 			Permission: "read",
-	// 		},
-	// 	},
-	// }
-
 	membership := model.WorkspaceMembership{
 		Model: model.Model{
 			ID: uint(snowflake.ID()),
@@ -94,12 +64,6 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 		if err := tx.Create(&workspace).Error; err != nil {
 			return err
 		}
-		// if err := tx.Create(&ownerRole).Error; err != nil {
-		// 	return err
-		// }
-		// if err := tx.Create(&memberRole).Error; err != nil {
-		// 	return err
-		// }
 		if err := tx.Create(&membership).Error; err != nil {
 			return err
 		}

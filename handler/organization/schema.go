@@ -1,11 +1,13 @@
 package organization
 
 type CreateOrgRequest struct {
-	Name string `form:"name" validate:"required"`
+	Name        string `form:"name" validate:"required"`
+	Description string `form:"description"`
 }
 
 type UpdateOrgRequest struct {
-	Name string `form:"name" validate:"required"`
+	Name        string `form:"name" validate:"required"`
+	Description string `form:"description"`
 }
 
 type InviteMemberRequest struct {

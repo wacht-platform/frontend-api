@@ -9,7 +9,7 @@ import (
 )
 
 func SetDeploymentMiddleware(c *fiber.Ctx) error {
-	host := c.Hostname()
+	// host := c.Hostname()
 
 	path := c.Path()
 
@@ -18,13 +18,14 @@ func SetDeploymentMiddleware(c *fiber.Ctx) error {
 	}
 
 	deployment := new(model.Deployment)
-	err := database.Connection.Where("backend_host = ?", host).
-		Joins("OrgSettings").
+	err := database.Connection.Where("backend_host = ?", "awkward-anyone-1.backend-api.services").
+		Joins("B2BSettings").
 		Joins("AuthSettings").
 		Joins("KepPair").
 		Joins("UISettings").
 		Joins("EmailTemplates").
 		Joins("SmsTemplates").
+		Joins("B2BSettings.DefaultOrgCreatorRole").
 		Preload("SocialConnections").
 		First(&deployment).
 		Error

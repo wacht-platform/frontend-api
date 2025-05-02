@@ -2,7 +2,6 @@ package user
 
 import (
 	"crypto/rand"
-	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -874,7 +873,7 @@ func (h *Handler) UploadProfilePicture(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "File is required")
 	}
 
-	err = h.service.UploadProfilePicture(session.ActiveSignin.UserID, file)
+	url, err := h.service.UploadProfilePicture(session.ActiveSignin.UserID, file)
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,
@@ -884,11 +883,7 @@ func (h *Handler) UploadProfilePicture(c *fiber.Ctx) error {
 		)
 	}
 
-	user.ProfilePictureURL = fmt.Sprintf(
-		"http://cdn.wacht.tech/%d/%s",
-		session.ActiveSignin.UserID,
-		file.Filename,
-	)
+	user.ProfilePictureURL = url
 	user.HasProfilePicture = true
 	if err := database.Connection.Save(&user).Error; err != nil {
 		return handler.SendInternalServerError(
@@ -934,11 +929,7 @@ func (h *Handler) SignOutFromSession(c *fiber.Ctx) error {
 func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
-		return handler.SendUnauthorized(
-			c,
-			nil,
-			"Unauthorized",
-		)
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
 	}
 
 	memberships := []model.OrganizationMembership{}
@@ -948,27 +939,16 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 	).Preload(
 		clause.Associations,
 	).Find(&memberships).Error; err != nil {
-		return handler.SendInternalServerError(
-			c,
-			nil,
-			"Failed to get user organization memberships",
-		)
+		return handler.SendInternalServerError(c, err, "Failed to get user organization memberships")
 	}
 
-	return handler.SendSuccess(
-		c,
-		memberships,
-	)
+	return handler.SendSuccess(c, memberships)
 }
 
 func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
-		return handler.SendUnauthorized(
-			c,
-			nil,
-			"Unauthorized",
-		)
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
 	}
 
 	memberships := []model.WorkspaceMembership{}
@@ -988,15 +968,8 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 	}
 
 	if err := query.Find(&memberships).Error; err != nil {
-		return handler.SendInternalServerError(
-			c,
-			nil,
-			"Failed to get user workspace memberships",
-		)
+		return handler.SendInternalServerError(c, err, "Failed to get user workspace memberships")
 	}
 
-	return handler.SendSuccess(
-		c,
-		memberships,
-	)
+	return handler.SendSuccess(c, memberships)
 }

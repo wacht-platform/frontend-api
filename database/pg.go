@@ -15,9 +15,6 @@ func InitPgConnection() error {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		SkipDefaultTransaction: true,
 		PrepareStmt:            true,
-		// Logger: logger.New(log.Default(), logger.Config{
-		// 	LogLevel: logger.Silent,
-		// }),
 	})
 	if err != nil {
 		return err

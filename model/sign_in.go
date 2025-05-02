@@ -7,19 +7,21 @@ import (
 
 type Signin struct {
 	Model
-	SessionID    uint   `json:"session_id"     gorm:"index:idx_session_user_id,unique"`
-	UserID       uint   `json:"user_id"        gorm:"index:idx_session_user_id,unique"`
-	User         *User  `json:"user,omitempty"`
-	ExpiresAt    string `json:"expires_at"     gorm:"not null"`
-	LastActiveAt string `json:"last_active_at" gorm:"not null"`
-	IpAddress    string `json:"ip_address"`
-	Browser      string `json:"browser"`
-	Device       string `json:"device"`
-	City         string `json:"city"`
-	Region       string `json:"region"`
-	RegionCode   string `json:"region_code"`
-	Country      string `json:"country"`
-	CountryCode  string `json:"country_code"`
+	SessionID            uint   `json:"session_id,string"     gorm:"index:idx_session_user_id,unique"`
+	UserID               uint   `json:"user_id,string"        gorm:"index:idx_session_user_id,unique"`
+	ActiveOrganizationID *uint  `json:"active_organization_id,string"`
+	ActiveWorkspaceID    *uint  `json:"active_workspace_id,string"`
+	User                 *User  `json:"user,omitempty"`
+	ExpiresAt            string `json:"expires_at"     gorm:"not null"`
+	LastActiveAt         string `json:"last_active_at" gorm:"not null"`
+	IpAddress            string `json:"ip_address"`
+	Browser              string `json:"browser"`
+	Device               string `json:"device"`
+	City                 string `json:"city"`
+	Region               string `json:"region"`
+	RegionCode           string `json:"region_code"`
+	Country              string `json:"country"`
+	CountryCode          string `json:"country_code"`
 }
 
 func NewSignIn(sessionID, userID uint) *Signin {

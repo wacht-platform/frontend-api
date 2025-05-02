@@ -19,7 +19,9 @@ func GetDeployment(c *fiber.Ctx) model.Deployment {
 }
 
 func GetSession(c *fiber.Ctx) *model.Session {
+	fmt.Println("GetSession")
 	sessionID := c.Locals("session").(uint)
+	fmt.Println("sessionID", sessionID)
 
 	session, err := getSessionFromCache(sessionID)
 	if err != nil {
@@ -66,6 +68,7 @@ func getSessionAndSetToCache(sessionId uint) *model.Session {
 
 	database.Connection.Where("id = ?", sessionId).
 		Preload(clause.Associations).
+		Preload("ActiveSignin.User").
 		First(session)
 
 	json, err := json.Marshal(session)

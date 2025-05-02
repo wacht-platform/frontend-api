@@ -13,10 +13,11 @@ var AwsSession *session.Session
 
 func InitAwsSession() error {
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(os.Getenv("AWS_DEFAULT_REGION")),
+		Endpoint: aws.String(os.Getenv("R2_ENDPOINT")),
+		Region:   aws.String(os.Getenv("R2_DEFAULT_REGION")),
 		Credentials: credentials.NewStaticCredentials(
-			os.Getenv("AWS_ACCESS_KEY_ID"),
-			os.Getenv("AWS_SECRET_ACCESS_KEY"),
+			os.Getenv("R2_ACCESS_KEY_ID"),
+			os.Getenv("R2_SECRET_ACCESS_KEY"),
 			"",
 		),
 	})

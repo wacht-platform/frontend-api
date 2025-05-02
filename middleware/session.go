@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"errors"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -147,8 +146,6 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token) error {
 		sessionID,
 		rotatingTokenID,
 	)
-
-	log.Println("rotatingToken", rotatingToken, rotatingTokenID)
 
 	if err != nil {
 		return handler.SendUnauthorized(c, err, "Invalid session")

@@ -156,6 +156,7 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 		)
 	}
 
+	handler.RemoveSessionFromCache(session.ID)
 	return handler.SendSuccess(c, session)
 }
 

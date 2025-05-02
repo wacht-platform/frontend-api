@@ -119,14 +119,11 @@ func (s *UserService) SendSmsOTPVerification(
 func (s *UserService) UploadProfilePicture(
 	userID uint,
 	file *multipart.FileHeader,
-) error {
-	bucket := "wacht-cdn"
-	key := fmt.Sprintf("%d/%s", userID, file.Filename)
-
+) (string, error) {
 	reader, err := file.Open()
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return s.s3.UploadFile(bucket, key, reader)
+	return s.s3.UploadToCdn(fmt.Sprintf("users/%d", userID), reader)
 }
