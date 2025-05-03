@@ -21,7 +21,7 @@ const (
 	OauthApple     VerificationStrategy = "oauth_apple"
 )
 
-func (o *VerificationStrategy) Scan(value interface{}) error {
+func (o *VerificationStrategy) Scan(value any) error {
 	*o = VerificationStrategy(value.(string))
 	return nil
 }

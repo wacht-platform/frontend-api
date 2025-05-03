@@ -93,7 +93,7 @@ func ExchangeTokenForUser(
 		}
 		defer resp.Body.Close()
 
-		var res map[string]interface{}
+		var res map[string]any
 
 		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 			return nil, err
@@ -124,7 +124,7 @@ func ExchangeTokenForUser(
 		}
 		defer resp.Body.Close()
 
-		var emails []map[string]interface{}
+		var emails []map[string]any
 
 		if err := json.NewDecoder(resp.Body).Decode(&emails); err != nil {
 			return nil, err
@@ -157,7 +157,7 @@ func ExchangeTokenForUser(
 		}
 		defer resp.Body.Close()
 
-		var res map[string]interface{}
+		var res map[string]any
 
 		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 			return nil, err
@@ -185,7 +185,7 @@ func ExchangeTokenForUser(
 		}
 		defer resp.Body.Close()
 
-		var res map[string]interface{}
+		var res map[string]any
 
 		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 			return nil, err

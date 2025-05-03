@@ -21,7 +21,7 @@ const (
 	SocialConnectionProviderApple     SocialConnectionProvider = "apple_oauth"
 )
 
-func (p *SocialConnectionProvider) Scan(value interface{}) error {
+func (p *SocialConnectionProvider) Scan(value any) error {
 	*p = SocialConnectionProvider(value.(string))
 	return nil
 }
@@ -59,7 +59,7 @@ type OauthCredentials struct {
 	Scopes       []string
 }
 
-func (o *OauthCredentials) Scan(value interface{}) error {
+func (o *OauthCredentials) Scan(value any) error {
 	bytes, ok := value.([]byte)
 	if !ok {
 		return errors.New(

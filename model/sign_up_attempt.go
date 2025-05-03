@@ -13,7 +13,7 @@ const (
 	SignupAttemptStepVerifyPhone SignupAttemptStep = "verify_phone"
 )
 
-func (s *SignupAttemptStep) Scan(value interface{}) error {
+func (s *SignupAttemptStep) Scan(value any) error {
 	*s = SignupAttemptStep(value.(string))
 	return nil
 }
@@ -29,7 +29,7 @@ const (
 	SignupAttemptStatusApproved SignupAttemptStatus = "complete"
 )
 
-func (s *SignupAttemptStatus) Scan(value interface{}) error {
+func (s *SignupAttemptStatus) Scan(value any) error {
 	*s = SignupAttemptStatus(value.(string))
 	return nil
 }
