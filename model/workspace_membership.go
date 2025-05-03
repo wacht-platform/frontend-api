@@ -7,5 +7,5 @@ type WorkspaceMembership struct {
 	OrganizationID           uint                       `json:"organization_id" gorm:"not null;index"`
 	OrganizationMembershipID uint                       `json:"organization_membership_id" gorm:"not null;index"`
 	UserID                   uint                       `json:"user_id"         gorm:"not null;index"`
-	Role                     []*DeploymentWorkspaceRole `json:"role"            gorm:"many2many:workspace_membership_roles;"`
+	Role                     []*WorkspaceRole `json:"role"            gorm:"many2many:workspace_membership_roles;"`
 }

@@ -2,7 +2,7 @@ package model
 
 import "github.com/lib/pq"
 
-type DeploymentOrganizationRole struct {
+type OrganizationRole struct {
 	Model
 	OrganizationID uint           `json:"organization_id" gorm:"index"`
 	Name           string         `json:"name"          gorm:"not null"`

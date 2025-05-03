@@ -1,6 +1,6 @@
 package model
 
-type DeploymentWorkspaceRole struct {
+type WorkspaceRole struct {
 	Model
 	OrganizationID uint     `json:"organization_id" gorm:"index"`
 	Name           string   `json:"name"          gorm:"not null"`

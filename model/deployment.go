@@ -39,8 +39,8 @@ type Deployment struct {
 	Restrictions      DeploymentRestrictions       `json:"restrictions"`
 	SocialConnections []DeploymentSocialConnection `json:"social_connections"`
 	JwtTemplates      []DeploymentJwtTemplate      `json:"-"`
-	WorkspaceRoles    []DeploymentWorkspaceRole    `json:"-"`
-	OrgRoles          []DeploymentOrganizationRole `json:"-"`
+	WorkspaceRoles    []WorkspaceRole              `json:"-"`
+	OrgRoles          []OrganizationRole           `json:"-"`
 	EmailTemplates    *DeploymentEmailTemplate     `json:"email_templates"`
 	SmsTemplates      *DeploymentSmsTemplate       `json:"sms_templates"`
 	ProjectID         uint                         `json:"project_id"         gorm:"not null"`

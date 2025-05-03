@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 type Error struct {
@@ -108,4 +111,21 @@ func (e Error) Is(target error) bool {
 		return false
 	}
 	return e.Code == t.Code
+}
+
+func DefaultErrorHandler(c *fiber.Ctx, err error) error {
+	code := fiber.StatusInternalServerError
+
+	var e *fiber.Error
+	if errors.As(err, &e) {
+		code = e.Code
+	}
+
+	return SendResponse[any](
+		c,
+		code,
+		nil,
+		"Something went wrong. Please try again later.",
+		[]Error{},
+	)
 }
