@@ -19,9 +19,7 @@ func GetDeployment(c *fiber.Ctx) model.Deployment {
 }
 
 func GetSession(c *fiber.Ctx) *model.Session {
-	fmt.Println("GetSession")
 	sessionID := c.Locals("session").(uint)
-	fmt.Println("sessionID", sessionID)
 
 	session, err := getSessionFromCache(sessionID)
 	if err != nil {

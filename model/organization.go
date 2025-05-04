@@ -21,7 +21,7 @@ type Organization struct {
 	BillingAddresses        []*OrganizationBillingAddress `json:"billing_addresses"`
 	Invitations             []*OrganizationInvitation     `json:"invitations"`
 	WhitelistedIPs          pq.StringArray                `json:"whitelisted_ips" gorm:"type:text[]"`
-	AutoAssignedWorkspaceID uint                          `json:"auto_assigned_workspace_id"`
+	AutoAssignedWorkspaceID *uint                         `json:"auto_assigned_workspace_id"`
 	AutoAssignedWorkspace   *Workspace                    `json:"auto_assigned_workspace" gorm:"foreignKey:AutoAssignedWorkspaceID"`
 	PublicMetadata          datatypes.JSONMap             `json:"public_metadata" gorm:"not null"`
 	PrivateMetadata         datatypes.JSONMap             `json:"-"               gorm:"not null"`

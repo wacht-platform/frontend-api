@@ -69,20 +69,11 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 			b.Password,
 		)
 		if err != nil {
-			return handler.SendInternalServerError(
-				c,
-				err,
-				"Error comparing password",
-			)
+			return handler.SendInternalServerError(c, err, "Error comparing password")
 		}
 
 		if !match {
-			return handler.SendUnauthorized(
-				c,
-				nil,
-				"Invalid credentials",
-				handler.ErrInvalidCredentials,
-			)
+			return handler.SendUnauthorized(c, nil, "Invalid credentials", handler.ErrInvalidCredentials)
 		}
 		authenticated = true
 	}

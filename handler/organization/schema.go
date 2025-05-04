@@ -9,7 +9,7 @@ type UpdateOrgRequest struct {
 	Name                    string   `form:"name"`
 	Description             string   `form:"description"`
 	WhitelistedIPs          []string `form:"whitelisted_ips"`
-	AutoAssignedWorkspaceID uint     `form:"auto_assigned_workspace_id,string"`
+	AutoAssignedWorkspaceID *uint    `form:"auto_assigned_workspace_id,string"`
 }
 
 type InviteMemberRequest struct {

@@ -2,6 +2,7 @@ package organization
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"slices"
 	"strconv"
@@ -25,7 +26,7 @@ func NewHandler() *Handler {
 }
 
 func getUint(s string) uint {
-	v, err := strconv.ParseUint(s, 10, 32)
+	v, err := strconv.ParseUint(s, 10, 64)
 	if err != nil {
 		panic("invalid organization id")
 	}
@@ -44,6 +45,7 @@ func (h *Handler) CreateOrganization(
 	if img != nil {
 		url, err := h.service.UploadOrganizationImage(orgId, img)
 		if err != nil {
+			log.Println(err)
 			return handler.SendInternalServerError(c, err, "Failed to upload organization image")
 		}
 		imgUrl = url
@@ -160,9 +162,7 @@ func (h *Handler) UpdateOrganization(
 		return handler.SendBadRequest(c, verr, "Bad request body")
 	}
 
-	session := handler.GetSession(
-		c,
-	)
+	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
@@ -181,7 +181,7 @@ func (h *Handler) UpdateOrganization(
 	}
 
 	hasPermission := false
-	for _, role := range membership.Role {
+	for _, role := range membership.Roles {
 		if role.Name == "organization:owner" {
 			hasPermission = true
 			break
@@ -204,7 +204,7 @@ func (h *Handler) UpdateOrganization(
 		org.WhitelistedIPs = b.WhitelistedIPs
 	}
 
-	if b.AutoAssignedWorkspaceID != 0 {
+	if b.AutoAssignedWorkspaceID != nil {
 		org.AutoAssignedWorkspaceID = b.AutoAssignedWorkspaceID
 	}
 
@@ -238,7 +238,7 @@ func (h *Handler) DeleteOrganization(
 	}
 
 	isOwner := false
-	for _, role := range membership.Role {
+	for _, role := range membership.Roles {
 		if role.Name == "organization:owner" {
 			isOwner = true
 			break
@@ -274,7 +274,7 @@ func (h *Handler) GetOrganizationInvitations(
 	}
 
 	hasPermission := false
-	for _, role := range membership.Role {
+	for _, role := range membership.Roles {
 		if role.Name == "organization:owner" {
 			hasPermission = true
 			break
@@ -324,7 +324,7 @@ func (h *Handler) InviteMember(
 	}
 
 	hasPermission := false
-	for _, role := range membership.Role {
+	for _, role := range membership.Roles {
 		if role.Name == "organization:owner" {
 			hasPermission = true
 			break
@@ -357,7 +357,7 @@ func (h *Handler) InviteMember(
 			snowflake.ID(),
 		),
 		UserID: userEmail.UserID,
-		Role:   []*model.OrganizationRole{},
+		Roles:  []*model.OrganizationRole{},
 	}
 
 	err := database.Connection.Transaction(
@@ -396,7 +396,7 @@ func (h *Handler) RemoveMember(
 	}
 
 	hasPermission := false
-	for _, role := range membership.Role {
+	for _, role := range membership.Roles {
 		if role.Name == "organization:owner" {
 			hasPermission = true
 			break
@@ -429,6 +429,7 @@ func (h *Handler) GetOrganizationMembers(
 	if err := database.Connection.
 		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
 		Preload("Role").
+		Preload("User").
 		First(&currentMembership).
 		Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
@@ -482,6 +483,7 @@ func (h *Handler) AddOrganizationDomain(
 	c *fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
+	d := handler.GetDeployment(c)
 	b, verr := handler.Validate[AddDomainRequest](c)
 	if verr != nil {
 		return handler.SendBadRequest(c, verr, "Bad request body")
@@ -495,15 +497,15 @@ func (h *Handler) AddOrganizationDomain(
 	var membership model.OrganizationMembership
 	if err := database.Connection.
 		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		Preload("Role").
+		Preload("Roles").
 		First(&membership).
 		Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
 	hasPermission := false
-	for _, role := range membership.Role {
-		if role.Name == "organization:owner" || role.Name == "organization:admin" {
+	for _, role := range membership.Roles {
+		if role.Name == "Admin" {
 			hasPermission = true
 			break
 		}
@@ -513,11 +515,6 @@ func (h *Handler) AddOrganizationDomain(
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	var existingDomain model.OrganizationDomain
-	if err := database.Connection.Where("organization_id = ? AND domain = ?", orgID, b.Domain).First(&existingDomain).Error; err == nil {
-		return handler.SendBadRequest(c, nil, "Domain already exists for this organization")
-	}
-
 	verificationToken := fmt.Sprintf("wacht-verify-%d", snowflake.ID())
 
 	domain := model.OrganizationDomain{
@@ -525,10 +522,11 @@ func (h *Handler) AddOrganizationDomain(
 			ID: uint(snowflake.ID()),
 		},
 		OrganizationID:            getUint(orgID),
-		Domain:                    b.Domain,
+		Fqdn:                      b.Domain,
+		DeploymentID:              d.ID,
 		Verified:                  false,
 		VerificationDnsRecordType: "TXT",
-		VerificationDnsRecordName: "_wacht-verification",
+		VerificationDnsRecordName: "_wc-verification",
 		VerificationDnsRecordData: verificationToken,
 		VerificationAttempts:      0,
 	}
@@ -537,9 +535,7 @@ func (h *Handler) AddOrganizationDomain(
 		return handler.SendInternalServerError(c, err, "Failed to add domain")
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"domain": domain,
-	})
+	return handler.SendSuccess(c, domain)
 }
 
 func (h *Handler) VerifyOrganizationDomain(
@@ -563,7 +559,7 @@ func (h *Handler) VerifyOrganizationDomain(
 	}
 
 	hasPermission := false
-	for _, role := range membership.Role {
+	for _, role := range membership.Roles {
 		if role.Name == "organization:owner" || role.Name == "organization:admin" {
 			hasPermission = true
 			break
@@ -598,7 +594,7 @@ func (h *Handler) VerifyOrganizationDomain(
 		return handler.SendInternalServerError(c, err, "Failed to update domain verification attempts")
 	}
 
-	fullRecordName := fmt.Sprintf("%s.%s", domain.VerificationDnsRecordName, domain.Domain)
+	fullRecordName := fmt.Sprintf("%s.%s", domain.VerificationDnsRecordName, domain.Fqdn)
 
 	txtRecords, err := net.LookupTXT(fullRecordName)
 	if err != nil {
@@ -646,7 +642,7 @@ func (h *Handler) DeleteOrganizationDomain(
 	}
 
 	hasPermission := false
-	for _, role := range membership.Role {
+	for _, role := range membership.Roles {
 		if role.Name == "organization:owner" || role.Name == "organization:admin" {
 			hasPermission = true
 			break
@@ -721,7 +717,7 @@ func (h *Handler) AddOrganizationBillingAddress(
 	}
 
 	hasPermission := false
-	for _, role := range membership.Role {
+	for _, role := range membership.Roles {
 		if role.Name == "organization:owner" || role.Name == "organization:admin" {
 			hasPermission = true
 			break
@@ -778,7 +774,7 @@ func (h *Handler) UpdateOrganizationBillingAddress(
 	}
 
 	hasPermission := false
-	for _, role := range membership.Role {
+	for _, role := range membership.Roles {
 		if role.Name == "organization:owner" || role.Name == "organization:admin" {
 			hasPermission = true
 			break
@@ -833,7 +829,7 @@ func (h *Handler) DeleteOrganizationBillingAddress(
 	}
 
 	hasPermission := false
-	for _, role := range membership.Role {
+	for _, role := range membership.Roles {
 		if role.Name == "organization:owner" || role.Name == "organization:admin" {
 			hasPermission = true
 			break

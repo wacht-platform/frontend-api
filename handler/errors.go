@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -119,6 +120,12 @@ func DefaultErrorHandler(c *fiber.Ctx, err error) error {
 	var e *fiber.Error
 	if errors.As(err, &e) {
 		code = e.Code
+	}
+
+	log.Println(err.Error())
+
+	if code == 404 {
+		return SendNotFound(c, nil, "Resource does not exist")
 	}
 
 	return SendResponse[any](
