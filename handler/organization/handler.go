@@ -668,7 +668,6 @@ func (h *Handler) DeleteOrganizationDomain(
 	})
 }
 
-// Get all billing addresses for an organization
 func (h *Handler) GetOrganizationBillingAddresses(
 	c *fiber.Ctx,
 ) error {
@@ -679,7 +678,6 @@ func (h *Handler) GetOrganizationBillingAddresses(
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
-	// Check if user is member of organization
 	var membership model.OrganizationMembership
 	if err := database.Connection.
 		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
@@ -688,7 +686,6 @@ func (h *Handler) GetOrganizationBillingAddresses(
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	// Get all billing addresses for organization
 	var billingAddresses []model.OrganizationBillingAddress
 	if err := database.Connection.
 		Where("organization_id = ?", getUint(orgID)).
@@ -815,7 +812,6 @@ func (h *Handler) UpdateOrganizationBillingAddress(
 	})
 }
 
-// Delete a billing address
 func (h *Handler) DeleteOrganizationBillingAddress(
 	c *fiber.Ctx,
 ) error {
