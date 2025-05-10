@@ -52,6 +52,7 @@ func handleNewSession(
 ) error {
 	var token string
 	session := model.NewSession()
+	deployment.LoadKepPair(database.Connection)
 
 	err := database.Connection.Transaction(func(tx *gorm.DB) error {
 		var err error
@@ -91,6 +92,8 @@ func handleExistingSession(
 	deployment model.Deployment,
 	sessionToken string,
 ) error {
+	deployment.LoadKepPair(database.Connection)
+
 	token, err := utils.VerifyJWT(
 		sessionToken,
 		deployment.KepPair,
@@ -136,6 +139,7 @@ func setSessionToken(c *fiber.Ctx, token string, isProduction bool) {
 
 func refreshSession(c *fiber.Ctx, expJwt jwt.Token) error {
 	deployment := handler.GetDeployment(c)
+	deployment.LoadKepPair(database.Connection)
 
 	sessionID, rotatingTokenID, err := extractTokenClaims(expJwt)
 	if err != nil {

@@ -2,7 +2,6 @@ package user
 
 import (
 	"crypto/rand"
-	"log"
 	"strconv"
 	"time"
 
@@ -37,7 +36,6 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 		Where("id = ?", session.ID).
 		First(session).Error
 	if err != nil {
-		log.Println(err)
 		return handler.SendInternalServerError(
 			c,
 			nil,
@@ -255,7 +253,7 @@ func (h *Handler) AttemptEmailVerification(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "OTP code is required")
 	}
 
-	expectedOTP, err := h.service.GetOTPFromCache(
+	expectedOTP, err := h.service.getOTPFromCache(
 		strconv.Itoa(int(emailAddress.ID)),
 	)
 	if err != nil {
@@ -271,8 +269,7 @@ func (h *Handler) AttemptEmailVerification(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Invalid OTP code")
 	}
 
-	if err = h.service.RemoveOTPFromCache(strconv.Itoa(int(emailAddress.ID))); err != nil {
-		log.Printf("Failed to remove OTP from cache: %v", err)
+	if err = h.service.removeOTPFromCache(strconv.Itoa(int(emailAddress.ID))); err != nil {
 	}
 
 	emailAddress.Verified = true
@@ -328,7 +325,7 @@ func (h *Handler) PrepareEmailVerification(c *fiber.Ctx) error {
 		)
 	}
 
-	err = h.service.StoreOTPInCache(
+	err = h.service.storeOTPInCache(
 		strconv.Itoa(int(emailAddress.ID)),
 		code,
 	)
@@ -341,7 +338,7 @@ func (h *Handler) PrepareEmailVerification(c *fiber.Ctx) error {
 		)
 	}
 
-	err = h.service.SendEmailOTPVerification(emailAddress.Email, code)
+	err = h.service.sendEmailOTPVerification(emailAddress.Email, code)
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,
@@ -479,7 +476,7 @@ func (h *Handler) PreparePhoneVerification(c *fiber.Ctx) error {
 		)
 	}
 
-	err = h.service.StoreOTPInCache(
+	err = h.service.storeOTPInCache(
 		strconv.Itoa(int(phoneNumber.ID)),
 		code,
 	)
@@ -492,7 +489,7 @@ func (h *Handler) PreparePhoneVerification(c *fiber.Ctx) error {
 		)
 	}
 
-	err = h.service.SendSmsOTPVerification(phoneNumber.PhoneNumber, code)
+	err = h.service.sendSmsOTPVerification(phoneNumber.PhoneNumber, code)
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,
@@ -535,7 +532,7 @@ func (h *Handler) AttemptPhoneVerification(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "OTP code is required")
 	}
 
-	expectedOTP, err := h.service.GetOTPFromCache(
+	expectedOTP, err := h.service.getOTPFromCache(
 		strconv.Itoa(int(phoneNumber.ID)),
 	)
 	if err != nil {
@@ -551,8 +548,7 @@ func (h *Handler) AttemptPhoneVerification(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Invalid OTP code")
 	}
 
-	if err = h.service.RemoveOTPFromCache(strconv.Itoa(int(phoneNumber.ID))); err != nil {
-		log.Printf("Failed to remove OTP from cache: %v", err)
+	if err = h.service.removeOTPFromCache(strconv.Itoa(int(phoneNumber.ID))); err != nil {
 	}
 
 	phoneNumber.Verified = true
@@ -622,7 +618,6 @@ func (h *Handler) GenerateAuthenticator(c *fiber.Ctx) error {
 	}
 
 	if err := database.Connection.Create(authenticator).Error; err != nil {
-		log.Println("Failed to save authenticator", err)
 		return handler.SendInternalServerError(
 			c,
 			nil,
@@ -672,9 +667,6 @@ func (h *Handler) VerifyAuthenticator(c *fiber.Ctx) error {
 	firstCode := b.Codes[0]
 	secondCode := b.Codes[1]
 
-	log.Println("First code", firstCode)
-	log.Println("Second code", secondCode)
-
 	valid, err := totp.ValidateCustom(
 		firstCode,
 		authenticator.TotpSecret,
@@ -685,7 +677,6 @@ func (h *Handler) VerifyAuthenticator(c *fiber.Ctx) error {
 		},
 	)
 	if err != nil {
-		log.Println("Failed to validate first code", err)
 		return handler.SendInternalServerError(
 			c,
 			nil,
@@ -822,7 +813,6 @@ func (h *Handler) GenerateBackupCodes(c *fiber.Ctx) error {
 	user.BackupCodes = backupCodes
 	user.BackupCodesGenerated = true
 	if err := database.Connection.Save(&user).Error; err != nil {
-		log.Println("Failed to save backup codes", err)
 		return handler.SendInternalServerError(
 			c,
 			nil,
@@ -873,7 +863,7 @@ func (h *Handler) UploadProfilePicture(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "File is required")
 	}
 
-	url, err := h.service.UploadProfilePicture(session.ActiveSignin.UserID, file)
+	url, err := h.service.uploadProfilePicture(session.ActiveSignin.UserID, file)
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,

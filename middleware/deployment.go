@@ -21,7 +21,6 @@ func SetDeploymentMiddleware(c *fiber.Ctx) error {
 	err := database.Connection.Where("backend_host = ?", "awkward-anyone-1.backend-api.services").
 		Joins("B2BSettings").
 		Joins("AuthSettings").
-		Joins("KepPair").
 		Joins("UISettings").
 		Joins("EmailTemplates").
 		Joins("SmsTemplates").
@@ -29,6 +28,7 @@ func SetDeploymentMiddleware(c *fiber.Ctx) error {
 		Preload("SocialConnections").
 		First(&deployment).
 		Error
+
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{
 			"message": "Deployment not found",

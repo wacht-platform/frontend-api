@@ -28,7 +28,7 @@ func NewUserService() *UserService {
 	}
 }
 
-func (s *UserService) StoreOTPInCache(key string, otp string) error {
+func (s *UserService) storeOTPInCache(key string, otp string) error {
 	return database.Cache.Set(
 		context.Background(),
 		fmt.Sprintf("otp:%s", key),
@@ -37,21 +37,21 @@ func (s *UserService) StoreOTPInCache(key string, otp string) error {
 	).Err()
 }
 
-func (s *UserService) RemoveOTPFromCache(key string) error {
+func (s *UserService) removeOTPFromCache(key string) error {
 	return database.Cache.Del(
 		context.Background(),
 		fmt.Sprintf("otp:%s", key),
 	).Err()
 }
 
-func (s *UserService) GetOTPFromCache(key string) (string, error) {
+func (s *UserService) getOTPFromCache(key string) (string, error) {
 	return database.Cache.Get(
 		context.Background(),
 		fmt.Sprintf("otp:%s", key),
 	).Result()
 }
 
-func (s *UserService) SendEmailOTPVerification(
+func (s *UserService) sendEmailOTPVerification(
 	email string,
 	otp string,
 ) error {
@@ -104,7 +104,7 @@ func (s *UserService) SendEmailOTPVerification(
 	return nil
 }
 
-func (s *UserService) SendSmsOTPVerification(
+func (s *UserService) sendSmsOTPVerification(
 	phone string,
 	otp string,
 ) error {
@@ -116,7 +116,7 @@ func (s *UserService) SendSmsOTPVerification(
 	return s.sns.SendSMS(phone, message)
 }
 
-func (s *UserService) UploadProfilePicture(
+func (s *UserService) uploadProfilePicture(
 	userID uint,
 	file *multipart.FileHeader,
 ) (string, error) {

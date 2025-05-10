@@ -1,5 +1,7 @@
 package model
 
+import "github.com/lib/pq"
+
 type DeploymentB2bSettings struct {
 	Model
 	DeploymentID                  uint             `json:"deployment_id"                     gorm:"not null;index"`
@@ -26,4 +28,6 @@ type DeploymentB2bSettings struct {
 	DefaultWorkspaceMemberRole    WorkspaceRole    `json:"default_workspace_member_role"     gorm:"foreignKey:DefaultWorkspaceMemberRoleID"`
 	DefaultOrgCreatorRole         OrganizationRole `json:"default_org_creator_role"          gorm:"foreignKey:DefaultOrgCreatorRoleID"`
 	DefaultOrgMemberRole          OrganizationRole `json:"default_org_member_role"           gorm:"foreignKey:DefaultOrgMemberRoleID"`
+	WorkspacePermissions          pq.StringArray   `json:"workspace_permissions"             gorm:"type:text[]"`
+	OrganizationPermissions       pq.StringArray   `json:"organization_permissions"          gorm:"type:text[]"`
 }

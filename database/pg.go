@@ -2,10 +2,12 @@ package database
 
 import (
 	"os"
+	"time"
 
 	"github.com/ilabs/wacht-fe/model"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var Connection *gorm.DB
@@ -15,10 +17,20 @@ func InitPgConnection() error {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		SkipDefaultTransaction: true,
 		PrepareStmt:            true,
+		Logger:                 logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
 		return err
 	}
+
+	pgDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+
+	pgDB.SetConnMaxIdleTime(time.Hour)
+	pgDB.SetConnMaxLifetime(24 * time.Hour)
+	pgDB.SetMaxIdleConns(100)
 
 	Connection = db
 
@@ -44,11 +56,14 @@ func AutoMigratePg() error {
 		&model.Organization{},
 		&model.OrganizationRole{},
 		&model.OrganizationMembership{},
+		&model.OrgMembershipRoleAssoc{},
+		&model.OrganizationInvitation{},
 		&model.OrganizationDomain{},
 		&model.OrganizationBillingAddress{},
 		&model.Workspace{},
 		&model.WorkspaceRole{},
 		&model.WorkspaceMembership{},
+		&model.WorkspaceMembershipRoleAssoc{},
 		&model.SignupAttempt{},
 		&model.DeploymentUISettings{},
 		&model.UserAuthenticator{},

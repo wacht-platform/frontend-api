@@ -39,16 +39,20 @@ func (h *Handler) CreateOrganization(
 	d := handler.GetDeployment(c)
 	b, verr := handler.Validate[CreateOrgRequest](c)
 	img, _ := c.FormFile("image")
-	imgUrl := d.UISettings.DefaultOrganizationProfileImageURL
-	orgId := uint(snowflake.ID())
+	imgurl := d.UISettings.DefaultOrganizationProfileImageURL
+	orgid := uint(snowflake.ID())
+
+	if !d.B2BSettings.OrganizationsEnabled {
+		return handler.SendBadRequest(c, nil, "Organizations are not enabled for this deployment")
+	}
 
 	if img != nil {
-		url, err := h.service.UploadOrganizationImage(orgId, img)
+		url, err := h.service.uploadOrganizationImage(orgid, img)
 		if err != nil {
 			log.Println(err)
 			return handler.SendInternalServerError(c, err, "Failed to upload organization image")
 		}
-		imgUrl = url
+		imgurl = url
 	}
 
 	if verr != nil {
@@ -62,19 +66,19 @@ func (h *Handler) CreateOrganization(
 
 	org := model.Organization{
 		Model: model.Model{
-			ID: orgId,
+			ID: orgid,
 		},
 		DeploymentID: d.ID,
 		Name:         b.Name,
 		Description:  b.Description,
-		ImageUrl:     imgUrl,
+		ImageUrl:     imgurl,
 	}
 
 	membership := model.OrganizationMembership{
 		Model: model.Model{
 			ID: uint(snowflake.ID()),
 		},
-		OrganizationID: orgId,
+		OrganizationID: orgid,
 		UserID:         session.ActiveSignin.UserID,
 	}
 
@@ -96,7 +100,7 @@ func (h *Handler) CreateOrganization(
 			).Error; err != nil {
 				return err
 			}
-			session.ActiveSignin.ActiveOrganizationID = &orgId
+			session.ActiveSignin.ActiveOrganizationID = &orgid
 			database.Connection.Save(session.ActiveSignin)
 			return nil
 		},
@@ -114,29 +118,60 @@ func (h *Handler) CreateOrganization(
 func (h *Handler) LeaveOrganization(
 	c *fiber.Ctx,
 ) error {
-	orgID := c.Params("id")
+	orgIDStr := c.Params("id")
+	orgID := getUint(orgIDStr)
 	session := handler.GetSession(c)
+	d := handler.GetDeployment(c)
+
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
 	var membership model.OrganizationMembership
+	if err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&membership).
+		Error; err != nil {
+		log.Println("Error fetching membership:", err)
+		return handler.SendInternalServerError(c, err, "Failed to retrieve membership details")
+	}
+
+	isOwner := h.service.hasPermission(membership, orgOwnerPermissions)
+
+	if isOwner {
+		var adminCount int64
+		if err := database.Connection.Table("org_membership_roles").
+			Where("organization_id = ? AND organization_role_id = ? AND organization_membership_id != ?",
+				orgID,
+				d.B2BSettings.DefaultOrgCreatorRoleID,
+				membership.ID).
+			Count(&adminCount).Error; err != nil {
+			log.Println("Error counting other admins using DefaultOrgCreatorRoleID on org_membership_roles:", err)
+			return handler.SendInternalServerError(c, err, "Failed to verify organization admin status")
+		}
+
+		if adminCount == 0 {
+			return handler.SendForbidden(c, nil, "Cannot leave organization as the sole admin. Please transfer ownership or assign this role to another member first.")
+		}
+	}
+
 	err := database.Connection.Transaction(
 		func(tx *gorm.DB) error {
-			if err := tx.
-				Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-				First(&membership).
-				Error; err != nil {
-				return err
-			}
-
-			if err := tx.Delete(&model.WorkspaceMembership{OrganizationMembershipID: membership.ID}).
-				Error; err != nil {
+			if err := tx.Where("organization_membership_id = ?", membership.ID).
+				Delete(&model.WorkspaceMembership{}).Error; err != nil {
 				return err
 			}
 
 			if err := tx.Delete(&membership).Error; err != nil {
 				return err
+			}
+
+			if session.ActiveSignin.ActiveOrganizationID != nil && *session.ActiveSignin.ActiveOrganizationID == membership.OrganizationID {
+				session.ActiveSignin.ActiveOrganizationID = nil
+				if errDb := database.Connection.Save(session.ActiveSignin).Error; errDb != nil {
+					log.Printf("Failed to clear active organization ID for user %d: %v", session.ActiveSignin.UserID, errDb)
+				}
 			}
 
 			return nil
@@ -175,19 +210,12 @@ func (h *Handler) UpdateOrganization(
 	var membership model.OrganizationMembership
 	if err := database.Connection.
 		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		Preload("Role").First(&membership).
+		Preload("Roles").First(&membership).
 		Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	hasPermission := false
-	for _, role := range membership.Roles {
-		if role.Name == "organization:owner" {
-			hasPermission = true
-			break
-		}
-	}
-
+	hasPermission := h.service.hasPermission(membership, orgManagementPermissions)
 	if !hasPermission {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
@@ -232,20 +260,13 @@ func (h *Handler) DeleteOrganization(
 	var membership model.OrganizationMembership
 	if err := database.Connection.
 		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		Preload("Role").First(&membership).
+		Preload("Roles").First(&membership).
 		Error; err != nil {
 		return handler.SendForbidden(c, nil, "Only organization owner can delete the organization")
 	}
 
-	isOwner := false
-	for _, role := range membership.Roles {
-		if role.Name == "organization:owner" {
-			isOwner = true
-			break
-		}
-	}
-
-	if !isOwner {
+	hasPermission := h.service.hasPermission(membership, orgOwnerPermissions)
+	if !hasPermission {
 		return handler.SendForbidden(c, nil, "Only organization owner can delete the organization")
 	}
 
@@ -267,20 +288,13 @@ func (h *Handler) GetOrganizationInvitations(
 	var membership model.OrganizationMembership
 	if err := database.Connection.
 		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		Preload("Role").
+		Preload("Roles").
 		First(&membership).
 		Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	hasPermission := false
-	for _, role := range membership.Roles {
-		if role.Name == "organization:owner" {
-			hasPermission = true
-			break
-		}
-	}
-
+	hasPermission := h.service.hasPermission(membership, orgManagementPermissions)
 	if !hasPermission {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
@@ -317,63 +331,75 @@ func (h *Handler) InviteMember(
 	var membership model.OrganizationMembership
 	if err := database.Connection.
 		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		Preload("Role").
+		Preload("Roles").
 		First(&membership).
 		Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	hasPermission := false
-	for _, role := range membership.Roles {
-		if role.Name == "organization:owner" {
-			hasPermission = true
-			break
-		}
-	}
-
+	hasPermission := h.service.hasPermission(membership, orgManagementPermissions)
 	if !hasPermission {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	var userEmail model.UserEmailAddress
-	if err := database.Connection.Where("email = ?", b.Email).First(&userEmail).Error; err != nil {
-		return handler.SendNotFound(c, nil, "User not found")
-	}
-
-	var existingMembership model.OrganizationMembership
-	if err := database.Connection.Where(
-		"organization_id = ? AND user_id = ?",
-		orgID,
-		userEmail.UserID,
-	).First(&existingMembership).Error; err == nil {
-		return handler.SendBadRequest(c, nil, "User is already a member")
-	}
-
-	newMembership := model.OrganizationMembership{
+	invitation := model.OrganizationInvitation{
 		Model: model.Model{
 			ID: uint(snowflake.ID()),
 		},
-		OrganizationID: uint(
-			snowflake.ID(),
-		),
-		UserID: userEmail.UserID,
-		Roles:  []*model.OrganizationRole{},
+		OrganizationID: getUint(orgID),
+		InviterID:      membership.ID,
+		Email:          b.Email,
 	}
 
-	err := database.Connection.Transaction(
-		func(tx *gorm.DB) error {
-			if err := tx.Create(&newMembership).Error; err != nil {
-				return err
-			}
-			return nil
+	if b.RoleID != nil {
+		invitation.InitialOrganizationRoleID = b.RoleID
+	}
+
+	if b.WorkspaceID != nil {
+		invitation.WorkspaceID = b.WorkspaceID
+	}
+
+	if b.WorkspaceRoleID != nil {
+		invitation.InitialWorkspaceRoleID = b.WorkspaceRoleID
+	}
+
+	if err := database.Connection.Create(&invitation).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to invite member")
+	}
+
+	return handler.SendSuccess(c, invitation)
+}
+
+func (h *Handler) DiscardInvitation(
+	c *fiber.Ctx,
+) error {
+	orgID := c.Params("id")
+	invitationID := c.Params("invitationId")
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	var membership model.OrganizationMembership
+	if err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&membership).
+		Error; err != nil {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	if err := database.Connection.Delete(&model.OrganizationInvitation{
+		Model: model.Model{
+			ID: getUint(invitationID),
 		},
-	)
-	if err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to add member")
+		OrganizationID: getUint(orgID),
+	}).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to dismiss invitation")
 	}
 
 	return handler.SendSuccess(c, fiber.Map{
-		"membership": newMembership,
+		"success": true,
 	})
 }
 
@@ -391,24 +417,150 @@ func (h *Handler) RemoveMember(
 	}
 
 	var membership model.OrganizationMembership
-	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).Preload("Role").First(&membership).Error; err != nil {
+	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).Preload("Roles").First(&membership).Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	hasPermission := false
-	for _, role := range membership.Roles {
-		if role.Name == "organization:owner" {
-			hasPermission = true
-			break
-		}
-	}
-
+	hasPermission := h.service.hasPermission(membership, orgManagementPermissions)
 	if !hasPermission {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
 	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, memberID).Delete(&model.OrganizationMembership{}).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to remove member")
+	}
+
+	return handler.SendSuccess(c, fiber.Map{
+		"success": true,
+	})
+}
+
+func (h *Handler) AddMemberRole(
+	c *fiber.Ctx,
+) error {
+	orgID := c.Params("id")
+	memberID := c.Params("memberId")
+	roleID := c.Params("roleId")
+
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	var membership model.OrganizationMembership
+	if err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&membership).
+		Error; err != nil {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	hasPermission := h.service.hasPermission(membership, orgManagementPermissions)
+	if !hasPermission {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	var role model.OrganizationRole
+	var assignedMember model.OrganizationMembership
+
+	err := database.Connection.Where("id = ?", roleID).First(&role).Error
+	if err != nil {
+		log.Println(err)
+		return handler.SendInternalServerError(c, err, "Failed to add role")
+	}
+
+	err = database.Connection.
+		Where("organization_id = ? AND id = ?", orgID, memberID).
+		First(&assignedMember).
+		Error
+	if err != nil {
+		log.Println(err)
+		return handler.SendInternalServerError(c, err, "Failed to add role")
+	}
+
+	err = database.Connection.Exec(
+		"INSERT INTO org_membership_roles (organization_membership_id, organization_role_id) VALUES (?, ?)",
+		assignedMember.ID,
+		role.ID,
+	).Error
+
+	if err != nil {
+		log.Println(err)
+		return handler.SendInternalServerError(c, err, "Failed to add role")
+	}
+
+	return handler.SendSuccess(c, fiber.Map{
+		"success": true,
+	})
+}
+
+func (h *Handler) RemoveMemberRole(
+	c *fiber.Ctx,
+) error {
+	orgIDStr := c.Params("id")
+	memberIDStr := c.Params("memberId")
+	roleIDStr := c.Params("roleId")
+
+	orgIDUint := getUint(orgIDStr)
+	targetMembershipIDUint := getUint(memberIDStr)
+	roleIDToRemoveUint := getUint(roleIDStr)
+
+	session := handler.GetSession(c)
+	d := handler.GetDeployment(c)
+
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	var actingUserMembership model.OrganizationMembership
+	if err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", orgIDUint, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&actingUserMembership).
+		Error; err != nil {
+		log.Printf("Permission check failed for user %d in org %d: %v", session.ActiveSignin.UserID, orgIDUint, err)
+		return handler.SendForbidden(c, nil, "Insufficient permissions to manage roles (user not found in org or DB error).")
+	}
+
+	hasPermission := h.service.hasPermission(actingUserMembership, orgManagementPermissions)
+	if !hasPermission {
+		return handler.SendForbidden(c, nil, "Insufficient permissions to manage roles.")
+	}
+
+	var targetMemberShip model.OrganizationMembership
+	if err := database.Connection.Where("organization_id = ? AND id = ?", orgIDUint, targetMembershipIDUint).First(&targetMemberShip).Error; err != nil {
+		log.Printf("Target membership ID %d not found in org %d: %v", targetMembershipIDUint, orgIDUint, err)
+		return handler.SendNotFound(c, err, "Target member or organization not found.")
+	}
+
+	isAdminRoleBeingRemoved := (roleIDToRemoveUint == d.B2BSettings.DefaultOrgCreatorRoleID)
+	isSelfRemoval := (targetMemberShip.UserID == session.ActiveSignin.UserID)
+
+	if isAdminRoleBeingRemoved && isSelfRemoval {
+		var otherAdminCount int64
+		if err := database.Connection.Table("org_membership_roles").
+			Where("organization_id = ? AND organization_role_id = ? AND organization_membership_id != ?",
+				orgIDUint,
+				d.B2BSettings.DefaultOrgCreatorRoleID,
+				targetMembershipIDUint).
+			Count(&otherAdminCount).Error; err != nil {
+			log.Println("Error counting other admins in RemoveMemberRole:", err)
+			return handler.SendInternalServerError(c, err, "Failed to verify organization admin status.")
+		}
+
+		if otherAdminCount == 0 {
+			return handler.SendForbidden(c, nil, "Cannot remove your own admin role as you are the sole admin. Please assign this role to another member first.")
+		}
+	}
+
+	if err := database.Connection.Exec(
+		"DELETE FROM org_membership_roles WHERE organization_membership_id = ? AND organization_role_id = ?",
+		targetMembershipIDUint,
+		roleIDToRemoveUint,
+	).Error; err != nil {
+		log.Println("Failed to delete role from org_membership_roles:", err)
+		return handler.SendInternalServerError(c, err, "Failed to remove role.")
 	}
 
 	return handler.SendSuccess(c, fiber.Map{
@@ -428,8 +580,7 @@ func (h *Handler) GetOrganizationMembers(
 	var currentMembership model.OrganizationMembership
 	if err := database.Connection.
 		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		Preload("Role").
-		Preload("User").
+		Preload("Roles").
 		First(&currentMembership).
 		Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
@@ -437,7 +588,8 @@ func (h *Handler) GetOrganizationMembers(
 
 	var members []model.OrganizationMembership
 	if err := database.Connection.Where("organization_id = ?", orgID).
-		Preload("Role").
+		Preload("Roles").
+		Joins("User").
 		Find(&members).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to get organization members")
 	}
@@ -450,12 +602,17 @@ func (h *Handler) GetOrganizationRoles(
 ) error {
 	orgID := c.Params("id")
 	session := handler.GetSession(c)
+	deployment := handler.GetDeployment(c)
+
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
 	var roles []model.OrganizationRole
-	if err := database.Connection.Where("organization_id = ?", orgID).Find(&roles).Error; err != nil {
+	if err := database.Connection.
+		Where("deployment_id = ? AND (organization_id = ? OR organization_id IS NULL)", deployment.ID, orgID).
+		Find(&roles).
+		Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to get organization roles")
 	}
 
@@ -503,14 +660,12 @@ func (h *Handler) AddOrganizationDomain(
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	hasPermission := false
-	for _, role := range membership.Roles {
-		if role.Name == "Admin" {
-			hasPermission = true
-			break
-		}
+	requiredPermissions := map[string]bool{
+		"organization:owner":  true,
+		"organization:admin":  true,
+		"organization:manage": true,
 	}
-
+	hasPermission := h.service.hasPermission(membership, requiredPermissions)
 	if !hasPermission {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
@@ -552,20 +707,18 @@ func (h *Handler) VerifyOrganizationDomain(
 	var membership model.OrganizationMembership
 	if err := database.Connection.
 		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		Preload("Role").
+		Preload("Roles").
 		First(&membership).
 		Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	hasPermission := false
-	for _, role := range membership.Roles {
-		if role.Name == "organization:owner" || role.Name == "organization:admin" {
-			hasPermission = true
-			break
-		}
+	requiredPermissions := map[string]bool{
+		"organization:owner":  true,
+		"organization:admin":  true,
+		"organization:manage": true,
 	}
-
+	hasPermission := h.service.hasPermission(membership, requiredPermissions)
 	if !hasPermission {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
@@ -635,20 +788,18 @@ func (h *Handler) DeleteOrganizationDomain(
 	var membership model.OrganizationMembership
 	if err := database.Connection.
 		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		Preload("Role").
+		Preload("Roles").
 		First(&membership).
 		Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	hasPermission := false
-	for _, role := range membership.Roles {
-		if role.Name == "organization:owner" || role.Name == "organization:admin" {
-			hasPermission = true
-			break
-		}
+	requiredPermissions := map[string]bool{
+		"organization:owner":  true,
+		"organization:admin":  true,
+		"organization:manage": true,
 	}
-
+	hasPermission := h.service.hasPermission(membership, requiredPermissions)
 	if !hasPermission {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
@@ -710,20 +861,18 @@ func (h *Handler) AddOrganizationBillingAddress(
 	var membership model.OrganizationMembership
 	if err := database.Connection.
 		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		Preload("Role").
+		Preload("Roles").
 		First(&membership).
 		Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	hasPermission := false
-	for _, role := range membership.Roles {
-		if role.Name == "organization:owner" || role.Name == "organization:admin" {
-			hasPermission = true
-			break
-		}
+	requiredPermissions := map[string]bool{
+		"organization:owner":  true,
+		"organization:admin":  true,
+		"organization:manage": true,
 	}
-
+	hasPermission := h.service.hasPermission(membership, requiredPermissions)
 	if !hasPermission {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
@@ -767,20 +916,18 @@ func (h *Handler) UpdateOrganizationBillingAddress(
 	var membership model.OrganizationMembership
 	if err := database.Connection.
 		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		Preload("Role").
+		Preload("Roles").
 		First(&membership).
 		Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	hasPermission := false
-	for _, role := range membership.Roles {
-		if role.Name == "organization:owner" || role.Name == "organization:admin" {
-			hasPermission = true
-			break
-		}
+	requiredPermissions := map[string]bool{
+		"organization:owner":  true,
+		"organization:admin":  true,
+		"organization:manage": true,
 	}
-
+	hasPermission := h.service.hasPermission(membership, requiredPermissions)
 	if !hasPermission {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
@@ -822,20 +969,18 @@ func (h *Handler) DeleteOrganizationBillingAddress(
 	var membership model.OrganizationMembership
 	if err := database.Connection.
 		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		Preload("Role").
+		Preload("Roles").
 		First(&membership).
 		Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	hasPermission := false
-	for _, role := range membership.Roles {
-		if role.Name == "organization:owner" || role.Name == "organization:admin" {
-			hasPermission = true
-			break
-		}
+	requiredPermissions := map[string]bool{
+		"organization:owner":  true,
+		"organization:admin":  true,
+		"organization:manage": true,
 	}
-
+	hasPermission := h.service.hasPermission(membership, requiredPermissions)
 	if !hasPermission {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}

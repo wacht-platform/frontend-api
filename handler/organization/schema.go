@@ -13,7 +13,10 @@ type UpdateOrgRequest struct {
 }
 
 type InviteMemberRequest struct {
-	Email string `form:"email" validate:"required,email"`
+	Email           string `form:"email" validate:"required,email"`
+	RoleID          *uint  `form:"role_id,string"`
+	WorkspaceID     *uint  `form:"workspace_id,string"`
+	WorkspaceRoleID *uint  `form:"workspace_role_id,string"`
 }
 
 type AddDomainRequest struct {

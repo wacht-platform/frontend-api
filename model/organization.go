@@ -20,6 +20,8 @@ type Organization struct {
 	Domains                 []*OrganizationDomain         `json:"domains"`
 	BillingAddresses        []*OrganizationBillingAddress `json:"billing_addresses"`
 	Invitations             []*OrganizationInvitation     `json:"invitations"`
+	EnforceMFASetup         bool                          `json:"enforce_2fa" gorm:"not null;default:false"`
+	EnableIPRestriction     bool                          `json:"enable_ip_restriction" gorm:"not null;default:false"`
 	WhitelistedIPs          pq.StringArray                `json:"whitelisted_ips" gorm:"type:text[]"`
 	AutoAssignedWorkspaceID *uint                         `json:"auto_assigned_workspace_id"`
 	AutoAssignedWorkspace   *Workspace                    `json:"auto_assigned_workspace" gorm:"foreignKey:AutoAssignedWorkspaceID"`

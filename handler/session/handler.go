@@ -1,6 +1,7 @@
 package session
 
 import (
+	"log"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -23,8 +24,8 @@ func (h *Handler) GetCurrentSession(
 
 	session := new(model.Session)
 
-	err := database.Connection.Preload("ActiveSignin").
-		Preload("ActiveSignin.User").
+	err := database.Connection.Joins("ActiveSignin").
+		Joins("ActiveSignin.User").
 		Preload("ActiveSignin.User.UserEmailAddresses").
 		Preload("ActiveSignin.User.UserPhoneNumbers").
 		Preload("ActiveSignin.User.SocialConnections").
@@ -33,10 +34,13 @@ func (h *Handler) GetCurrentSession(
 		Preload("Signins.User.UserEmailAddresses").
 		Preload("Signins.User.UserPhoneNumbers").
 		Preload("Signins.User.SocialConnections").
-		Where("id = ?", sessionID).
+		Where("sessions.id = ?", sessionID).
 		First(session).
 		Error
+
+	log.Println(session)
 	if err != nil {
+		log.Println(err)
 		return handler.SendNotFound(
 			c,
 			nil,
@@ -253,12 +257,14 @@ func (h *Handler) SwitchWorkspace(
 	}
 
 	membership := new(model.WorkspaceMembership)
-	count := database.Connection.
+	err = database.Connection.
 		Model(&model.WorkspaceMembership{}).
 		Where("user_id = ? AND workspace_id = ?", session.ActiveSignin.UserID, workspaceIDUint).
 		Joins("Organization").
-		First(membership).RowsAffected
-	if count == 0 {
+		First(membership).
+		Error
+	if err != nil {
+		log.Println(err)
 		return fiber.NewError(fiber.StatusBadRequest, "You are not a member of this workspace")
 	}
 

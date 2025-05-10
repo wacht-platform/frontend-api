@@ -78,6 +78,7 @@ type DeploymentUISettings struct {
 	FaviconImageURL                        string            `json:"favicon_image_url"                           gorm:"not null"`
 	DefaultUserProfileImageURL             string            `json:"default_user_profile_image_url"              gorm:"not null"`
 	DefaultOrganizationProfileImageURL     string            `json:"default_organization_profile_image_url"      gorm:"not null"`
+	DefaultWorkspaceProfileImageURL        string            `json:"default_workspace_profile_image_url"         gorm:"not null;default:''"`
 	UseInitialsForUserProfileImage         bool              `json:"use_initials_for_user_profile_image"         gorm:"not null"`
 	UseInitialsForOrganizationProfileImage bool              `json:"use_initials_for_organization_profile_image" gorm:"not null"`
 	LogoImageURL                           string            `json:"logo_image_url"                              gorm:"not null"`

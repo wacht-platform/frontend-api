@@ -1,6 +1,10 @@
 package model
 
-import "database/sql/driver"
+import (
+	"database/sql/driver"
+
+	"gorm.io/gorm"
+)
 
 type DeploymentMode string
 
@@ -51,4 +55,16 @@ type Deployment struct {
 
 func (d *Deployment) IsProduction() bool {
 	return d.Mode == DeploymentModeProduction
+}
+
+func (d *Deployment) LoadKepPair(db *gorm.DB) error {
+	keypair := new(DeploymentKeyPair)
+	err := db.Where("deployment_id = ?", d.ID).First(&keypair).Error
+
+	if err != nil {
+		return err
+	}
+
+	d.KepPair = *keypair
+	return nil
 }
