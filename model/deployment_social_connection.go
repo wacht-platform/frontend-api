@@ -87,7 +87,7 @@ func (a *OauthCredentials) GormDBDataType() string {
 
 type DeploymentSocialConnection struct {
 	Model
-	DeploymentID uint                     `json:"deployment_id" gorm:"index:idx_deployment_id_social_connection_provider,unique;index"`
+	DeploymentID uint64                   `json:"deployment_id" gorm:"index:idx_deployment_id_social_connection_provider,unique;index"`
 	Provider     SocialConnectionProvider `json:"provider"      gorm:"index:idx_deployment_id_social_connection_provider,unique"`
 	Enabled      bool                     `json:"enabled"       gorm:"not null"`
 	Credentials  *OauthCredentials        `json:"-"`

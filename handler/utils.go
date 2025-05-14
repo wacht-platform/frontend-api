@@ -19,7 +19,7 @@ func GetDeployment(c *fiber.Ctx) model.Deployment {
 }
 
 func GetSession(c *fiber.Ctx) *model.Session {
-	sessionID := c.Locals("session").(uint)
+	sessionID := c.Locals("session").(uint64)
 
 	session, err := getSessionFromCache(sessionID)
 	if err != nil {
@@ -29,14 +29,14 @@ func GetSession(c *fiber.Ctx) *model.Session {
 	return session
 }
 
-func RemoveSessionFromCache(id uint) {
+func RemoveSessionFromCache(id uint64) {
 	database.Cache.Del(
 		context.Background(),
 		fmt.Sprintf("session:%d", id),
 	)
 }
 
-func getSessionFromCache(id uint) (*model.Session, error) {
+func getSessionFromCache(id uint64) (*model.Session, error) {
 	var session model.Session
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
@@ -61,7 +61,7 @@ func getSessionFromCache(id uint) (*model.Session, error) {
 	return &session, nil
 }
 
-func getSessionAndSetToCache(sessionId uint) *model.Session {
+func getSessionAndSetToCache(sessionId uint64) *model.Session {
 	session := new(model.Session)
 
 	database.Connection.Where("id = ?", sessionId).

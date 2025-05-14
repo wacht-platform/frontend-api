@@ -6,17 +6,24 @@ type CreateOrgRequest struct {
 }
 
 type UpdateOrgRequest struct {
-	Name                    string   `form:"name"`
-	Description             string   `form:"description"`
+	Name                    *string  `form:"name"`
+	Description             *string  `form:"description"`
 	WhitelistedIPs          []string `form:"whitelisted_ips"`
-	AutoAssignedWorkspaceID *uint    `form:"auto_assigned_workspace_id,string"`
+	AutoAssignedWorkspaceID *uint64  `form:"auto_assigned_workspace_id,string"`
+	EnableIPRestriction     *bool    `form:"enable_ip_restriction"`
+	EnforceMFASetup         *bool    `form:"enforce_mfa_setup"`
+}
+
+type CreateRoleRequest struct {
+	Name        string   `form:"name,min=2,max=100"`
+	Permissions []string `form:"permissions"`
 }
 
 type InviteMemberRequest struct {
-	Email           string `form:"email" validate:"required,email"`
-	RoleID          *uint  `form:"role_id,string"`
-	WorkspaceID     *uint  `form:"workspace_id,string"`
-	WorkspaceRoleID *uint  `form:"workspace_role_id,string"`
+	Email           string  `form:"email" validate:"required,email"`
+	RoleID          *uint64 `form:"role_id,string"`
+	WorkspaceID     *uint64 `form:"workspace_id,string"`
+	WorkspaceRoleID *uint64 `form:"workspace_role_id,string"`
 }
 
 type AddDomainRequest struct {

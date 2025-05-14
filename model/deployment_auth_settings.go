@@ -213,10 +213,10 @@ func (p *PhoneSettings) GormDBDataType() string {
 }
 
 type UsernameSettings struct {
-	Enabled   bool  `json:"enabled"`
-	Required  bool  `json:"required"`
-	MinLength uint8 `json:"min_length,omitempty"`
-	MaxLength uint8 `json:"max_length,omitempty"`
+	Enabled   bool   `json:"enabled"`
+	Required  bool   `json:"required"`
+	MinLength uint64 `json:"min_length,omitempty"`
+	MaxLength uint64 `json:"max_length,omitempty"`
 }
 
 func (u *UsernameSettings) Scan(src any) error {
@@ -243,12 +243,12 @@ func (u *UsernameSettings) GormDBDataType() string {
 }
 
 type PasswordSettings struct {
-	Enabled            bool  `json:"enabled"`
-	MinLength          uint8 `json:"min_length,omitempty"`
-	RequireLowercase   bool  `json:"require_lowercase,omitempty"`
-	RequireUppercase   bool  `json:"require_uppercase,omitempty"`
-	RequireNumber      bool  `json:"require_number,omitempty"`
-	RequireSpecialChar bool  `json:"require_special,omitempty"`
+	Enabled            bool   `json:"enabled"`
+	MinLength          uint64 `json:"min_length,omitempty"`
+	RequireLowercase   bool   `json:"require_lowercase,omitempty"`
+	RequireUppercase   bool   `json:"require_uppercase,omitempty"`
+	RequireNumber      bool   `json:"require_number,omitempty"`
+	RequireSpecialChar bool   `json:"require_special,omitempty"`
 }
 
 func (p *PasswordSettings) Scan(src any) error {
@@ -337,9 +337,9 @@ func (p *PasskeySettings) GormDBDataType() string {
 }
 
 type MultiSessionSupport struct {
-	Enabled               bool `json:"enabled"`
-	MaxAccountsPerSession uint `json:"max_accounts_per_session"`
-	MaxSessionsPerAccount uint `json:"max_sessions_per_account"`
+	Enabled               bool   `json:"enabled"`
+	MaxAccountsPerSession uint64 `json:"max_accounts_per_session"`
+	MaxSessionsPerAccount uint64 `json:"max_sessions_per_account"`
 }
 
 func (m *MultiSessionSupport) Scan(src any) error {
@@ -379,9 +379,9 @@ type DeploymentAuthSettings struct {
 	VerificationPolicy     VerificationPolicy     `json:"verification_policy"      gorm:"not null"`
 	SecondFactorPolicy     SecondFactorPolicy     `json:"second_factor_policy"     gorm:"not null"`
 	FirstFactor            FirstFactor            `json:"first_factor"             gorm:"not null"`
-	SessionTokenLifetime   uint                   `json:"session_token_lifetime"   gorm:"not null"`
-	SessionValidityPeriod  uint                   `json:"session_validity_period"  gorm:"not null"`
-	SessionInactiveTimeout uint                   `json:"session_inactive_timeout" gorm:"not null"`
+	SessionTokenLifetime   uint64                 `json:"session_token_lifetime"   gorm:"not null"`
+	SessionValidityPeriod  uint64                 `json:"session_validity_period"  gorm:"not null"`
+	SessionInactiveTimeout uint64                 `json:"session_inactive_timeout" gorm:"not null"`
 	MultiSessionSupport    MultiSessionSupport    `json:"multi_session_support"    gorm:"not null"`
-	DeploymentID           uint                   `json:"deployment_id"            gorm:"not null;index"`
+	DeploymentID           uint64                 `json:"deployment_id"            gorm:"not null;index"`
 }

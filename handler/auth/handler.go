@@ -26,10 +26,10 @@ func NewHandler() *Handler {
 }
 
 func (h *Handler) SignIn(c *fiber.Ctx) error {
-	b, verr := handler.Validate[SignInRequest](c)
+	b, validation := handler.Validate[SignInRequest](c)
 
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
 	d := handler.GetDeployment(c)
@@ -152,9 +152,9 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 }
 
 func (h *Handler) SignUp(c *fiber.Ctx) error {
-	b, verr := handler.Validate[SignUpRequest](c)
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+	b, validation := handler.Validate[SignUpRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
 	if err := h.service.ValidatePassword(b.Password); err != nil {
@@ -403,11 +403,11 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			)
 		}
 
-		primaryAddressID := uint(snowflake.ID())
+		primaryAddressID := snowflake.ID()
 
 		u := model.User{
 			Model: model.Model{
-				ID: uint(snowflake.ID()),
+				ID: snowflake.ID(),
 			},
 			SchemaVersion:         model.SchemaVersionV1,
 			SecondFactorPolicy:    deployment.AuthSettings.SecondFactorPolicy,
@@ -507,7 +507,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 
 	if identifierType == "signin" {
 		attempt, err := h.service.GetSignInAttempt(
-			uint(attemptIdentifier),
+			uint64(attemptIdentifier),
 		)
 		if err != nil {
 			return handler.SendInternalServerError(
@@ -586,7 +586,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 			return handler.SendBadRequest(c, nil, "Invalid step")
 		}
 	} else {
-		attempt, err := h.service.GetSignupAttempt(uint(attemptIdentifier))
+		attempt, err := h.service.GetSignupAttempt(uint64(attemptIdentifier))
 		if err != nil {
 			return handler.SendInternalServerError(
 				c,
@@ -658,14 +658,14 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 		)
 	}
 
-	b, verr := handler.Validate[VerifyOTPRequest](c)
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+	b, validation := handler.Validate[VerifyOTPRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
 	if identifierType == "signin" {
 		attempt, err := h.service.GetSignInAttempt(
-			uint(attemptIdentifier),
+			uint64(attemptIdentifier),
 		)
 		if err != nil {
 			return handler.SendInternalServerError(
@@ -771,7 +771,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 			}
 		}
 	} else {
-		attempt, err := h.service.GetSignupAttempt(uint(attemptIdentifier))
+		attempt, err := h.service.GetSignupAttempt(uint64(attemptIdentifier))
 		if err != nil {
 			return handler.SendInternalServerError(c, err, "Error fetching sign up attempt")
 		}

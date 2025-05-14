@@ -48,7 +48,7 @@ func (s *WorkspaceService) hasWorkspacePermission(membership model.WorkspaceMemb
 	return false
 }
 
-func (s *WorkspaceService) uploadWorkspaceImage(workspaceID uint, file *multipart.FileHeader) (string, error) {
+func (s *WorkspaceService) uploadWorkspaceImage(workspaceID uint64, file *multipart.FileHeader) (string, error) {
 	reader, err := file.Open()
 	if err != nil {
 		return "", err

@@ -58,9 +58,9 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 func (h *Handler) UpdateUser(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 
-	b, verr := handler.Validate[UpdateUserSchema](c)
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+	b, validation := handler.Validate[UpdateUserSchema](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
 	updates := make(map[string]any)
@@ -195,15 +195,15 @@ func (h *Handler) CreateUserEmailAddress(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
 	}
 
-	b, verr := handler.Validate[AddUserEmailAddressSchema](c)
+	b, validation := handler.Validate[AddUserEmailAddressSchema](c)
 
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
 	newEmail := model.UserEmailAddress{
 		Model: model.Model{
-			ID: uint(snowflake.ID()),
+			ID: snowflake.ID(),
 		},
 		UserID:   session.ActiveSignin.UserID,
 		Email:    b.Email,
@@ -409,15 +409,15 @@ func (h *Handler) AddPhoneNumber(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
 	}
 
-	b, verr := handler.Validate[AddUserPhoneNumberSchema](c)
+	b, validation := handler.Validate[AddUserPhoneNumberSchema](c)
 
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
 	phoneNumber := model.UserPhoneNumber{
 		Model: model.Model{
-			ID: uint(snowflake.ID()),
+			ID: snowflake.ID(),
 		},
 		PhoneNumber: b.PhoneNumber,
 	}
@@ -611,7 +611,7 @@ func (h *Handler) GenerateAuthenticator(c *fiber.Ctx) error {
 
 	authenticator := &model.UserAuthenticator{
 		Model: model.Model{
-			ID: uint(snowflake.ID()),
+			ID: snowflake.ID(),
 		},
 		TotpSecret: key.Secret(),
 		OtpUrl:     key.URL(),
@@ -642,9 +642,9 @@ func (h *Handler) VerifyAuthenticator(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
 	}
 
-	b, verr := handler.Validate[VerifyAuthenticatorSchema](c)
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+	b, validation := handler.Validate[VerifyAuthenticatorSchema](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
 	var authenticator model.UserAuthenticator

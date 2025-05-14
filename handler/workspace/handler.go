@@ -14,13 +14,13 @@ import (
 	"gorm.io/gorm"
 )
 
-func getUintParam(c *fiber.Ctx, paramName string) (uint, error) {
+func getuint64Param(c *fiber.Ctx, paramName string) (uint64, error) {
 	valStr := c.Params(paramName)
-	valUint64, err := strconv.ParseUint(valStr, 10, 64)
+	valuint64, err := strconv.ParseUint(valStr, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("invalid parameter '%s': %w", paramName, err)
 	}
-	return uint(valUint64), nil
+	return uint64(valuint64), nil
 }
 
 type Handler struct {
@@ -34,14 +34,14 @@ func NewHandler() *Handler {
 }
 
 func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
-	b, verr := handler.Validate[CreateWorkspaceRequest](c)
+	b, validation := handler.Validate[CreateWorkspaceRequest](c)
 	deployment := handler.GetDeployment(c)
 	img, _ := c.FormFile("image")
 	imgurl := deployment.UISettings.DefaultWorkspaceProfileImageURL
-	workspaceid := uint(snowflake.ID())
+	workspaceid := snowflake.ID()
 
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
 	session := handler.GetSession(c)
@@ -92,7 +92,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 
 		creatorMembership := model.WorkspaceMembership{
 			Model: model.Model{
-				ID: uint(snowflake.ID()),
+				ID: snowflake.ID(),
 			},
 			WorkspaceID:              workspace.ID,
 			UserID:                   session.ActiveSignin.UserID,
@@ -142,7 +142,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 
 func (h *Handler) GetWorkspace(c *fiber.Ctx) error {
 	workspaceIDStr := c.Params("id")
-	workspaceID, err := getUintParam(c, "id")
+	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, err.Error())
 	}
@@ -178,7 +178,7 @@ func (h *Handler) GetWorkspace(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
-	workspaceID, err := getUintParam(c, "id")
+	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, err.Error())
 	}
@@ -209,7 +209,7 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetWorkspaceRoles(c *fiber.Ctx) error {
-	workspaceID, err := getUintParam(c, "id")
+	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, err.Error())
 	}
@@ -237,15 +237,15 @@ func (h *Handler) GetWorkspaceRoles(c *fiber.Ctx) error {
 }
 
 func (h *Handler) AddWorkspaceMemberRole(c *fiber.Ctx) error {
-	workspaceID, err := getUintParam(c, "workspaceId")
+	workspaceID, err := getuint64Param(c, "workspaceId")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid workspace ID: "+err.Error())
 	}
-	targetMembershipID, err := getUintParam(c, "membershipId")
+	targetMembershipID, err := getuint64Param(c, "membershipId")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid membership ID: "+err.Error())
 	}
-	roleIDToAdd, err := getUintParam(c, "roleId")
+	roleIDToAdd, err := getuint64Param(c, "roleId")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid role ID: "+err.Error())
 	}
@@ -303,15 +303,15 @@ func (h *Handler) AddWorkspaceMemberRole(c *fiber.Ctx) error {
 }
 
 func (h *Handler) RemoveWorkspaceMemberRole(c *fiber.Ctx) error {
-	workspaceID, err := getUintParam(c, "workspaceId")
+	workspaceID, err := getuint64Param(c, "workspaceId")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid workspace ID: "+err.Error())
 	}
-	targetMembershipID, err := getUintParam(c, "membershipId")
+	targetMembershipID, err := getuint64Param(c, "membershipId")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid membership ID: "+err.Error())
 	}
-	roleIDToRemove, err := getUintParam(c, "roleId")
+	roleIDToRemove, err := getuint64Param(c, "roleId")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid role ID: "+err.Error())
 	}
@@ -376,14 +376,14 @@ func (h *Handler) RemoveWorkspaceMemberRole(c *fiber.Ctx) error {
 }
 
 func (h *Handler) UpdateWorkspace(c *fiber.Ctx) error {
-	workspaceID, err := getUintParam(c, "id")
+	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid workspace ID: "+err.Error())
 	}
 
-	b, verr := handler.Validate[UpdateWorkspaceRequest](c)
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+	b, validation := handler.Validate[UpdateWorkspaceRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
 	session := handler.GetSession(c)
@@ -442,7 +442,7 @@ func (h *Handler) UpdateWorkspace(c *fiber.Ctx) error {
 }
 
 func (h *Handler) DeleteWorkspace(c *fiber.Ctx) error {
-	workspaceID, err := getUintParam(c, "id")
+	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid workspace ID: "+err.Error())
 	}
@@ -497,19 +497,19 @@ func (h *Handler) DeleteWorkspace(c *fiber.Ctx) error {
 }
 
 func (h *Handler) InviteMember(c *fiber.Ctx) error {
-	workspaceID, err := getUintParam(c, "id")
+	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid workspace ID: "+err.Error())
 	}
 
 	type AddMemberToWorkspaceRequest struct {
 		Email  string `json:"email" validate:"required,email"`
-		RoleID uint   `json:"role_id" validate:"required"` // WorkspaceRoleID
+		RoleID uint64 `json:"role_id" validate:"required"` // WorkspaceRoleID
 	}
 
-	b, verr := handler.Validate[AddMemberToWorkspaceRequest](c)
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+	b, validation := handler.Validate[AddMemberToWorkspaceRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
 	session := handler.GetSession(c)
@@ -569,7 +569,7 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 
 	newWorkspaceMembership := model.WorkspaceMembership{
 		Model: model.Model{
-			ID: uint(snowflake.ID()),
+			ID: snowflake.ID(),
 		},
 		WorkspaceID:              workspaceID,
 		UserID:                   userToInvite.ID,
@@ -604,12 +604,12 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 }
 
 func (h *Handler) RemoveMember(c *fiber.Ctx) error {
-	workspaceID, err := getUintParam(c, "id")
+	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid workspace ID: "+err.Error())
 	}
 
-	targetUserID, err := getUintParam(c, "memberId")
+	targetUserID, err := getuint64Param(c, "memberId")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid member ID: "+err.Error())
 	}

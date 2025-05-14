@@ -40,8 +40,8 @@ func (ct VerificationStrategy) GormDBDataType() string {
 
 type UserEmailAddress struct {
 	Model
-	DeploymentID         uint                 `json:"-" gorm:"index:idx_deployment_user_email_address_email,unique"`
-	UserID               uint                 `json:"-" gorm:"index:idx_deployment_user_email_address_email,unique"`
+	DeploymentID         uint64               `json:"-" gorm:"index:idx_deployment_user_email_address_email,unique"`
+	UserID               uint64               `json:"-" gorm:"index:idx_deployment_user_email_address_email,unique"`
 	User                 User                 `json:"-" gorm:"foreignKey:UserID"`
 	Email                string               `json:"email" gorm:"index:idx_user_email_address_email;index:idx_deployment_user_email_address_email,unique"`
 	IsPrimary            bool                 `json:"is_primary" gorm:"not null"`
@@ -96,8 +96,8 @@ type User struct {
 	LastPasswordResetAt            time.Time               `json:"last_password_reset_at"`
 	SchemaVersion                  SchemaVersion           `json:"schema_version"                  gorm:"not null"`
 	Disabled                       bool                    `json:"disabled"                        gorm:"not null"`
-	PrimaryEmailAddressID          *uint                   `json:"primary_email_address_id,string"`
-	PrimaryPhoneNumberID           *uint                   `json:"primary_phone_number_id,string"`
+	PrimaryEmailAddressID          *uint64                 `json:"primary_email_address_id,string"`
+	PrimaryPhoneNumberID           *uint64                 `json:"primary_phone_number_id,string"`
 	PrimaryPhoneNumber             *UserPhoneNumber        `json:"primary_phone_number"            gorm:"constraint:OnDelete:CASCADE;foreignKey:PrimaryPhoneNumberID"`
 	PrimaryEmailAddress            *UserEmailAddress       `json:"primary_email_address"           gorm:"constraint:OnDelete:CASCADE;foreignKey:PrimaryEmailAddressID"`
 	SecondFactorPolicy             SecondFactorPolicy      `json:"second_factor_policy"            gorm:"not null"`
@@ -106,11 +106,11 @@ type User struct {
 	UserAuthenticator              *UserAuthenticator      `json:"user_authenticator"              gorm:"constraint:OnDelete:CASCADE;"`
 	SocialConnections              []*SocialConnection     `json:"social_connections,omitempty"    gorm:"constraint:OnDelete:CASCADE;"`
 	SignIns                        []*Signin               `json:"-"                               gorm:"constraint:OnDelete:CASCADE;"`
-	ActiveOrganizationMembershipID *uint                   `json:"active_organization_id,string"`
+	ActiveOrganizationMembershipID *uint64                 `json:"active_organization_id,string"`
 	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization"             gorm:"constraint:OnDelete:CASCADE;"`
-	ActiveWorkspaceMembershipID    *uint                   `json:"active_workspace_id,string"`
+	ActiveWorkspaceMembershipID    *uint64                 `json:"active_workspace_id,string"`
 	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace"                gorm:"constraint:OnDelete:CASCADE;"`
-	DeploymentID                   uint                    `json:"-"                               gorm:"not null"`
+	DeploymentID                   uint64                  `json:"-"                               gorm:"not null"`
 	PublicMetadata                 datatypes.JSONMap       `json:"public_metadata"                 gorm:"not null"`
 	PrivateMetadata                datatypes.JSONMap       `json:"-"                               gorm:"not null"`
 	OtpSecret                      string                  `json:"-"                               gorm:"not null"`
@@ -126,8 +126,8 @@ type PublicUserData struct {
 	LastName              string            `json:"last_name"                       gorm:"not null"`
 	Username              string            `json:"username"                        gorm:"not null"`
 	Availability          UserAvailability  `json:"availability"                    gorm:"default:away;not null"`
-	PrimaryEmailAddressID *uint             `json:"-"`
-	PrimaryPhoneNumberID  *uint             `json:"-"`
+	PrimaryEmailAddressID *uint64           `json:"primary_email_address_id"`
+	PrimaryPhoneNumberID  *uint64           `json:"-"`
 	PrimaryPhoneNumber    *UserPhoneNumber  `json:"primary_phone_number" gorm:"foreignKey:PrimaryPhoneNumberID;references:ID"`
 	PrimaryEmailAddress   *UserEmailAddress `json:"primary_email_address" gorm:"foreignKey:PrimaryEmailAddressID;references:ID"`
 }

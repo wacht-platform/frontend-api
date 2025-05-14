@@ -37,7 +37,7 @@ func (e *EmailTemplate) GormDBDataType() string {
 
 type DeploymentEmailTemplate struct {
 	Model
-	DeploymentID                uint          `json:"deployment_id"                    gorm:"not null;index"`
+	DeploymentID                uint64        `json:"deployment_id"                    gorm:"not null;index"`
 	OrganizationInviteTemplate  EmailTemplate `json:"organization_invite_template"     gorm:"not null"`
 	VerificationCodeTemplate    EmailTemplate `json:"verification_code_template"       gorm:"not null"`
 	ResetPasswordCodeTemplate   EmailTemplate `json:"reset_password_code_template"     gorm:"not null"`

@@ -191,7 +191,7 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token) error {
 	return c.Next()
 }
 
-func extractTokenClaims(token jwt.Token) (uint, uint, error) {
+func extractTokenClaims(token jwt.Token) (uint64, uint64, error) {
 	var sessionID float64
 	var rotatingTokenID string
 
@@ -203,17 +203,17 @@ func extractTokenClaims(token jwt.Token) (uint, uint, error) {
 		return 0, 0, err
 	}
 
-	rotatingTokenIDUint, err := strconv.ParseUint(rotatingTokenID, 10, 64)
+	rotatingTokenIDuint64, err := strconv.ParseUint(rotatingTokenID, 10, 64)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	return uint(sessionID), uint(rotatingTokenIDUint), nil
+	return uint64(sessionID), uint64(rotatingTokenIDuint64), nil
 }
 
 func validateRotatingToken(
-	sessionID uint,
-	rotatingTokenID uint,
+	sessionID uint64,
+	rotatingTokenID uint64,
 ) (model.RotatingToken, error) {
 	var rotatingToken model.RotatingToken
 	if err := database.Connection.First(&rotatingToken, rotatingTokenID).Error; err != nil {

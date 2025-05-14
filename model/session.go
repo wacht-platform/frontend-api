@@ -21,14 +21,14 @@ type Session struct {
 	SigninAttempts []*SignInAttempt `json:"signin_attempts,omitempty"`
 	Signins        []*Signin        `json:"signins,omitempty"`
 	SignupAttempts []*SignupAttempt `json:"signup_attempts,omitempty"`
-	ActiveSigninID uint             `json:"-"`
+	ActiveSigninID uint64           `json:"-"`
 	ActiveSignin   *Signin          `json:"active_signin,omitempty"`
 }
 
 func NewSession() *Session {
 	return &Session{
 		Model: Model{
-			ID: uint(snowflake.ID()),
+			ID: snowflake.ID(),
 		},
 	}
 }

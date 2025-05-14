@@ -10,7 +10,6 @@ import (
 	"github.com/ilabs/wacht-fe/config"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
-	"github.com/ilabs/wacht-fe/router"
 )
 
 func main() {
@@ -22,16 +21,16 @@ func main() {
 		log.Fatal("Error connecting to database: ", err)
 	}
 
-	// if err = database.AutoMigratePg(); err != nil {
-	// 	log.Fatal("Error migrating database: ", err)
-	// }
+	if err = database.AutoMigratePg(); err != nil {
+		log.Fatal("Error migrating database: ", err)
+	}
 
 	app := fiber.New(fiber.Config{
 		JSONEncoder:  json.Marshal,
 		JSONDecoder:  json.Unmarshal,
 		ErrorHandler: handler.DefaultErrorHandler,
 	})
-	router.Setup(app)
+	// router.Setup(app)
 
 	log.Fatal(app.Listen(":3000"))
 }

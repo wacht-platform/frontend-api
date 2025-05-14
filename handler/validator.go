@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"log"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 )
@@ -17,6 +19,7 @@ func Validate[T any](c *fiber.Ctx) (*T, *ValidationError) {
 	validationError := &ValidationError{}
 
 	if err := c.BodyParser(p); err != nil {
+		log.Println("parse error", err)
 		validationError.parseError = err.Error()
 	}
 

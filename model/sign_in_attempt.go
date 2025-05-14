@@ -65,9 +65,9 @@ func (e *Error) GormDBDataType() string {
 
 type SignInAttempt struct {
 	Model
-	UserID         uint                                   `json:"-"`
-	IdentifierID   uint                                   `json:"-"`
-	SessionID      uint                                   `json:"session_id"      gorm:"not null"`
+	UserID         uint64                                 `json:"-"`
+	IdentifierID   uint64                                 `json:"-"`
+	SessionID      uint64                                 `json:"session_id"      gorm:"not null"`
 	Method         SignInMethod                           `json:"method"          gorm:"not null"`
 	SSOProvider    SocialConnectionProvider               `json:"sso_provider"`
 	ExpiresAt      time.Time                              `json:"expires_at"      gorm:"not null"`
@@ -81,9 +81,13 @@ type SignInAttempt struct {
 func NewSignInAttempt(method SignInMethod) *SignInAttempt {
 	return &SignInAttempt{
 		Model: Model{
-			ID: uint(snowflake.ID()),
+			ID: snowflake.ID(),
 		},
 		Method:    method,
 		ExpiresAt: time.Now().Add(time.Minute * 10),
 	}
+}
+
+type Test struct {
+	Model
 }

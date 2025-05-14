@@ -34,7 +34,7 @@ func NewOrgService() *OrgService {
 	}
 }
 
-func (s *OrgService) uploadOrganizationImage(orgID uint, file *multipart.FileHeader) (string, error) {
+func (s *OrgService) uploadOrganizationImage(orgID uint64, file *multipart.FileHeader) (string, error) {
 	reader, err := file.Open()
 	if err != nil {
 		return "", err

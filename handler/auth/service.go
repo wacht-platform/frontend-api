@@ -58,7 +58,7 @@ func (s *AuthService) FindUserByEmail(
 }
 
 func (s *AuthService) FindUserByEmailID(
-	emailId uint,
+	emailId uint64,
 ) (*model.UserEmailAddress, error) {
 	var userEmail model.UserEmailAddress
 	if res := s.db.Where(&model.UserEmailAddress{Model: model.Model{ID: emailId}}).Joins("User").First(&userEmail); res.RowsAffected == 0 {
@@ -107,9 +107,9 @@ func (s *AuthService) DetermineAuthenticationStep(
 }
 
 func (s *AuthService) CreateSignInAttempt(
-	userID uint,
-	identifierID uint,
-	sessionID uint,
+	userID uint64,
+	identifierID uint64,
+	sessionID uint64,
 	method model.SignInMethod,
 	steps []model.SignInAttemptStep,
 	completed bool,
@@ -151,14 +151,14 @@ func (s *AuthService) ValidateSignUpRequest(
 func (s *AuthService) CreateUser(
 	b *SignUpRequest,
 	hashedPassword string,
-	deploymentID uint,
+	deploymentID uint64,
 	secondFactorPolicy model.SecondFactorPolicy,
 	otpSecret string,
 	verified bool,
 ) model.User {
-	emailID := uint(snowflake.ID())
+	emailID := snowflake.ID()
 	u := model.User{
-		Model:                 model.Model{ID: uint(snowflake.ID())},
+		Model:                 model.Model{ID: snowflake.ID()},
 		FirstName:             b.FirstName,
 		LastName:              b.LastName,
 		Username:              b.Username,
@@ -179,7 +179,7 @@ func (s *AuthService) CreateUser(
 	}
 
 	if b.PhoneNumber != "" {
-		phoneNumberID := uint(snowflake.ID())
+		phoneNumberID := snowflake.ID()
 		u.UserPhoneNumbers = append(
 			u.UserPhoneNumbers,
 			&model.UserPhoneNumber{
@@ -195,14 +195,14 @@ func (s *AuthService) CreateUser(
 }
 
 func (s *AuthService) CreateSocialConnection(
-	userID uint,
-	emailID uint,
+	userID uint64,
+	emailID uint64,
 	provider model.SocialConnectionProvider,
 	email string,
 	token *oauth2.Token,
 ) model.SocialConnection {
 	return model.SocialConnection{
-		Model:              model.Model{ID: uint(snowflake.ID())},
+		Model:              model.Model{ID: snowflake.ID()},
 		Provider:           provider,
 		EmailAddress:       email,
 		UserID:             userID,
@@ -335,7 +335,7 @@ func (s *AuthService) CheckIdentifierAvailability(
 }
 
 func (s *AuthService) GetSignInAttempt(
-	signInAttempt uint,
+	signInAttempt uint64,
 ) (model.SignInAttempt, error) {
 	var attempt model.SignInAttempt
 	if err := s.db.Where("id = ?", signInAttempt).First(&attempt).Error; err != nil {
@@ -522,7 +522,7 @@ func (s *AuthService) CreateSignupAttempt(
 
 	attempt := &model.SignupAttempt{
 		Model: model.Model{
-			ID: uint(snowflake.ID()),
+			ID: snowflake.ID(),
 		},
 		SessionID:      session.ID,
 		FirstName:      b.FirstName,
@@ -571,7 +571,7 @@ func (s *AuthService) DeleteOTPFromRedis(key string) error {
 }
 
 func (s *AuthService) GetSignupAttempt(
-	signupAttempt uint,
+	signupAttempt uint64,
 ) (*model.SignupAttempt, error) {
 	var attempt model.SignupAttempt
 	if err := s.db.Where("id = ?", signupAttempt).First(&attempt).Error; err != nil {
@@ -605,8 +605,8 @@ func (s *AuthService) CreateVerifiedUser(
 }
 
 func (s *AuthService) CreateSignin(
-	userID uint,
-	sessionID uint,
+	userID uint64,
+	sessionID uint64,
 	ctx *fiber.Ctx,
 ) *model.Signin {
 	signIn := model.NewSignIn(sessionID, userID)

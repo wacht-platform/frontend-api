@@ -8,7 +8,7 @@ import (
 
 type DeploymentRestrictions struct {
 	Model
-	DeploymentID          uint                             `json:"deployment_id"           gorm:"not null;index"`
+	DeploymentID          uint64                           `json:"deployment_id"           gorm:"not null;index"`
 	AllowlistEnabled      bool                             `json:"allowlist_enabled"       gorm:"not null"`
 	BlocklistEnabled      bool                             `json:"blocklist_enabled"       gorm:"not null"`
 	BlockSubaddresses     bool                             `json:"block_subaddresses"      gorm:"not null"`

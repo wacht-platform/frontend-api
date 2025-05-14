@@ -25,22 +25,22 @@ func NewHandler() *Handler {
 	}
 }
 
-func getUint(s string) uint {
+func getuint64(s string) uint64 {
 	v, err := strconv.ParseUint(s, 10, 64)
 	if err != nil {
 		panic("invalid organization id")
 	}
-	return uint(v)
+	return uint64(v)
 }
 
 func (h *Handler) CreateOrganization(
 	c *fiber.Ctx,
 ) error {
 	d := handler.GetDeployment(c)
-	b, verr := handler.Validate[CreateOrgRequest](c)
+	b, validation := handler.Validate[CreateOrgRequest](c)
 	img, _ := c.FormFile("image")
 	imgurl := d.UISettings.DefaultOrganizationProfileImageURL
-	orgid := uint(snowflake.ID())
+	orgid := snowflake.ID()
 
 	if !d.B2BSettings.OrganizationsEnabled {
 		return handler.SendBadRequest(c, nil, "Organizations are not enabled for this deployment")
@@ -55,8 +55,8 @@ func (h *Handler) CreateOrganization(
 		imgurl = url
 	}
 
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
 	session := handler.GetSession(c)
@@ -76,7 +76,7 @@ func (h *Handler) CreateOrganization(
 
 	membership := model.OrganizationMembership{
 		Model: model.Model{
-			ID: uint(snowflake.ID()),
+			ID: snowflake.ID(),
 		},
 		OrganizationID: orgid,
 		UserID:         session.ActiveSignin.UserID,
@@ -93,7 +93,7 @@ func (h *Handler) CreateOrganization(
 			if err := tx.Exec(
 				fmt.Sprintf(
 					"INSERT INTO %s (organization_membership_id, deployment_organization_role_id) VALUES (?, ?)",
-					"org_membership_roles",
+					"organization_membership_roles",
 				),
 				membership.ID,
 				d.B2BSettings.DefaultOrgCreatorRoleID,
@@ -119,7 +119,7 @@ func (h *Handler) LeaveOrganization(
 	c *fiber.Ctx,
 ) error {
 	orgIDStr := c.Params("id")
-	orgID := getUint(orgIDStr)
+	orgID := getuint64(orgIDStr)
 	session := handler.GetSession(c)
 	d := handler.GetDeployment(c)
 
@@ -141,13 +141,13 @@ func (h *Handler) LeaveOrganization(
 
 	if isOwner {
 		var adminCount int64
-		if err := database.Connection.Table("org_membership_roles").
+		if err := database.Connection.Table("organization_membership_roles").
 			Where("organization_id = ? AND organization_role_id = ? AND organization_membership_id != ?",
 				orgID,
 				d.B2BSettings.DefaultOrgCreatorRoleID,
 				membership.ID).
 			Count(&adminCount).Error; err != nil {
-			log.Println("Error counting other admins using DefaultOrgCreatorRoleID on org_membership_roles:", err)
+			log.Println("Error counting other admins using DefaultOrgCreatorRoleID on organization_membership_roles:", err)
 			return handler.SendInternalServerError(c, err, "Failed to verify organization admin status")
 		}
 
@@ -190,11 +190,10 @@ func (h *Handler) UpdateOrganization(
 	c *fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
-	b, verr := handler.Validate[UpdateOrgRequest](
-		c,
-	)
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+	b, validation := handler.Validate[UpdateOrgRequest](c)
+	if validation != nil {
+		log.Println(validation)
+		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
 	session := handler.GetSession(c)
@@ -202,15 +201,12 @@ func (h *Handler) UpdateOrganization(
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
-	var org model.Organization
-	if err := database.Connection.First(&org, orgID).Error; err != nil {
-		return handler.SendNotFound(c, nil, "Organization not found")
-	}
-
 	var membership model.OrganizationMembership
 	if err := database.Connection.
 		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		Preload("Roles").First(&membership).
+		Preload("Roles").
+		Joins("Organization").
+		First(&membership).
 		Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
@@ -220,12 +216,16 @@ func (h *Handler) UpdateOrganization(
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	if b.Name != "" {
-		org.Name = b.Name
+	org := membership.Organization
+
+	log.Println(b)
+
+	if b.Name != nil {
+		org.Name = *b.Name
 	}
 
-	if b.Description != "" {
-		org.Description = b.Description
+	if b.Description != nil {
+		org.Description = *b.Description
 	}
 
 	if len(b.WhitelistedIPs) > 0 {
@@ -236,13 +236,19 @@ func (h *Handler) UpdateOrganization(
 		org.AutoAssignedWorkspaceID = b.AutoAssignedWorkspaceID
 	}
 
+	if b.EnforceMFASetup != nil {
+		org.EnforceMFASetup = *b.EnforceMFASetup
+	}
+
+	if b.EnableIPRestriction != nil {
+		org.EnableIPRestriction = *b.EnableIPRestriction
+	}
+
 	if err := database.Connection.Save(&org).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to update organization")
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"organization": org,
-	})
+	return handler.SendSuccess(c, org)
 }
 
 func (h *Handler) DeleteOrganization(
@@ -314,11 +320,11 @@ func (h *Handler) InviteMember(
 	c *fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
-	b, verr := handler.Validate[InviteMemberRequest](
+	b, validation := handler.Validate[InviteMemberRequest](
 		c,
 	)
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
 	session := handler.GetSession(
@@ -344,9 +350,9 @@ func (h *Handler) InviteMember(
 
 	invitation := model.OrganizationInvitation{
 		Model: model.Model{
-			ID: uint(snowflake.ID()),
+			ID: snowflake.ID(),
 		},
-		OrganizationID: getUint(orgID),
+		OrganizationID: getuint64(orgID),
 		InviterID:      membership.ID,
 		Email:          b.Email,
 	}
@@ -391,9 +397,9 @@ func (h *Handler) DiscardInvitation(
 
 	if err := database.Connection.Delete(&model.OrganizationInvitation{
 		Model: model.Model{
-			ID: getUint(invitationID),
+			ID: getuint64(invitationID),
 		},
-		OrganizationID: getUint(orgID),
+		OrganizationID: getuint64(orgID),
 	}).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to dismiss invitation")
 	}
@@ -480,7 +486,7 @@ func (h *Handler) AddMemberRole(
 	}
 
 	err = database.Connection.Exec(
-		"INSERT INTO org_membership_roles (organization_membership_id, organization_role_id) VALUES (?, ?)",
+		"INSERT INTO organization_membership_roles (organization_membership_id, organization_role_id) VALUES (?, ?)",
 		assignedMember.ID,
 		role.ID,
 	).Error
@@ -502,9 +508,9 @@ func (h *Handler) RemoveMemberRole(
 	memberIDStr := c.Params("memberId")
 	roleIDStr := c.Params("roleId")
 
-	orgIDUint := getUint(orgIDStr)
-	targetMembershipIDUint := getUint(memberIDStr)
-	roleIDToRemoveUint := getUint(roleIDStr)
+	orgIDuint64 := getuint64(orgIDStr)
+	targetMembershipIDuint64 := getuint64(memberIDStr)
+	roleIDToRemoveuint64 := getuint64(roleIDStr)
 
 	session := handler.GetSession(c)
 	d := handler.GetDeployment(c)
@@ -515,11 +521,11 @@ func (h *Handler) RemoveMemberRole(
 
 	var actingUserMembership model.OrganizationMembership
 	if err := database.Connection.
-		Where("organization_id = ? AND user_id = ?", orgIDUint, session.ActiveSignin.UserID).
+		Where("organization_id = ? AND user_id = ?", orgIDuint64, session.ActiveSignin.UserID).
 		Preload("Roles").
 		First(&actingUserMembership).
 		Error; err != nil {
-		log.Printf("Permission check failed for user %d in org %d: %v", session.ActiveSignin.UserID, orgIDUint, err)
+		log.Printf("Permission check failed for user %d in org %d: %v", session.ActiveSignin.UserID, orgIDuint64, err)
 		return handler.SendForbidden(c, nil, "Insufficient permissions to manage roles (user not found in org or DB error).")
 	}
 
@@ -529,21 +535,21 @@ func (h *Handler) RemoveMemberRole(
 	}
 
 	var targetMemberShip model.OrganizationMembership
-	if err := database.Connection.Where("organization_id = ? AND id = ?", orgIDUint, targetMembershipIDUint).First(&targetMemberShip).Error; err != nil {
-		log.Printf("Target membership ID %d not found in org %d: %v", targetMembershipIDUint, orgIDUint, err)
+	if err := database.Connection.Where("organization_id = ? AND id = ?", orgIDuint64, targetMembershipIDuint64).First(&targetMemberShip).Error; err != nil {
+		log.Printf("Target membership ID %d not found in org %d: %v", targetMembershipIDuint64, orgIDuint64, err)
 		return handler.SendNotFound(c, err, "Target member or organization not found.")
 	}
 
-	isAdminRoleBeingRemoved := (roleIDToRemoveUint == d.B2BSettings.DefaultOrgCreatorRoleID)
+	isAdminRoleBeingRemoved := (roleIDToRemoveuint64 == d.B2BSettings.DefaultOrgCreatorRoleID)
 	isSelfRemoval := (targetMemberShip.UserID == session.ActiveSignin.UserID)
 
 	if isAdminRoleBeingRemoved && isSelfRemoval {
 		var otherAdminCount int64
-		if err := database.Connection.Table("org_membership_roles").
+		if err := database.Connection.Table("organization_membership_roles").
 			Where("organization_id = ? AND organization_role_id = ? AND organization_membership_id != ?",
-				orgIDUint,
+				orgIDuint64,
 				d.B2BSettings.DefaultOrgCreatorRoleID,
-				targetMembershipIDUint).
+				targetMembershipIDuint64).
 			Count(&otherAdminCount).Error; err != nil {
 			log.Println("Error counting other admins in RemoveMemberRole:", err)
 			return handler.SendInternalServerError(c, err, "Failed to verify organization admin status.")
@@ -555,11 +561,11 @@ func (h *Handler) RemoveMemberRole(
 	}
 
 	if err := database.Connection.Exec(
-		"DELETE FROM org_membership_roles WHERE organization_membership_id = ? AND organization_role_id = ?",
-		targetMembershipIDUint,
-		roleIDToRemoveUint,
+		"DELETE FROM organization_membership_roles WHERE organization_membership_id = ? AND organization_role_id = ?",
+		targetMembershipIDuint64,
+		roleIDToRemoveuint64,
 	).Error; err != nil {
-		log.Println("Failed to delete role from org_membership_roles:", err)
+		log.Println("Failed to delete role from organization_membership_roles:", err)
 		return handler.SendInternalServerError(c, err, "Failed to remove role.")
 	}
 
@@ -590,11 +596,65 @@ func (h *Handler) GetOrganizationMembers(
 	if err := database.Connection.Where("organization_id = ?", orgID).
 		Preload("Roles").
 		Joins("User").
+		Joins("User.PrimaryEmailAddress").
 		Find(&members).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to get organization members")
 	}
 
 	return handler.SendSuccess(c, members)
+}
+
+func (h *Handler) CreateOrganizationRole(
+	c *fiber.Ctx,
+) error {
+	orgID := c.Params("id")
+	session := handler.GetSession(c)
+	deployment := handler.GetDeployment(c)
+
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	var currentMembership model.OrganizationMembership
+	if err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&currentMembership).
+		Error; err != nil {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	hasPermission := h.service.hasPermission(currentMembership, orgManagementPermissions)
+	if !hasPermission {
+		return handler.SendForbidden(c, nil, "Insufficient permissions to manage roles.")
+	}
+
+	body, validation := handler.Validate[CreateRoleRequest](c)
+
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Invalid request")
+	}
+
+	for _, permission := range body.Permissions {
+		if slices.Contains(deployment.B2BSettings.OrganizationPermissions, permission) {
+			return handler.SendForbidden(c, nil, "Insufficient permissions to manage roles.")
+		}
+	}
+
+	role := model.OrganizationRole{
+		Model:          model.Model{ID: snowflake.ID()},
+		OrganizationID: getuint64(orgID),
+	}
+
+	if err := database.Connection.Create(&role).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to create organization role")
+	}
+
+	if err := database.Connection.Create(&role).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to create organization role")
+	}
+
+	return handler.SendSuccess(c, role)
 }
 
 func (h *Handler) GetOrganizationRoles(
@@ -619,6 +679,40 @@ func (h *Handler) GetOrganizationRoles(
 	return handler.SendSuccess(c, roles)
 }
 
+func (h *Handler) RemoveOrganizationRoles(
+	c *fiber.Ctx,
+) error {
+	orgID := c.Params("id")
+	roleID := c.Params("roleId")
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	var currentMembership model.OrganizationMembership
+	if err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&currentMembership).
+		Error; err != nil {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	var role model.OrganizationRole
+	if err := database.Connection.
+		Where("id = ? AND organization_id = ?", roleID, orgID).
+		First(&role).
+		Error; err != nil {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	if err := database.Connection.Delete(&role).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to delete organization role")
+	}
+
+	return handler.SendSuccess(c, fiber.Map{})
+}
+
 func (h *Handler) GetOrganizationDomains(
 	c *fiber.Ctx,
 ) error {
@@ -641,9 +735,9 @@ func (h *Handler) AddOrganizationDomain(
 ) error {
 	orgID := c.Params("id")
 	d := handler.GetDeployment(c)
-	b, verr := handler.Validate[AddDomainRequest](c)
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+	b, validation := handler.Validate[AddDomainRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
 	session := handler.GetSession(c)
@@ -673,10 +767,8 @@ func (h *Handler) AddOrganizationDomain(
 	verificationToken := fmt.Sprintf("wacht-verify-%d", snowflake.ID())
 
 	domain := model.OrganizationDomain{
-		Model: model.Model{
-			ID: uint(snowflake.ID()),
-		},
-		OrganizationID:            getUint(orgID),
+		ID:                        snowflake.ID(),
+		OrganizationID:            getuint64(orgID),
 		Fqdn:                      b.Domain,
 		DeploymentID:              d.ID,
 		Verified:                  false,
@@ -725,7 +817,7 @@ func (h *Handler) VerifyOrganizationDomain(
 
 	var domain model.OrganizationDomain
 	if err := database.Connection.
-		Where("id = ? AND organization_id = ?", getUint(domainID), getUint(orgID)).
+		Where("id = ? AND organization_id = ?", getuint64(domainID), getuint64(orgID)).
 		First(&domain).
 		Error; err != nil {
 		return handler.SendNotFound(c, nil, "Domain not found")
@@ -805,7 +897,7 @@ func (h *Handler) DeleteOrganizationDomain(
 	}
 
 	if err := database.Connection.
-		Delete(&model.OrganizationDomain{OrganizationID: getUint(orgID), Model: model.Model{ID: getUint(domainID)}}).
+		Delete(&model.OrganizationDomain{OrganizationID: getuint64(orgID), ID: getuint64(domainID)}).
 		Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to delete domain")
 	}
@@ -835,7 +927,7 @@ func (h *Handler) GetOrganizationBillingAddresses(
 
 	var billingAddresses []model.OrganizationBillingAddress
 	if err := database.Connection.
-		Where("organization_id = ?", getUint(orgID)).
+		Where("organization_id = ?", getuint64(orgID)).
 		Find(&billingAddresses).
 		Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to get organization billing addresses")
@@ -848,9 +940,9 @@ func (h *Handler) AddOrganizationBillingAddress(
 	c *fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
-	b, verr := handler.Validate[BillingAddressRequest](c)
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+	b, validation := handler.Validate[BillingAddressRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
 	session := handler.GetSession(c)
@@ -879,9 +971,9 @@ func (h *Handler) AddOrganizationBillingAddress(
 
 	billingAddress := model.OrganizationBillingAddress{
 		Model: model.Model{
-			ID: uint(snowflake.ID()),
+			ID: snowflake.ID(),
 		},
-		OrganizationID: getUint(orgID),
+		OrganizationID: getuint64(orgID),
 		Address:        b.Address,
 		City:           b.City,
 		State:          b.State,
@@ -903,9 +995,9 @@ func (h *Handler) UpdateOrganizationBillingAddress(
 ) error {
 	orgID := c.Params("id")
 	billingAddressID := c.Params("billingAddressId")
-	b, verr := handler.Validate[UpdateBillingAddressRequest](c)
-	if verr != nil {
-		return handler.SendBadRequest(c, verr, "Bad request body")
+	b, validation := handler.Validate[UpdateBillingAddressRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
 	session := handler.GetSession(c)
@@ -934,7 +1026,7 @@ func (h *Handler) UpdateOrganizationBillingAddress(
 
 	var billingAddress model.OrganizationBillingAddress
 	if err := database.Connection.
-		Where("id = ? AND organization_id = ?", getUint(billingAddressID), getUint(orgID)).
+		Where("id = ? AND organization_id = ?", getuint64(billingAddressID), getuint64(orgID)).
 		First(&billingAddress).
 		Error; err != nil {
 		return handler.SendNotFound(c, nil, "Billing address not found")
@@ -986,7 +1078,7 @@ func (h *Handler) DeleteOrganizationBillingAddress(
 	}
 
 	if err := database.Connection.
-		Delete(&model.OrganizationBillingAddress{OrganizationID: getUint(orgID), Model: model.Model{ID: getUint(billingAddressID)}}).
+		Delete(&model.OrganizationBillingAddress{OrganizationID: getuint64(orgID), Model: model.Model{ID: getuint64(billingAddressID)}}).
 		Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to delete billing address")
 	}

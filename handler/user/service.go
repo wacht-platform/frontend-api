@@ -117,7 +117,7 @@ func (s *UserService) sendSmsOTPVerification(
 }
 
 func (s *UserService) uploadProfilePicture(
-	userID uint,
+	userID uint64,
 	file *multipart.FileHeader,
 ) (string, error) {
 	reader, err := file.Open()

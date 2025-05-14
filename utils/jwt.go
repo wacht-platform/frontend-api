@@ -15,7 +15,7 @@ import (
 )
 
 func SignJWT(
-	sessionID uint,
+	sessionID uint64,
 	iss string,
 	exp time.Time,
 	keypair model.DeploymentKeyPair,

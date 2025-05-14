@@ -20,7 +20,7 @@ func NewHandler() *Handler {
 func (h *Handler) GetCurrentSession(
 	c *fiber.Ctx,
 ) error {
-	sessionID := c.Locals("session").(uint)
+	sessionID := c.Locals("session").(uint64)
 
 	session := new(model.Session)
 
@@ -75,7 +75,7 @@ func (h *Handler) SwitchActiveSignIn(
 
 	validSignIn := false
 	for _, signIn := range session.Signins {
-		if signIn.ID == uint(
+		if signIn.ID == uint64(
 			signInId,
 		) {
 			session.ActiveSignin = signIn
@@ -91,7 +91,7 @@ func (h *Handler) SwitchActiveSignIn(
 		)
 	}
 
-	session.ActiveSigninID = uint(
+	session.ActiveSigninID = uint64(
 		signInId,
 	)
 
@@ -206,7 +206,7 @@ func (h *Handler) SwitchOrganization(
 		return handler.SendSuccess(c, session)
 	}
 
-	orgIDUint, err := strconv.ParseUint(orgID, 10, 64)
+	orgIDuint64, err := strconv.ParseUint(orgID, 10, 64)
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid org ID")
 	}
@@ -214,7 +214,7 @@ func (h *Handler) SwitchOrganization(
 	membership := new(model.OrganizationMembership)
 	count := database.Connection.
 		Model(&model.OrganizationMembership{}).
-		Where("user_id = ? AND organization_id = ?", session.ActiveSignin.UserID, orgIDUint).
+		Where("user_id = ? AND organization_id = ?", session.ActiveSignin.UserID, orgIDuint64).
 		First(membership).
 		RowsAffected
 	if count == 0 {
@@ -251,7 +251,7 @@ func (h *Handler) SwitchWorkspace(
 		return handler.SendSuccess(c, session)
 	}
 
-	workspaceIDUint, err := strconv.ParseUint(workspaceID, 10, 64)
+	workspaceIDuint64, err := strconv.ParseUint(workspaceID, 10, 64)
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid workspace ID")
 	}
@@ -259,7 +259,7 @@ func (h *Handler) SwitchWorkspace(
 	membership := new(model.WorkspaceMembership)
 	err = database.Connection.
 		Model(&model.WorkspaceMembership{}).
-		Where("user_id = ? AND workspace_id = ?", session.ActiveSignin.UserID, workspaceIDUint).
+		Where("user_id = ? AND workspace_id = ?", session.ActiveSignin.UserID, workspaceIDuint64).
 		Joins("Organization").
 		First(membership).
 		Error
