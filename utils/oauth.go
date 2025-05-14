@@ -60,7 +60,7 @@ func GenerateVerificationUrl(
 	case model.SocialConnectionProviderMicrosoft:
 		conf.Endpoint = microsoft.AzureADEndpoint("")
 		url = conf.AuthCodeURL(
-			strconv.FormatUint(uint64(attempt.ID), 10),
+			strconv.FormatUintFormatuint64(uint64(attempt.ID), 10),
 		)
 
 	case model.SocialConnectionProviderLinkedIn:

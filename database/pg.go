@@ -7,7 +7,6 @@ import (
 	"github.com/ilabs/wacht-fe/model"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 var Connection *gorm.DB
@@ -17,7 +16,7 @@ func InitPgConnection() error {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		SkipDefaultTransaction: true,
 		PrepareStmt:            true,
-		Logger:                 logger.Default.LogMode(logger.Silent),
+		// Logger:                 logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
 		return err
