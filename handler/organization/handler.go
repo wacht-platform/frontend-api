@@ -100,7 +100,7 @@ func (h *Handler) CreateOrganization(
 			).Error; err != nil {
 				return err
 			}
-			session.ActiveSignin.ActiveOrganizationID = &orgid
+			session.ActiveSignin.ActiveOrganizationMembershipID = &membership.ID
 			database.Connection.Save(session.ActiveSignin)
 			return nil
 		},
@@ -167,8 +167,10 @@ func (h *Handler) LeaveOrganization(
 				return err
 			}
 
-			if session.ActiveSignin.ActiveOrganizationID != nil && *session.ActiveSignin.ActiveOrganizationID == membership.OrganizationID {
-				session.ActiveSignin.ActiveOrganizationID = nil
+			if session.ActiveSignin.ActiveOrganizationMembershipID != nil &&
+				*session.ActiveSignin.ActiveOrganizationMembershipID == membership.ID {
+				session.ActiveSignin.ActiveOrganizationMembershipID = nil
+				session.ActiveSignin.ActiveWorkspaceMembershipID = nil
 				if errDb := database.Connection.Save(session.ActiveSignin).Error; errDb != nil {
 					log.Printf("Failed to clear active organization ID for user %d: %v", session.ActiveSignin.UserID, errDb)
 				}

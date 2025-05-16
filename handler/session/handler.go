@@ -1,13 +1,25 @@
 package session
 
 import (
+	"crypto/ecdsa"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+	"fmt"
 	"log"
+	"maps"
+	"slices"
 	"strconv"
+	"time"
 
+	"github.com/aymerick/raymond"
+	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/lestrrat-go/jwx/v3/jwa"
+	"github.com/lestrrat-go/jwx/v3/jwt"
 	"gorm.io/gorm"
 )
 
@@ -41,31 +53,19 @@ func (h *Handler) GetCurrentSession(
 	log.Println(session)
 	if err != nil {
 		log.Println(err)
-		return handler.SendNotFound(
-			c,
-			nil,
-			"Session not found",
-		)
+		return handler.SendNotFound(c, nil, "Session not found")
 	}
 
-	return handler.SendSuccess(
-		c,
-		session,
-	)
+	return handler.SendSuccess(c, session)
 }
 
 func (h *Handler) SwitchActiveSignIn(
 	c *fiber.Ctx,
 ) error {
-	session := handler.GetSession(
-		c,
-	)
+	session := handler.GetSession(c)
 
-	signInId, err := strconv.ParseUint(
-		c.Query("sign_in_id"),
-		10,
-		64,
-	)
+	signInId, err := strconv.ParseUint(c.Query("sign_in_id"), 10, 64)
+
 	if err != nil {
 		return fiber.NewError(
 			fiber.StatusBadRequest,
@@ -75,9 +75,7 @@ func (h *Handler) SwitchActiveSignIn(
 
 	validSignIn := false
 	for _, signIn := range session.Signins {
-		if signIn.ID == uint64(
-			signInId,
-		) {
+		if signIn.ID == signInId {
 			session.ActiveSignin = signIn
 			validSignIn = true
 			break
@@ -91,22 +89,12 @@ func (h *Handler) SwitchActiveSignIn(
 		)
 	}
 
-	session.ActiveSigninID = uint64(
-		signInId,
-	)
+	session.ActiveSigninID = signInId
 
-	handler.RemoveSessionFromCache(
-		session.ID,
-	)
+	handler.RemoveSessionFromCache(session.ID)
 
-	database.Connection.Save(
-		session,
-	)
-
-	return handler.SendSuccess(
-		c,
-		session,
-	)
+	database.Connection.Save(session)
+	return handler.SendSuccess(c, session)
 }
 
 func (h *Handler) SignOut(
@@ -121,11 +109,7 @@ func (h *Handler) SignOut(
 	)
 
 	if signInIdStr != "" {
-		signInId, err := strconv.ParseUint(
-			signInIdStr,
-			10,
-			64,
-		)
+		signInId, err := strconv.ParseUint(signInIdStr, 10, 64)
 		if err != nil {
 			return fiber.NewError(
 				fiber.StatusBadRequest,
@@ -149,11 +133,8 @@ func (h *Handler) SignOut(
 
 		err = database.Connection.Transaction(
 			func(tx *gorm.DB) error {
-				tx.Delete(
-					signIn,
-				)
-				tx.Model(session).
-					Update("active_sign_in_id", nil)
+				tx.Delete(signIn)
+				tx.Model(session).Update("active_sign_in_id", nil)
 				return nil
 			},
 		)
@@ -200,7 +181,8 @@ func (h *Handler) SwitchOrganization(
 	if orgID == "" {
 		session.ActiveSignin.User.ActiveOrganizationMembershipID = nil
 		database.Connection.Save(session.ActiveSignin.User)
-		session.ActiveSignin.ActiveOrganizationID = nil
+		session.ActiveSignin.ActiveOrganizationMembershipID = nil
+		session.ActiveSignin.ActiveOrganizationMembershipID = nil
 		database.Connection.Save(session.ActiveSignin)
 		handler.RemoveSessionFromCache(session.ID)
 		return handler.SendSuccess(c, session)
@@ -222,7 +204,7 @@ func (h *Handler) SwitchOrganization(
 	}
 
 	session.ActiveSignin.User.ActiveOrganizationMembershipID = &membership.ID
-	session.ActiveSignin.ActiveOrganizationID = &membership.OrganizationID
+	session.ActiveSignin.ActiveOrganizationMembershipID = &membership.ID
 	database.Connection.Save(session.ActiveSignin.User)
 	database.Connection.Save(session.ActiveSignin)
 	handler.RemoveSessionFromCache(session.ID)
@@ -244,8 +226,8 @@ func (h *Handler) SwitchWorkspace(
 		session.ActiveSignin.User.ActiveWorkspaceMembershipID = nil
 		session.ActiveSignin.User.ActiveOrganizationMembershipID = nil
 		database.Connection.Save(session.ActiveSignin.User)
-		session.ActiveSignin.ActiveWorkspaceID = nil
-		session.ActiveSignin.ActiveOrganizationID = nil
+		session.ActiveSignin.ActiveWorkspaceMembershipID = nil
+		session.ActiveSignin.ActiveOrganizationMembershipID = nil
 		database.Connection.Save(session.ActiveSignin)
 		handler.RemoveSessionFromCache(session.ID)
 		return handler.SendSuccess(c, session)
@@ -270,11 +252,324 @@ func (h *Handler) SwitchWorkspace(
 
 	session.ActiveSignin.User.ActiveWorkspaceMembershipID = &membership.ID
 	session.ActiveSignin.User.ActiveOrganizationMembershipID = &membership.OrganizationMembershipID
-	session.ActiveSignin.ActiveWorkspaceID = &membership.WorkspaceID
-	session.ActiveSignin.ActiveOrganizationID = &membership.OrganizationID
+	session.ActiveSignin.ActiveWorkspaceMembershipID = &membership.ID
+	session.ActiveSignin.ActiveOrganizationMembershipID = &membership.OrganizationMembershipID
 	database.Connection.Save(session.ActiveSignin.User)
 	database.Connection.Save(session.ActiveSignin)
 	handler.RemoveSessionFromCache(session.ID)
 
 	return handler.SendSuccess(c, session)
+}
+
+func (h *Handler) GetToken(
+	c *fiber.Ctx,
+) error {
+	deployment := handler.GetDeployment(c)
+	deployment.LoadKepPair(database.Connection)
+	templatename := c.Query("template", "default")
+
+	template := new(model.DeploymentJwtTemplate)
+
+	if templatename != "default" {
+		if database.Connection.
+			Model(&model.DeploymentJwtTemplate{}).
+			Where("name = ? AND deployment_id = ?", templatename, deployment.ID).
+			First(template).
+			Error != nil {
+			return handler.SendNotFound(c, nil, "Template not found")
+		}
+	} else {
+		template.Name = "default"
+		template.AllowedClockSkew = 5
+		template.TokenLifetime = 30
+	}
+
+	sessionID := c.Locals("session").(uint64)
+	session := new(model.Session)
+
+	err := database.Connection.Joins("ActiveSignin").
+		Joins("ActiveSignin.User").
+		Joins("ActiveSignin.ActiveWorkspaceMembership").
+		Joins("ActiveSignin.ActiveOrganizationMembership").
+		Joins("ActiveSignin.User.PrimaryEmailAddress").
+		Joins("ActiveSignin.User.PrimaryPhoneNumber").
+		Joins("ActiveSignin.ActiveWorkspaceMembership.Workspace").
+		Joins("ActiveSignin.ActiveOrganizationMembership.Organization").
+		Preload("ActiveSignin.ActiveWorkspaceMembership.Roles").
+		Preload("ActiveSignin.ActiveOrganizationMembership.Roles").
+		Where("sessions.id = ?", sessionID).
+		First(session).
+		Error
+
+	if err != nil {
+		return handler.SendInternalServerError(c, nil, "Something went wrong")
+	}
+
+	if session.ActiveSignin == nil {
+		return handler.SendBadRequest(c, nil, "No active sign in")
+	}
+
+	now := time.Now()
+	tok, err := jwt.NewBuilder().
+		Issuer(fmt.Sprintf("https://%s", deployment.BackendHost)).
+		Subject(strconv.FormatUint(session.ActiveSignin.UserID, 10)).
+		IssuedAt(now).
+		Expiration(now.Add(time.Duration(template.TokenLifetime+template.AllowedClockSkew) * time.Second)).
+		Build()
+
+	if err != nil {
+		log.Println("Error building JWT token:", err)
+		return handler.SendInternalServerError(c, nil, "Failed to generate token")
+	}
+
+	tok.Set("session_id", session.ID)
+	if session.ActiveSignin.ActiveOrganizationMembership != nil {
+		permissionsMap := map[string]bool{}
+		for _, role := range session.ActiveSignin.ActiveOrganizationMembership.Roles {
+			for _, rolepermissions := range role.Permissions {
+				permissionsMap[rolepermissions] = true
+			}
+		}
+		permissions := slices.Collect(maps.Keys(permissionsMap))
+		tok.Set("organization_permissions", permissions)
+		tok.Set("organization", *&session.ActiveSignin.ActiveOrganizationMembership.OrganizationID)
+	}
+	if session.ActiveSignin.ActiveWorkspaceMembership != nil {
+		permissionsMap := map[string]bool{}
+		for _, role := range session.ActiveSignin.ActiveWorkspaceMembership.Roles {
+			for _, rolepermissions := range role.Permissions {
+				permissionsMap[rolepermissions] = true
+			}
+		}
+		permissions := slices.Collect(maps.Keys(permissionsMap))
+		tok.Set("workspace_permissions", permissions)
+		tok.Set("workspace", *&session.ActiveSignin.ActiveWorkspaceMembership.WorkspaceID)
+	}
+
+	signingAlg := template.CustomSigningKey.Algorithm
+	secret := template.CustomSigningKey.Key
+	if signingAlg == "" {
+		signingAlg = "ES256"
+	}
+
+	if secret == "" {
+		secret = deployment.KepPair.PrivateKey
+	}
+
+	claimsRaw := string(template.Template)
+	if claimsRaw == "" {
+		claimsRaw = "{}"
+	}
+
+	stralizedsignin, _ := json.Marshal(session.ActiveSignin)
+	parsed := new(map[string]any)
+	json.Unmarshal(stralizedsignin, parsed)
+
+	claimsPopulated, err := raymond.Render(claimsRaw, parsed)
+
+	if err != nil {
+		return handler.SendInternalServerError(c, nil, "Failed to render claims")
+	}
+
+	claimsJson := new(map[string]any)
+	err = json.Unmarshal([]byte(claimsPopulated), claimsJson)
+	if err != nil {
+		log.Println(err)
+		return handler.SendInternalServerError(c, nil, "Failed to unmarshal claims")
+	}
+
+	signedToken, err := signToken(tok, signingAlg, secret)
+	if err != nil {
+		return handler.SendInternalServerError(c, nil, "Failed to sign token")
+	}
+
+	return handler.SendSuccess(c, fiber.Map{
+		"token":   signedToken,
+		"expires": time.Now().Add(time.Duration(template.TokenLifetime) * time.Second).UnixMilli(),
+	})
+}
+
+func signToken(tok jwt.Token, alg string, secret string) (string, error) {
+	switch alg {
+	case "HS256":
+		return signTokenHS256(tok, secret)
+	case "HS384":
+		return signTokenHS384(tok, secret)
+	case "HS512":
+		return signTokenHS512(tok, secret)
+	case "RS256":
+		return signTokenRS256(tok, secret)
+	case "RS384":
+		return signTokenRS384(tok, secret)
+	case "RS512":
+		return signTokenRS512(tok, secret)
+	case "ES256":
+		return signTokenES256(tok, secret)
+	case "ES384":
+		return signTokenES384(tok, secret)
+	default:
+		return "", fmt.Errorf("unsupported algorithm: %s", alg)
+	}
+}
+
+func signTokenHS256(tok jwt.Token, secret string) (string, error) {
+	key := []byte(secret)
+	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.HS256(), key))
+	if err != nil {
+		return "", fmt.Errorf("failed to sign with HS256: %w", err)
+	}
+	return string(signed), nil
+}
+
+func signTokenHS384(tok jwt.Token, secret string) (string, error) {
+	key := []byte(secret)
+	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.HS384(), key))
+	if err != nil {
+		return "", fmt.Errorf("failed to sign with HS384: %w", err)
+	}
+	return string(signed), nil
+}
+
+func signTokenHS512(tok jwt.Token, secret string) (string, error) {
+	key := []byte(secret)
+	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.HS512(), key))
+	if err != nil {
+		return "", fmt.Errorf("failed to sign with HS512: %w", err)
+	}
+	return string(signed), nil
+}
+
+func signTokenRS256(tok jwt.Token, privateKeyPEM string) (string, error) {
+	block, _ := pem.Decode([]byte(privateKeyPEM))
+	if block == nil {
+		return "", fmt.Errorf("failed to parse PEM block containing private key")
+	}
+
+	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		// Try PKCS8 format if PKCS1 fails
+		pk, err2 := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err2 != nil {
+			return "", fmt.Errorf("failed to parse private key: %w", err)
+		}
+		var ok bool
+		privateKey, ok = pk.(*rsa.PrivateKey)
+		if !ok {
+			return "", fmt.Errorf("not an RSA private key")
+		}
+	}
+
+	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.RS256(), privateKey))
+	if err != nil {
+		return "", fmt.Errorf("failed to sign with RS256: %w", err)
+	}
+	return string(signed), nil
+}
+
+func signTokenRS384(tok jwt.Token, privateKeyPEM string) (string, error) {
+	block, _ := pem.Decode([]byte(privateKeyPEM))
+	if block == nil {
+		return "", fmt.Errorf("failed to parse PEM block containing private key")
+	}
+
+	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		// Try PKCS8 format if PKCS1 fails
+		pk, err2 := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err2 != nil {
+			return "", fmt.Errorf("failed to parse private key: %w", err)
+		}
+		var ok bool
+		privateKey, ok = pk.(*rsa.PrivateKey)
+		if !ok {
+			return "", fmt.Errorf("not an RSA private key")
+		}
+	}
+
+	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.RS384(), privateKey))
+	if err != nil {
+		return "", fmt.Errorf("failed to sign with RS384: %w", err)
+	}
+	return string(signed), nil
+}
+
+func signTokenRS512(tok jwt.Token, privateKeyPEM string) (string, error) {
+	block, _ := pem.Decode([]byte(privateKeyPEM))
+	if block == nil {
+		return "", fmt.Errorf("failed to parse PEM block containing private key")
+	}
+
+	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		// Try PKCS8 format if PKCS1 fails
+		pk, err2 := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err2 != nil {
+			return "", fmt.Errorf("failed to parse private key: %w", err)
+		}
+		var ok bool
+		privateKey, ok = pk.(*rsa.PrivateKey)
+		if !ok {
+			return "", fmt.Errorf("not an RSA private key")
+		}
+	}
+
+	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.RS512(), privateKey))
+	if err != nil {
+		return "", fmt.Errorf("failed to sign with RS512: %w", err)
+	}
+	return string(signed), nil
+}
+
+func signTokenES256(tok jwt.Token, privateKeyPEM string) (string, error) {
+	block, _ := pem.Decode([]byte(privateKeyPEM))
+	if block == nil {
+		return "", fmt.Errorf("failed to parse PEM block containing private key")
+	}
+
+	privateKey, err := x509.ParseECPrivateKey(block.Bytes)
+	if err != nil {
+		// Try PKCS8 format if direct parsing fails
+		pk, err2 := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err2 != nil {
+			return "", fmt.Errorf("failed to parse private key: %w", err)
+		}
+		var ok bool
+		privateKey, ok = pk.(*ecdsa.PrivateKey)
+		if !ok {
+			return "", fmt.Errorf("not an ECDSA private key")
+		}
+	}
+
+	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.ES256(), privateKey))
+	if err != nil {
+		return "", fmt.Errorf("failed to sign with ES256: %w", err)
+	}
+	return string(signed), nil
+}
+
+func signTokenES384(tok jwt.Token, privateKeyPEM string) (string, error) {
+	block, _ := pem.Decode([]byte(privateKeyPEM))
+	if block == nil {
+		return "", fmt.Errorf("failed to parse PEM block containing private key")
+	}
+
+	privateKey, err := x509.ParseECPrivateKey(block.Bytes)
+	if err != nil {
+		// Try PKCS8 format if direct parsing fails
+		pk, err2 := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err2 != nil {
+			return "", fmt.Errorf("failed to parse private key: %w", err)
+		}
+		var ok bool
+		privateKey, ok = pk.(*ecdsa.PrivateKey)
+		if !ok {
+			return "", fmt.Errorf("not an ECDSA private key")
+		}
+	}
+
+	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.ES384(), privateKey))
+	if err != nil {
+		return "", fmt.Errorf("failed to sign with ES384: %w", err)
+	}
+	return string(signed), nil
 }

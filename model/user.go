@@ -106,9 +106,9 @@ type User struct {
 	UserAuthenticator              *UserAuthenticator      `json:"user_authenticator"              gorm:"constraint:OnDelete:CASCADE;"`
 	SocialConnections              []*SocialConnection     `json:"social_connections,omitempty"    gorm:"constraint:OnDelete:CASCADE;"`
 	SignIns                        []*Signin               `json:"-"                               gorm:"constraint:OnDelete:CASCADE;"`
-	ActiveOrganizationMembershipID *uint64                 `json:"active_organization_id,string"`
+	ActiveOrganizationMembershipID *uint64                 `json:"active_organization_membership_id,string"`
 	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization"             gorm:"constraint:OnDelete:CASCADE;"`
-	ActiveWorkspaceMembershipID    *uint64                 `json:"active_workspace_id,string"`
+	ActiveWorkspaceMembershipID    *uint64                 `json:"active_workspace_membership_id,string"`
 	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace"                gorm:"constraint:OnDelete:CASCADE;"`
 	DeploymentID                   uint64                  `json:"-"                               gorm:"not null"`
 	PublicMetadata                 datatypes.JSONMap       `json:"public_metadata"                 gorm:"not null"`

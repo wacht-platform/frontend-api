@@ -10,6 +10,7 @@ func setupSessionRoutes(app *fiber.App) {
 	router := app.Group("/session")
 
 	router.Get("/", sessionHandler.GetCurrentSession)
+	router.Get("/token", sessionHandler.GetToken)
 	router.Post("/switch-sign-in", sessionHandler.SwitchActiveSignIn)
 	router.Post("/sign-out", sessionHandler.SignOut)
 	router.Put("/switch-organization", sessionHandler.SwitchOrganization)

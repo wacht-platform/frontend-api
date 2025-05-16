@@ -11,7 +11,7 @@ type Organization struct {
 	Name                    string                        `json:"name"            gorm:"not null"`
 	ImageUrl                string                        `json:"image_url"       gorm:"not null"`
 	Description             string                        `json:"description"`
-	MemberCount             uint32                      `json:"member_count"    gorm:"not null"`
+	MemberCount             uint32                        `json:"member_count"    gorm:"not null"`
 	Roles                   []*OrganizationRole           `json:"roles"`
 	Members                 []*OrganizationMembership     `json:"members"`
 	Workspaces              []*Workspace                  `json:"workspaces"`

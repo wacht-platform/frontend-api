@@ -45,5 +45,5 @@ type DeploymentJwtTemplate struct {
 	AllowedClockSkew int64            `json:"allowed_clock_skew" gorm:"not null"`
 	CustomSigningKey CustomSigningKey `json:"custom_sign_key"`
 	Template         datatypes.JSON   `json:"template"           gorm:"not null"`
-	DeploymentID     uint64           `json:"deployment_id"      gorm:"not null;index"`
+	DeploymentID     uint64           `json:"deployment_id"      gorm:"not null;index;index:deployment_name_id_idx,unique"`
 }

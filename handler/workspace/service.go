@@ -35,10 +35,10 @@ func NewWorkspaceService() *WorkspaceService {
 }
 
 func (s *WorkspaceService) hasWorkspacePermission(membership model.WorkspaceMembership, requiredPermissions map[string]bool) bool {
-	if len(membership.Role) == 0 {
+	if len(membership.Roles) == 0 {
 		return false
 	}
-	for _, role := range membership.Role {
+	for _, role := range membership.Roles {
 		for _, p := range role.Permissions {
 			if requiredPermissions[p] {
 				return true
