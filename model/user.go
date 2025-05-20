@@ -43,7 +43,7 @@ type UserEmailAddress struct {
 	DeploymentID         uint64               `json:"-" gorm:"index:idx_deployment_user_email_address_email,unique"`
 	UserID               uint64               `json:"-" gorm:"index:idx_deployment_user_email_address_email,unique"`
 	User                 User                 `json:"-" gorm:"foreignKey:UserID"`
-	Email                string               `json:"email" gorm:"index:idx_user_email_address_email;index:idx_deployment_user_email_address_email,unique"`
+	EmailAddress         string               `json:"email" gorm:"index:idx_user_email_address_email;index:idx_deployment_user_email_address_email,unique"`
 	IsPrimary            bool                 `json:"is_primary" gorm:"not null"`
 	Verified             bool                 `json:"verified" gorm:"not null"`
 	VerifiedAt           time.Time            `json:"verified_at"`

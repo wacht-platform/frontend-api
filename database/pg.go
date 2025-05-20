@@ -17,6 +17,7 @@ func InitPgConnection() error {
 		SkipDefaultTransaction: true,
 		PrepareStmt:            true,
 		// Logger:                 logger.Default.LogMode(logger.Silent),
+		// DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {
 		return err

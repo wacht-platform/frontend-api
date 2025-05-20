@@ -205,6 +205,8 @@ func (h *Handler) SwitchOrganization(
 
 	session.ActiveSignin.User.ActiveOrganizationMembershipID = &membership.ID
 	session.ActiveSignin.ActiveOrganizationMembershipID = &membership.ID
+	session.ActiveSignin.ActiveWorkspaceMembershipID = nil
+	session.ActiveSignin.User.ActiveWorkspaceMembershipID = nil
 	database.Connection.Save(session.ActiveSignin.User)
 	database.Connection.Save(session.ActiveSignin)
 	handler.RemoveSessionFromCache(session.ID)

@@ -48,7 +48,7 @@ func (s *AuthService) FindUserByEmail(
 	email string,
 ) (*model.UserEmailAddress, error) {
 	var userEmail model.UserEmailAddress
-	if res := s.db.Where(&model.UserEmailAddress{Email: email}).Joins("User").First(&userEmail); res.RowsAffected == 0 {
+	if res := s.db.Where(&model.UserEmailAddress{EmailAddress: email}).Joins("User").First(&userEmail); res.RowsAffected == 0 {
 		return nil, handler.ErrUserNotFound
 	} else if res.Error != nil {
 		return nil, res.Error
@@ -166,7 +166,7 @@ func (s *AuthService) CreateUser(
 		PrimaryEmailAddressID: &emailID,
 		UserEmailAddresses: []*model.UserEmailAddress{{
 			Model:                model.Model{ID: emailID},
-			Email:                b.Email,
+			EmailAddress:         b.Email,
 			IsPrimary:            true,
 			Verified:             verified,
 			VerificationStrategy: model.Otp,
@@ -222,7 +222,7 @@ func (s *AuthService) HandleExistingUser(
 	var connection model.SocialConnection
 	for _, sc := range email.User.SocialConnections {
 		if sc.Provider == attempt.SSOProvider &&
-			sc.EmailAddress == email.Email {
+			sc.EmailAddress == email.EmailAddress {
 			connection = *sc
 			break
 		}
@@ -233,7 +233,7 @@ func (s *AuthService) HandleExistingUser(
 			email.User.ID,
 			email.ID,
 			attempt.SSOProvider,
-			email.Email,
+			email.EmailAddress,
 			token,
 		)
 

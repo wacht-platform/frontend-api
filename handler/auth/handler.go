@@ -421,10 +421,10 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		}
 
 		email := model.UserEmailAddress{
-			Model:     model.Model{ID: primaryAddressID},
-			Email:     user.Email,
-			IsPrimary: true,
-			UserID:    u.ID,
+			Model:        model.Model{ID: primaryAddressID},
+			EmailAddress: user.Email,
+			IsPrimary:    true,
+			UserID:       u.ID,
 		}
 
 		if err := tx.Create(&email).Error; err != nil {
@@ -573,7 +573,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			if err := h.service.SendEmailOTPVerification(email.Email, code, deployment); err != nil {
+			if err := h.service.SendEmailOTPVerification(email.EmailAddress, code, deployment); err != nil {
 				return handler.SendInternalServerError(
 					c,
 					err,

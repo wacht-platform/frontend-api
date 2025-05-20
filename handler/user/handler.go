@@ -205,9 +205,9 @@ func (h *Handler) CreateUserEmailAddress(c *fiber.Ctx) error {
 		Model: model.Model{
 			ID: snowflake.ID(),
 		},
-		UserID:   session.ActiveSignin.UserID,
-		Email:    b.Email,
-		Verified: false,
+		UserID:       session.ActiveSignin.UserID,
+		EmailAddress: b.Email,
+		Verified:     false,
 	}
 
 	query := database.Connection.Create(&newEmail)
@@ -338,7 +338,7 @@ func (h *Handler) PrepareEmailVerification(c *fiber.Ctx) error {
 		)
 	}
 
-	err = h.service.sendEmailOTPVerification(emailAddress.Email, code)
+	err = h.service.sendEmailOTPVerification(emailAddress.EmailAddress, code)
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,
