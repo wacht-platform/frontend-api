@@ -92,11 +92,12 @@ func (h *Handler) CreateOrganization(
 			}
 			if err := tx.Exec(
 				fmt.Sprintf(
-					"INSERT INTO %s (organization_membership_id, deployment_organization_role_id) VALUES (?, ?)",
+					"INSERT INTO %s (organization_membership_id, organization_role_id, organization_id) VALUES (?, ?, ?)",
 					"organization_membership_roles",
 				),
 				membership.ID,
 				d.B2BSettings.DefaultOrgCreatorRoleID,
+				org.ID,
 			).Error; err != nil {
 				return err
 			}
@@ -218,9 +219,9 @@ func (h *Handler) UpdateOrganization(
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	org := membership.Organization
+	img, _ := c.FormFile("image")
 
-	log.Println(b)
+	org := membership.Organization
 
 	if b.Name != nil {
 		org.Name = *b.Name
@@ -236,6 +237,16 @@ func (h *Handler) UpdateOrganization(
 
 	if b.AutoAssignedWorkspaceID != nil {
 		// org.AutoAssignedWorkspaceID = b.AutoAssignedWorkspaceID
+	}
+
+	if img != nil {
+		url, err := h.service.uploadOrganizationImage(getuint64(orgID), img)
+		if err != nil {
+			log.Println(err)
+			return handler.SendInternalServerError(c, err, "Failed to upload organization image")
+		}
+
+		org.ImageUrl = url
 	}
 
 	if b.EnforceMFASetup != nil {
