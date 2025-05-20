@@ -205,7 +205,7 @@ func (h *Handler) CreateUserEmailAddress(c *fiber.Ctx) error {
 		Model: model.Model{
 			ID: snowflake.ID(),
 		},
-		UserID:       session.ActiveSignin.UserID,
+		UserID:       &session.ActiveSignin.UserID,
 		EmailAddress: b.Email,
 		Verified:     false,
 	}

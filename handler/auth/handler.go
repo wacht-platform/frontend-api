@@ -97,7 +97,7 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 	)
 
 	attempt := h.service.CreateSignInAttempt(
-		email.UserID,
+		*email.UserID,
 		email.ID,
 		session.ID,
 		model.SignInMethodPlainEmail,
@@ -424,7 +424,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			Model:        model.Model{ID: primaryAddressID},
 			EmailAddress: user.Email,
 			IsPrimary:    true,
-			UserID:       u.ID,
+			UserID:       &u.ID,
 		}
 
 		if err := tx.Create(&email).Error; err != nil {
@@ -729,7 +729,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				if len(attempt.RemainingSteps) == 1 {
 					attempt.Completed = true
 					attempt.RemainingSteps = nil
-					signin = model.NewSignIn(session.ID, email.UserID)
+					signin = model.NewSignIn(session.ID, *email.UserID)
 					signin.User = &email.User
 
 					session.Signins = append(session.Signins, signin)
