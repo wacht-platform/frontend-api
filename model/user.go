@@ -41,7 +41,7 @@ func (ct VerificationStrategy) GormDBDataType() string {
 type UserEmailAddress struct {
 	Model
 	DeploymentID         uint64               `json:"-" gorm:"index:idx_deployment_user_email_address_email,unique"`
-	UserID               uint64               `json:"-" gorm:"index:idx_deployment_user_email_address_email,unique"`
+	UserID               *uint64              `json:"-" gorm:"index:idx_deployment_user_email_address_email,unique"`
 	User                 User                 `json:"-" gorm:"foreignKey:UserID"`
 	EmailAddress         string               `json:"email" gorm:"index:idx_user_email_address_email;index:idx_deployment_user_email_address_email,unique"`
 	IsPrimary            bool                 `json:"is_primary" gorm:"not null"`

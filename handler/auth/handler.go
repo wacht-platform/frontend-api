@@ -812,13 +812,20 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 			signIn.User = user
 
 			if err := database.Connection.Transaction(func(tx *gorm.DB) error {
-				if err := tx.Exec("SET CONSTRAINTS ALL DEFERRED").Error; err != nil {
+				email := user.UserEmailAddresses[0]
+				user.UserEmailAddresses = []*model.UserEmailAddress{}
+
+				email.UserID = nil
+
+				if err := tx.Create(email).Error; err != nil {
 					return err
 				}
 
 				if err := tx.Create(user).Error; err != nil {
 					return err
 				}
+
+				email.UserID = &user.ID
 
 				if err := tx.Create(signIn).Error; err != nil {
 					return err
