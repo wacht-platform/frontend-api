@@ -812,7 +812,9 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 			signIn.User = user
 
 			if err := database.Connection.Transaction(func(tx *gorm.DB) error {
-				tx.Exec("SET CONSTRAINTS ALL DEFERRED")
+				if err := tx.Exec("SET CONSTRAINTS ALL DEFERRED").Error; err != nil {
+					return err
+				}
 
 				if err := tx.Create(user).Error; err != nil {
 					return err
