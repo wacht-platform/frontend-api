@@ -171,6 +171,7 @@ func (s *AuthService) CreateUser(
 			Verified:             verified,
 			VerificationStrategy: model.Otp,
 			VerifiedAt:           time.Now(),
+			DeploymentID:         deploymentID,
 		}},
 		SchemaVersion:      model.SchemaVersionV1,
 		SecondFactorPolicy: secondFactorPolicy,
