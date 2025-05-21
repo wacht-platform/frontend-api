@@ -37,7 +37,7 @@ func (h *Handler) GetCurrentSession(
 	session := new(model.Session)
 
 	err := database.Connection.Joins("ActiveSignin").
-		Joins("ActiveSignin.User").
+		Preload("ActiveSignin.User").
 		Preload("ActiveSignin.User.UserEmailAddresses").
 		Preload("ActiveSignin.User.UserPhoneNumbers").
 		Preload("ActiveSignin.User.SocialConnections").
@@ -76,7 +76,7 @@ func (h *Handler) SwitchActiveSignIn(
 	validSignIn := false
 	for _, signIn := range session.Signins {
 		if signIn.ID == signInId {
-			session.ActiveSignin = signIn
+			session.ActiveSignin = &signIn
 			validSignIn = true
 			break
 		}
@@ -89,7 +89,7 @@ func (h *Handler) SwitchActiveSignIn(
 		)
 	}
 
-	session.ActiveSigninID = signInId
+	session.ActiveSigninID = &signInId
 
 	handler.RemoveSessionFromCache(session.ID)
 
@@ -205,8 +205,6 @@ func (h *Handler) SwitchOrganization(
 
 	session.ActiveSignin.User.ActiveOrganizationMembershipID = &membership.ID
 	session.ActiveSignin.ActiveOrganizationMembershipID = &membership.ID
-	session.ActiveSignin.ActiveWorkspaceMembershipID = nil
-	session.ActiveSignin.User.ActiveWorkspaceMembershipID = nil
 	database.Connection.Save(session.ActiveSignin.User)
 	database.Connection.Save(session.ActiveSignin)
 	handler.RemoveSessionFromCache(session.ID)
@@ -314,7 +312,7 @@ func (h *Handler) GetToken(
 	now := time.Now()
 	tok, err := jwt.NewBuilder().
 		Issuer(fmt.Sprintf("https://%s", deployment.BackendHost)).
-		Subject(strconv.FormatUint(session.ActiveSignin.UserID, 10)).
+		Subject(strconv.FormatUint(*session.ActiveSignin.UserID, 10)).
 		IssuedAt(now).
 		Expiration(now.Add(time.Duration(template.TokenLifetime+template.AllowedClockSkew) * time.Second)).
 		Build()

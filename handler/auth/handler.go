@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/godruoyi/go-snowflake"
@@ -64,6 +65,8 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 	authenticated := false
 
 	if b.Password != "" {
+		log.Println(email.User)
+
 		match, err := h.service.VerifyPassword(
 			email.User.Password,
 			b.Password,
@@ -117,13 +120,13 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 			}
 			signIn.User = &email.User
 
-			session.Signins = append(session.Signins, signIn)
-			session.ActiveSigninID = signIn.ID
+			session.Signins = append(session.Signins, *signIn)
+			session.ActiveSigninID = &signIn.ID
 		}
 
 		session.SigninAttempts = append(
 			session.SigninAttempts,
-			attempt,
+			*attempt,
 		)
 
 		return tx.Save(session).Error
@@ -226,7 +229,7 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 
 		session.SignupAttempts = append(
 			session.SignupAttempts,
-			attempt,
+			*attempt,
 		)
 
 		if len(attempt.RemainingSteps) == 0 {
@@ -258,8 +261,8 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 				return err
 			}
 
-			session.Signins = append(session.Signins, signIn)
-			session.ActiveSigninID = signIn.ID
+			session.Signins = append(session.Signins, *signIn)
+			session.ActiveSigninID = &signIn.ID
 		}
 
 		handler.RemoveSessionFromCache(session.ID)
@@ -305,7 +308,7 @@ func (h *Handler) InitSSO(c *fiber.Ctx) error {
 		}
 		session.SigninAttempts = append(
 			session.SigninAttempts,
-			attempt,
+			*attempt,
 		)
 		return nil
 	})
@@ -448,7 +451,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			return err
 		}
 
-		session.Signins = append(session.Signins, signIn)
+		session.Signins = append(session.Signins, *signIn)
 		return nil
 	})
 	if err != nil {
@@ -732,8 +735,8 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					signin = model.NewSignIn(session.ID, *email.UserID)
 					signin.User = &email.User
 
-					session.Signins = append(session.Signins, signin)
-					session.ActiveSigninID = signin.ID
+					session.Signins = append(session.Signins, *signin)
+					session.ActiveSigninID = &signin.ID
 				} else {
 					attempt.RemainingSteps = attempt.RemainingSteps[1:]
 					attempt.CurrentStep = attempt.RemainingSteps[0]
@@ -813,7 +816,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 
 			if err := database.Connection.Transaction(func(tx *gorm.DB) error {
 				email := user.UserEmailAddresses[0]
-				user.UserEmailAddresses = []*model.UserEmailAddress{}
+				user.UserEmailAddresses = []model.UserEmailAddress{}
 
 				email.UserID = nil
 
@@ -825,14 +828,16 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					return err
 				}
 
-				email.UserID = &user.ID
+				if err := tx.Model(&model.UserEmailAddress{}).Update("user_id", user.ID).Error; err != nil {
+					return err
+				}
 
 				if err := tx.Create(signIn).Error; err != nil {
 					return err
 				}
 
-				session.Signins = append(session.Signins, signIn)
-				session.ActiveSigninID = signIn.ID
+				session.Signins = append(session.Signins, *signIn)
+				session.ActiveSigninID = &signIn.ID
 
 				return tx.Save(session).Error
 			}); err != nil {

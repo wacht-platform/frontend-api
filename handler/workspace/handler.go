@@ -95,7 +95,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 				ID: snowflake.ID(),
 			},
 			WorkspaceID:              workspace.ID,
-			UserID:                   session.ActiveSignin.UserID,
+			UserID:                   *session.ActiveSignin.UserID,
 			OrganizationID:           b.OrganizationID,
 			OrganizationMembershipID: orgMembership.ID,
 		}
@@ -342,7 +342,7 @@ func (h *Handler) RemoveWorkspaceMemberRole(c *fiber.Ctx) error {
 	}
 
 	isDefaultOwnerRole := (roleIDToRemove == d.B2BSettings.DefaultWorkspaceCreatorRoleID)
-	isSelfRemoval := (targetMembership.UserID == session.ActiveSignin.UserID)
+	isSelfRemoval := (targetMembership.UserID == *session.ActiveSignin.UserID)
 
 	if isDefaultOwnerRole && isSelfRemoval {
 		var otherOwnerCount int64
@@ -659,7 +659,7 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 		}
 	}
 
-	if isTargetLastOwner && targetMembership.UserID != session.ActiveSignin.UserID {
+	if isTargetLastOwner && targetMembership.UserID != *session.ActiveSignin.UserID {
 		return handler.SendForbidden(c, nil, "Cannot remove this member as they are the sole owner. Assign ownership to another member first or delete the workspace.")
 	}
 

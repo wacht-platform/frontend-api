@@ -79,7 +79,7 @@ func (h *Handler) CreateOrganization(
 			ID: snowflake.ID(),
 		},
 		OrganizationID: orgid,
-		UserID:         session.ActiveSignin.UserID,
+		UserID:         *session.ActiveSignin.UserID,
 	}
 
 	err := database.Connection.Transaction(
@@ -554,7 +554,7 @@ func (h *Handler) RemoveMemberRole(
 	}
 
 	isAdminRoleBeingRemoved := (roleIDToRemoveuint64 == d.B2BSettings.DefaultOrgCreatorRoleID)
-	isSelfRemoval := (targetMemberShip.UserID == session.ActiveSignin.UserID)
+	isSelfRemoval := (targetMemberShip.UserID == *session.ActiveSignin.UserID)
 
 	if isAdminRoleBeingRemoved && isSelfRemoval {
 		var otherAdminCount int64
