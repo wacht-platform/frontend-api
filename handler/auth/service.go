@@ -164,13 +164,14 @@ func (s *AuthService) CreateUser(
 		Username:              b.Username,
 		Password:              hashedPassword,
 		PrimaryEmailAddressID: &emailID,
-		UserEmailAddresses: []*model.UserEmailAddress{{
+		UserEmailAddresses: []model.UserEmailAddress{{
 			Model:                model.Model{ID: emailID},
 			EmailAddress:         b.Email,
 			IsPrimary:            true,
 			Verified:             verified,
 			VerificationStrategy: model.Otp,
 			VerifiedAt:           time.Now(),
+			DeploymentID:         deploymentID,
 		}},
 		SchemaVersion:      model.SchemaVersionV1,
 		SecondFactorPolicy: secondFactorPolicy,
@@ -182,7 +183,7 @@ func (s *AuthService) CreateUser(
 		phoneNumberID := snowflake.ID()
 		u.UserPhoneNumbers = append(
 			u.UserPhoneNumbers,
-			&model.UserPhoneNumber{
+			model.UserPhoneNumber{
 				Model:       model.Model{ID: phoneNumberID},
 				PhoneNumber: b.PhoneNumber,
 				Verified:    false,
@@ -223,7 +224,7 @@ func (s *AuthService) HandleExistingUser(
 	for _, sc := range email.User.SocialConnections {
 		if sc.Provider == attempt.SSOProvider &&
 			sc.EmailAddress == email.EmailAddress {
-			connection = *sc
+			connection = sc
 			break
 		}
 	}

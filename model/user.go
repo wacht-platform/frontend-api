@@ -101,10 +101,10 @@ type User struct {
 	PrimaryPhoneNumber             *UserPhoneNumber        `json:"primary_phone_number"            gorm:"constraint:OnDelete:CASCADE;foreignKey:PrimaryPhoneNumberID"`
 	PrimaryEmailAddress            *UserEmailAddress       `json:"primary_email_address"           gorm:"constraint:OnDelete:CASCADE;foreignKey:PrimaryEmailAddressID"`
 	SecondFactorPolicy             SecondFactorPolicy      `json:"second_factor_policy"            gorm:"not null"`
-	UserEmailAddresses             []*UserEmailAddress     `json:"user_email_addresses"            gorm:"constraint:OnDelete:CASCADE;"`
-	UserPhoneNumbers               []*UserPhoneNumber      `json:"user_phone_numbers"              gorm:"constraint:OnDelete:CASCADE;"`
+	UserEmailAddresses             []UserEmailAddress      `json:"user_email_addresses"            gorm:"constraint:OnDelete:CASCADE;"`
+	UserPhoneNumbers               []UserPhoneNumber       `json:"user_phone_numbers"              gorm:"constraint:OnDelete:CASCADE;"`
 	UserAuthenticator              *UserAuthenticator      `json:"user_authenticator"              gorm:"constraint:OnDelete:CASCADE;"`
-	SocialConnections              []*SocialConnection     `json:"social_connections,omitempty"    gorm:"constraint:OnDelete:CASCADE;"`
+	SocialConnections              []SocialConnection      `json:"social_connections,omitempty"    gorm:"constraint:OnDelete:CASCADE;"`
 	SignIns                        []*Signin               `json:"-"                               gorm:"constraint:OnDelete:CASCADE;"`
 	ActiveOrganizationMembershipID *uint64                 `json:"active_organization_membership_id,string"`
 	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization"             gorm:"constraint:OnDelete:CASCADE;"`

@@ -205,7 +205,7 @@ func (h *Handler) CreateUserEmailAddress(c *fiber.Ctx) error {
 		Model: model.Model{
 			ID: snowflake.ID(),
 		},
-		UserID:       &session.ActiveSignin.UserID,
+		UserID:       session.ActiveSignin.UserID,
 		EmailAddress: b.Email,
 		Verified:     false,
 	}
@@ -422,7 +422,7 @@ func (h *Handler) AddPhoneNumber(c *fiber.Ctx) error {
 		PhoneNumber: b.PhoneNumber,
 	}
 
-	phoneNumber.UserID = session.ActiveSignin.UserID
+	phoneNumber.UserID = *session.ActiveSignin.UserID
 
 	if err := database.Connection.Create(&phoneNumber).Error; err != nil {
 		return handler.SendInternalServerError(
@@ -718,7 +718,7 @@ func (h *Handler) VerifyAuthenticator(c *fiber.Ctx) error {
 		)
 	}
 
-	authenticator.UserID = &session.ActiveSignin.UserID
+	authenticator.UserID = session.ActiveSignin.UserID
 	if err := database.Connection.Save(&authenticator).Error; err != nil {
 		return handler.SendInternalServerError(
 			c,
@@ -863,7 +863,7 @@ func (h *Handler) UploadProfilePicture(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "File is required")
 	}
 
-	url, err := h.service.uploadProfilePicture(session.ActiveSignin.UserID, file)
+	url, err := h.service.uploadProfilePicture(*session.ActiveSignin.UserID, file)
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,
