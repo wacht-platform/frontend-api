@@ -7,6 +7,8 @@ import (
 
 type Workspace struct {
 	Model
+	DeploymentID        uint64                 `json:"-"               gorm:"not null;index"`
+	Deployment          Deployment             `json:"-" gorm:"foreignkey:DeploymentID"`
 	OrganizationID      uint64                 `json:"-"               gorm:"not null;index;"`
 	Name                string                 `json:"name"            gorm:"not null"`
 	ImageUrl            string                 `json:"image_url"       gorm:"not null"`

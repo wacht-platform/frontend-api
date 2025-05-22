@@ -8,6 +8,7 @@ import (
 type Organization struct {
 	Model
 	DeploymentID            uint64                        `json:"-"               gorm:"not null;index"`
+	Deployment              Deployment                    `json:"-" gorm:"foreignkey:DeploymentID"`
 	Name                    string                        `json:"name"            gorm:"not null"`
 	ImageUrl                string                        `json:"image_url"       gorm:"not null"`
 	Description             string                        `json:"description"`

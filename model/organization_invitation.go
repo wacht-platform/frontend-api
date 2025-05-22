@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 type OrganizationInvitation struct {
 	Model
 	OrganizationID            uint64                 `json:"organization_id"`
@@ -12,5 +14,5 @@ type OrganizationInvitation struct {
 	Workspace                 Workspace              `json:"workspace" gorm:"foreignKey:WorkspaceID"`
 	InitialWorkspaceRoleID    *uint64                `json:"initial_workspace_role_id"`
 	InitialWorkspaceRole      WorkspaceRole          `json:"initial_workspace_role" gorm:"foreignKey:InitialWorkspaceRoleID"`
-	Expired                   bool                   `json:"expired"`
+	Expiry                    time.Time              `json:"expiry" gorm:"default:CURRENT_TIMESTAMP + INTERVAL '10 DAY'"`
 }
