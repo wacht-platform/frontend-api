@@ -828,7 +828,10 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					return err
 				}
 
-				if err := tx.Model(&model.UserEmailAddress{}).Update("user_id", user.ID).Error; err != nil {
+				if err := tx.Model(&model.UserEmailAddress{}).
+					Where("id = ?", email.ID).
+					Update("user_id", user.ID).
+					Error; err != nil {
 					return err
 				}
 
