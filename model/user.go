@@ -41,6 +41,7 @@ func (ct VerificationStrategy) GormDBDataType() string {
 type UserEmailAddress struct {
 	Model
 	DeploymentID         uint64               `json:"-" gorm:"index:idx_deployment_user_email_address_email,unique"`
+	Deployment           Deployment           `json:"-" gorm:"foreignKey:DeploymentID"`
 	UserID               *uint64              `json:"-" gorm:"index:idx_deployment_user_email_address_email,unique"`
 	User                 User                 `json:"-" gorm:"foreignKey:UserID"`
 	EmailAddress         string               `json:"email" gorm:"index:idx_user_email_address_email;index:idx_deployment_user_email_address_email,unique"`
@@ -98,8 +99,8 @@ type User struct {
 	Disabled                       bool                    `json:"disabled"                        gorm:"not null"`
 	PrimaryEmailAddressID          *uint64                 `json:"primary_email_address_id,string"`
 	PrimaryPhoneNumberID           *uint64                 `json:"primary_phone_number_id,string"`
-	PrimaryPhoneNumber             *UserPhoneNumber        `json:"primary_phone_number"            gorm:"constraint:OnDelete:CASCADE;foreignKey:PrimaryPhoneNumberID"`
-	PrimaryEmailAddress            *UserEmailAddress       `json:"primary_email_address"           gorm:"constraint:OnDelete:CASCADE;foreignKey:PrimaryEmailAddressID"`
+	PrimaryPhoneNumber             *UserPhoneNumber        `json:"primary_phone_number"            gorm:"foreignKey:PrimaryPhoneNumberID"`
+	PrimaryEmailAddress            *UserEmailAddress       `json:"primary_email_address"           gorm:"foreignKey:PrimaryEmailAddressID"`
 	SecondFactorPolicy             SecondFactorPolicy      `json:"second_factor_policy"            gorm:"not null"`
 	UserEmailAddresses             []UserEmailAddress      `json:"user_email_addresses"            gorm:"constraint:OnDelete:CASCADE;"`
 	UserPhoneNumbers               []UserPhoneNumber       `json:"user_phone_numbers"              gorm:"constraint:OnDelete:CASCADE;"`
