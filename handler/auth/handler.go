@@ -820,7 +820,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 
 				email.UserID = nil
 
-				if err := tx.Create(email).Error; err != nil {
+				if err := tx.Create(&email).Error; err != nil {
 					return err
 				}
 
