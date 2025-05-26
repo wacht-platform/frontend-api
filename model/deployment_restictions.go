@@ -4,6 +4,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+
+	"github.com/lib/pq"
 )
 
 type DeploymentRestrictions struct {
@@ -15,9 +17,9 @@ type DeploymentRestrictions struct {
 	BlockDisposableEmails bool                             `json:"block_disposable_emails" gorm:"not null"`
 	BlockVoipNumbers      bool                             `json:"block_voip_numbers"      gorm:"not null"`
 	CountryRestrictions   CountryRestriction               `json:"country_restrictions"    gorm:"not null"`
-	BannedKeywords        []string                         `json:"banned_keywords"         gorm:"type:text[];not null"`
-	AllowlistedResources  []string                         `json:"allowlisted_resources"   gorm:"type:text[];not null"`
-	BlocklistedResources  []string                         `json:"blocklisted_resources"   gorm:"type:text[];not null"`
+	BannedKeywords        pq.StringArray                   `json:"banned_keywords"         gorm:"type:text[];not null"`
+	AllowlistedResources  pq.StringArray                   `json:"allowlisted_resources"   gorm:"type:text[];not null"`
+	BlocklistedResources  pq.StringArray                   `json:"blocklisted_resources"   gorm:"type:text[];not null"`
 	SignUpMode            DeploymentRestrictionsSignUpMode `json:"sign_up_mode"            gorm:"not null"`
 }
 
