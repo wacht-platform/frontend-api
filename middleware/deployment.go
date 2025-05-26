@@ -23,6 +23,7 @@ func SetDeploymentMiddleware(c *fiber.Ctx) error {
 		Joins("B2BSettings").
 		Joins("AuthSettings").
 		Joins("UISettings").
+		Joins("Restrictions").
 		Joins("EmailTemplates").
 		Joins("SmsTemplates").
 		Joins("B2BSettings.DefaultOrgCreatorRole").

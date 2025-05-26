@@ -72,7 +72,6 @@ func AutoMigratePg() error {
 		&model.DeploymentJwtTemplate{},
 		&model.DeploymentEmailTemplate{},
 		&model.DeploymentSmsTemplate{},
-		&model.DeploymentInvitation{},
 		&model.DeploymentWaitlistUser{},
 	)
 }
