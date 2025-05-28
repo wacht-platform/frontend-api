@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -23,6 +24,7 @@ func GetSession(c *fiber.Ctx) *model.Session {
 
 	session, err := getSessionFromCache(sessionID)
 	if err != nil {
+		log.Println(err)
 		session = getSessionAndSetToCache(sessionID)
 	}
 

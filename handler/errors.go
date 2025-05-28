@@ -31,6 +31,7 @@ const (
 	ErrCodeInvalidCode                  = "INVALID_CODE"
 	ErrCodeRequiredField                = "REQUIRED_FIELD"
 	ErrCodeBadRequestBody               = "BAD_REQUEST_BODY"
+	ErrCodeProviderNotConfigured        = "PROVIDER_NOT_CONFIGURED"
 	ErrorCodeInternal                   = "INTERNAL"
 	ErrorCodeBadSignInAttempt           = "BAD_SIGN_IN_ATTEMPT"
 	ErrorCodeUserAlreadySignedIn        = "USER_ALREADY_SIGNED_IN"
@@ -96,6 +97,10 @@ var (
 	ErrUserAlreadySignedIn = Error{
 		Code:    ErrorCodeUserAlreadySignedIn,
 		Message: "You are already signed in.",
+	}
+	ErrProviderNotConfigured = Error{
+		Code:    ErrCodeProviderNotConfigured,
+		Message: "OAuth provider is not configured for this deployment.",
 	}
 )
 

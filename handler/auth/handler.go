@@ -3,6 +3,7 @@ package auth
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/godruoyi/go-snowflake"
@@ -297,6 +298,7 @@ func (h *Handler) InitSSO(c *fiber.Ctx) error {
 	}
 
 	session := handler.GetSession(c)
+	deployment := handler.GetDeployment(c)
 	attempt := model.NewSignInAttempt(model.SignInMethodSSO)
 	attempt.Method = model.SignInMethodSSO
 	attempt.SessionID = session.ID
@@ -320,7 +322,19 @@ func (h *Handler) InitSSO(c *fiber.Ctx) error {
 		)
 	}
 
-	url := utils.GenerateVerificationUrl(provider, *attempt)
+	// Check for custom redirect_uri parameter
+	customRedirectURI := c.Query("redirect_uri")
+
+	url, err := utils.GenerateVerificationUrlForDeployment(provider, *attempt, &deployment, customRedirectURI)
+	if err != nil {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			err.Error(),
+			handler.ErrProviderNotConfigured,
+		)
+	}
+
 	return handler.SendSuccess(c, fiber.Map{
 		"oauth_url": url,
 		"session":   session,
@@ -341,8 +355,17 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		)
 	}
 
+	// Parse state parameter which may contain custom redirect URI
+	state := c.Query("state")
+	stateParts := strings.Split(state, ":")
+	attemptID := stateParts[0]
+	var customRedirectURI string
+	if len(stateParts) > 1 {
+		customRedirectURI = strings.Join(stateParts[1:], ":")
+	}
+
 	var attempt model.SignInAttempt
-	if err := database.Connection.Where("id = ?", c.Query("state")).First(&attempt).Error; err != nil {
+	if err := database.Connection.Where("id = ?", attemptID).First(&attempt).Error; err != nil {
 		return handler.SendInternalServerError(
 			c,
 			err,
@@ -351,7 +374,16 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		)
 	}
 
-	conf := getOAuthConfig(attempt.SSOProvider)
+	conf, err := getOAuthConfigForDeployment(attempt.SSOProvider, &deployment)
+	if err != nil {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			err.Error(),
+			handler.ErrProviderNotConfigured,
+		)
+	}
+
 	token, err := conf.Exchange(c.Context(), code)
 	if err != nil || !token.Valid() {
 		return handler.SendBadRequest(
@@ -385,13 +417,30 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
 		if exists {
-			return h.service.HandleExistingUser(
+			signIn, err := h.service.HandleExistingUser(
 				tx,
 				&email,
 				token,
 				&attempt,
 				deployment.AuthSettings,
 			)
+			if err != nil {
+				return err
+			}
+
+			// Set the active signin for existing users
+			if signIn != nil {
+				session.Signins = append(session.Signins, *signIn)
+				session.ActiveSigninID = &signIn.ID
+			}
+
+			// Mark attempt as completed
+			attempt.Completed = true
+			if err := tx.Save(&attempt).Error; err != nil {
+				return err
+			}
+
+			return nil
 		}
 
 		otpSecret, err := totp.Generate(totp.GenerateOpts{
@@ -399,11 +448,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			AccountName: user.Email,
 		})
 		if err != nil {
-			return handler.SendInternalServerError(
-				c,
-				err,
-				"Error generating OTP secret",
-			)
+			return err
 		}
 
 		primaryAddressID := snowflake.ID()
@@ -451,7 +496,16 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			return err
 		}
 
+		// Set the active signin for new users
 		session.Signins = append(session.Signins, *signIn)
+		session.ActiveSigninID = &signIn.ID
+
+		// Mark attempt as completed
+		attempt.Completed = true
+		if err := tx.Save(&attempt).Error; err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -462,7 +516,27 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		)
 	}
 
-	return handler.SendSuccess(c, session)
+	// Save the updated session with active signin
+	if err := database.Connection.Save(session).Error; err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to save session",
+		)
+	}
+
+	// Remove session from cache to force refresh
+	handler.RemoveSessionFromCache(session.ID)
+
+	// Include custom redirect URI in response if provided
+	response := fiber.Map{
+		"session": session,
+	}
+	if customRedirectURI != "" {
+		response["redirect_uri"] = customRedirectURI
+	}
+
+	return handler.SendSuccess(c, response)
 }
 
 func (h *Handler) CheckIdentifierAvailability(c *fiber.Ctx) error {

@@ -1,18 +1,22 @@
 package config
 
-import "github.com/ilabs/wacht-fe/model"
+import (
+	"fmt"
+
+	"github.com/ilabs/wacht-fe/model"
+)
 
 var ssoConfig = map[string]model.OauthCredentials{
 	"google_oauth": {
-		ClientID:     "676309606362-8qka5c2tflkt2cjhlq8sqv0o7gn2ne1p.apps.googleusercontent.com",
-		ClientSecret: "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",
-		RedirectURI:  "http://localhost:5173/auth/sso/google/callback",
+		ClientID:     "",
+		ClientSecret: "",
+		RedirectURI:  "",
 		Scopes:       []string{"openid", "email", "profile"},
 	},
 	"microsoft_oauth": {
-		ClientID:     "da77f65d-9dfd-4d47-aff9-59ce2959a0d8",
-		ClientSecret: "DyX8Q~ZKrXGxW53JhOFnN0zmK5.HzLY4XT2o3dhl",
-		RedirectURI:  "http://localhost:5173/auth/sso/microsoft/callback",
+		ClientID:     "",
+		ClientSecret: "",
+		RedirectURI:  "",
 		Scopes: []string{
 			"openid",
 			"email",
@@ -21,43 +25,79 @@ var ssoConfig = map[string]model.OauthCredentials{
 		},
 	},
 	"github_oauth": {
-		ClientID:     "Ov23lifkTu6JeKZwE5V0",
-		ClientSecret: "1f7319c43486a764a53ceadd6dabacb8582c2d0b",
-		RedirectURI:  "http://localhost:5173/auth/sso/github/callback",
+		ClientID:     "",
+		ClientSecret: "",
+		RedirectURI:  "",
 		Scopes:       []string{"user"},
 	},
 	"x_oauth": {
-		ClientID:     "UUxlLVNrYk1mV0JaQ0xBWk00bVo6MTpjaQ",
-		ClientSecret: "bZ8ElbpQ2raCEoAhP39USo_5ccHnl0TLtTARI4I16e5q8CYq0m",
-		RedirectURI:  "http://localhost:3000",
+		ClientID:     "",
+		ClientSecret: "",
+		RedirectURI:  "",
 		Scopes:       []string{"users.read", "offline.access"},
 	},
 	"facebook_oauth": {
 		ClientID:     "",
 		ClientSecret: "",
-		RedirectURI:  "http://localhost:5173/auth/sso/facebook/callback",
+		RedirectURI:  "",
 		Scopes:       []string{"email"},
 	},
 	"apple_oauth": {
 		ClientID:     "",
 		ClientSecret: "",
-		RedirectURI:  "http://localhost:5173/auth/sso/apple/callback",
+		RedirectURI:  "",
 		Scopes:       []string{"email"},
 	},
 	"linkedin_oauth": {
-		ClientID:     "8651nmdfmhpe2t",
-		ClientSecret: "WPL_AP1.ETzRzphkhkd2ktBw.JAyoqg==",
-		RedirectURI:  "http://localhost:5173/auth/sso/linkedin/callback",
+		ClientID:     "",
+		ClientSecret: "",
+		RedirectURI:  "",
 		Scopes:       []string{"r_liteprofile", "r_emailaddress"},
 	},
 	"discord_oauth": {
-		ClientID:     "1331241079223095296",
-		ClientSecret: "K_5WMYdEgmd--ZQz6UlIlVrvOecWKQdk",
-		RedirectURI:  "http://localhost:5173/auth/sso/discord/callback",
+		ClientID:     "",
+		ClientSecret: "",
+		RedirectURI:  "",
 		Scopes:       []string{"identify", "email"},
 	},
 }
 
 func GetDefaultOAuthCredentials(name string) model.OauthCredentials {
 	return ssoConfig[name]
+}
+
+func GetOAuthCredentialsWithRedirectURI(name string, frontendHost string) model.OauthCredentials {
+	creds := ssoConfig[name]
+	if creds.RedirectURI == "" {
+		creds.RedirectURI = frontendHost + "/sso-callback"
+	}
+	return creds
+}
+
+// GetDeploymentOAuthCredentials retrieves OAuth credentials for a specific deployment and provider
+func GetDeploymentOAuthCredentials(deployment *model.Deployment, provider model.SocialConnectionProvider) (*model.OauthCredentials, error) {
+	// First, try to find deployment-specific credentials
+	for _, conn := range deployment.SocialConnections {
+		if conn.Provider == provider && conn.Enabled && conn.Credentials != nil {
+			// Use deployment-specific credentials
+			creds := *conn.Credentials
+			if creds.RedirectURI == "" {
+				creds.RedirectURI = deployment.FrontendHost + "/sso-callback"
+			}
+			return &creds, nil
+		}
+	}
+
+	// Fallback to default credentials for development/staging
+	if deployment.Mode != model.DeploymentModeProduction {
+		defaultCreds := GetDefaultOAuthCredentials(string(provider))
+		if defaultCreds.ClientID != "" {
+			if defaultCreds.RedirectURI == "" {
+				defaultCreds.RedirectURI = deployment.FrontendHost + "/sso-callback"
+			}
+			return &defaultCreds, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no OAuth credentials found for provider %s", provider)
 }

@@ -219,7 +219,7 @@ func (s *AuthService) HandleExistingUser(
 	token *oauth2.Token,
 	attempt *model.SignInAttempt,
 	deploymentSettings model.DeploymentAuthSettings,
-) error {
+) (*model.Signin, error) {
 	var connection model.SocialConnection
 	for _, sc := range email.User.SocialConnections {
 		if sc.Provider == attempt.SSOProvider &&
@@ -239,21 +239,20 @@ func (s *AuthService) HandleExistingUser(
 		)
 
 		if err := tx.Create(&connection).Error; err != nil {
-			return err
-		}
-
-		if attempt.Completed {
-			signIn := model.NewSignIn(
-				attempt.SessionID,
-				email.User.ID,
-			)
-			if err := tx.Create(&signIn).Error; err != nil {
-				return err
-			}
+			return nil, err
 		}
 	}
 
-	return tx.Save(attempt).Error
+	// Always create a signin for SSO authentication
+	signIn := model.NewSignIn(
+		attempt.SessionID,
+		email.User.ID,
+	)
+	if err := tx.Create(&signIn).Error; err != nil {
+		return nil, err
+	}
+
+	return signIn, nil
 }
 
 func (s *AuthService) VerifyPassword(
@@ -290,10 +289,15 @@ func (s *AuthService) CheckUserphoneExists(phone string) bool {
 	return count > 0
 }
 
-func getOAuthConfig(
+func getOAuthConfigForDeployment(
 	provider model.SocialConnectionProvider,
-) *oauth2.Config {
-	cred := config.GetDefaultOAuthCredentials(string(provider))
+	deployment *model.Deployment,
+) (*oauth2.Config, error) {
+	cred, err := config.GetDeploymentOAuthCredentials(deployment, provider)
+	if err != nil {
+		return nil, err
+	}
+
 	conf := &oauth2.Config{
 		ClientID:     cred.ClientID,
 		ClientSecret: cred.ClientSecret,
@@ -320,7 +324,7 @@ func getOAuthConfig(
 		conf.Endpoint = config.DiscordOAuthEndpoint
 	}
 
-	return conf
+	return conf, nil
 }
 
 func (s *AuthService) CheckIdentifierAvailability(
