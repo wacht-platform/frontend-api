@@ -48,7 +48,7 @@ type User struct {
 	ProfilePictureURL              string                  `json:"profile_picture_url"             gorm:"not null"`
 	LastName                       string                  `json:"last_name"                       gorm:"not null"`
 	Username                       string                  `json:"username"                        gorm:"not null"`
-	Password                       string                  `json:"-"`
+	Password                       string                  `json:"-" gorm:"select:false"`
 	Availability                   UserAvailability        `json:"availability"                    gorm:"default:away;not null"`
 	LastPasswordResetAt            time.Time               `json:"last_password_reset_at"`
 	SchemaVersion                  SchemaVersion           `json:"schema_version"                  gorm:"not null"`
@@ -67,7 +67,7 @@ type User struct {
 	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization"             gorm:"constraint:OnDelete:SET NULL;"`
 	ActiveWorkspaceMembershipID    *uint64                 `json:"active_workspace_membership_id,string"`
 	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace"                gorm:"constraint:OnDelete:SET NULL;"`
-	DeploymentID                   uint64                  `json:"-"                               gorm:"not null"`
+	DeploymentID                   uint64                  `json:"-"                               gorm:"not null;select:false"`
 	PublicMetadata                 datatypes.JSONMap       `json:"public_metadata"                 gorm:"not null"`
 	PrivateMetadata                datatypes.JSONMap       `json:"-"                               gorm:"not null"`
 	OtpSecret                      string                  `json:"-"                               gorm:"not null"`

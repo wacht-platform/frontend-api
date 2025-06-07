@@ -102,7 +102,9 @@ func (h *Handler) CreateOrganization(
 				return err
 			}
 			session.ActiveSignin.ActiveOrganizationMembershipID = &membership.ID
-			database.Connection.Save(session.ActiveSignin)
+			database.Connection.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).Updates(map[string]interface{}{
+				"active_organization_membership_id": membership.ID,
+			})
 			return nil
 		},
 	)
@@ -172,7 +174,10 @@ func (h *Handler) LeaveOrganization(
 				*session.ActiveSignin.ActiveOrganizationMembershipID == membership.ID {
 				session.ActiveSignin.ActiveOrganizationMembershipID = nil
 				session.ActiveSignin.ActiveWorkspaceMembershipID = nil
-				if errDb := database.Connection.Save(session.ActiveSignin).Error; errDb != nil {
+				if errDb := database.Connection.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).Updates(map[string]interface{}{
+					"active_organization_membership_id": nil,
+					"active_workspace_membership_id":    nil,
+				}).Error; errDb != nil {
 					log.Printf("Failed to clear active organization ID for user %d: %v", session.ActiveSignin.UserID, errDb)
 				}
 			}

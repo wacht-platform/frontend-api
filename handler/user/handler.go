@@ -810,9 +810,10 @@ func (h *Handler) GenerateBackupCodes(c *fiber.Ctx) error {
 		}
 	}
 
-	user.BackupCodes = backupCodes
-	user.BackupCodesGenerated = true
-	if err := database.Connection.Save(&user).Error; err != nil {
+	if err := database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Updates(map[string]interface{}{
+		"backup_codes":           backupCodes,
+		"backup_codes_generated": true,
+	}).Error; err != nil {
 		return handler.SendInternalServerError(
 			c,
 			nil,
@@ -873,9 +874,10 @@ func (h *Handler) UploadProfilePicture(c *fiber.Ctx) error {
 		)
 	}
 
-	user.ProfilePictureURL = url
-	user.HasProfilePicture = true
-	if err := database.Connection.Save(&user).Error; err != nil {
+	if err := database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Updates(map[string]interface{}{
+		"profile_picture_url": url,
+		"has_profile_picture": true,
+	}).Error; err != nil {
 		return handler.SendInternalServerError(
 			c,
 			nil,

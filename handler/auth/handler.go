@@ -54,7 +54,7 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 		)
 	}
 
-	if err := h.service.ValidateUserStatus(email); err != nil {
+	if err = h.service.ValidateUserStatus(email); err != nil {
 		return handler.SendForbidden(
 			c,
 			nil,
@@ -119,18 +119,13 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 			if err := tx.Create(signIn).Error; err != nil {
 				return err
 			}
-			signIn.User = &email.User
 
-			session.Signins = append(session.Signins, *signIn)
-			session.ActiveSigninID = &signIn.ID
+			if err := tx.Model(&session).Update("active_signin_id", signIn.ID).Error; err != nil {
+				return err
+			}
 		}
 
-		session.SigninAttempts = append(
-			session.SigninAttempts,
-			*attempt,
-		)
-
-		return tx.Save(session).Error
+		return nil
 	})
 
 	if err != nil &&
@@ -262,13 +257,15 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 				return err
 			}
 
-			session.Signins = append(session.Signins, *signIn)
-			session.ActiveSigninID = &signIn.ID
+			// Update session's active signin ID without loading associations
+			if err := tx.Model(&session).Update("active_signin_id", signIn.ID).Error; err != nil {
+				return err
+			}
 		}
 
 		handler.RemoveSessionFromCache(session.ID)
 
-		return tx.Save(session).Error
+		return nil
 	})
 	if err != nil {
 		return handler.SendInternalServerError(
@@ -517,7 +514,9 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 	}
 
 	// Save the updated session with active signin
-	if err := database.Connection.Save(session).Error; err != nil {
+	if err := database.Connection.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]interface{}{
+		"active_signin_id": session.ActiveSigninID,
+	}).Error; err != nil {
 		return handler.SendInternalServerError(
 			c,
 			err,
@@ -827,7 +826,9 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 						}
 					}
 
-					if err := tx.Save(session).Error; err != nil {
+					if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]interface{}{
+						"active_signin_id": session.ActiveSigninID,
+					}).Error; err != nil {
 						return err
 					}
 
@@ -913,10 +914,8 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					return err
 				}
 
-				session.Signins = append(session.Signins, *signIn)
-				session.ActiveSigninID = &signIn.ID
-
-				return tx.Save(session).Error
+				// Update session's active signin ID without loading associations
+				return tx.Model(&session).Update("active_signin_id", signIn.ID).Error
 			}); err != nil {
 				return handler.SendInternalServerError(c, err, "Something went wrong")
 			}

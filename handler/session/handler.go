@@ -93,7 +93,9 @@ func (h *Handler) SwitchActiveSignIn(
 
 	handler.RemoveSessionFromCache(session.ID)
 
-	database.Connection.Save(session)
+	database.Connection.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]interface{}{
+		"active_signin_id": session.ActiveSigninID,
+	})
 	return handler.SendSuccess(c, session)
 }
 
@@ -179,11 +181,8 @@ func (h *Handler) SwitchOrganization(
 	}
 
 	if orgID == "" {
-		session.ActiveSignin.User.ActiveOrganizationMembershipID = nil
-		database.Connection.Save(session.ActiveSignin.User)
-		session.ActiveSignin.ActiveOrganizationMembershipID = nil
-		session.ActiveSignin.ActiveOrganizationMembershipID = nil
-		database.Connection.Save(session.ActiveSignin)
+		database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Update("active_organization_membership_id", nil)
+		database.Connection.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).Update("active_organization_membership_id", nil)
 		handler.RemoveSessionFromCache(session.ID)
 		return handler.SendSuccess(c, session)
 	}
@@ -203,10 +202,8 @@ func (h *Handler) SwitchOrganization(
 		return fiber.NewError(fiber.StatusBadRequest, "You are not a member of this organization")
 	}
 
-	session.ActiveSignin.User.ActiveOrganizationMembershipID = &membership.ID
-	session.ActiveSignin.ActiveOrganizationMembershipID = &membership.ID
-	database.Connection.Save(session.ActiveSignin.User)
-	database.Connection.Save(session.ActiveSignin)
+	database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Update("active_organization_membership_id", membership.ID)
+	database.Connection.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).Update("active_organization_membership_id", membership.ID)
 	handler.RemoveSessionFromCache(session.ID)
 
 	return handler.SendSuccess(c, session)
@@ -223,12 +220,14 @@ func (h *Handler) SwitchWorkspace(
 	}
 
 	if workspaceID == "" {
-		session.ActiveSignin.User.ActiveWorkspaceMembershipID = nil
-		session.ActiveSignin.User.ActiveOrganizationMembershipID = nil
-		database.Connection.Save(session.ActiveSignin.User)
-		session.ActiveSignin.ActiveWorkspaceMembershipID = nil
-		session.ActiveSignin.ActiveOrganizationMembershipID = nil
-		database.Connection.Save(session.ActiveSignin)
+		database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Updates(map[string]interface{}{
+			"active_workspace_membership_id":    nil,
+			"active_organization_membership_id": nil,
+		})
+		database.Connection.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).Updates(map[string]interface{}{
+			"active_workspace_membership_id":    nil,
+			"active_organization_membership_id": nil,
+		})
 		handler.RemoveSessionFromCache(session.ID)
 		return handler.SendSuccess(c, session)
 	}
@@ -250,12 +249,14 @@ func (h *Handler) SwitchWorkspace(
 		return fiber.NewError(fiber.StatusBadRequest, "You are not a member of this workspace")
 	}
 
-	session.ActiveSignin.User.ActiveWorkspaceMembershipID = &membership.ID
-	session.ActiveSignin.User.ActiveOrganizationMembershipID = &membership.OrganizationMembershipID
-	session.ActiveSignin.ActiveWorkspaceMembershipID = &membership.ID
-	session.ActiveSignin.ActiveOrganizationMembershipID = &membership.OrganizationMembershipID
-	database.Connection.Save(session.ActiveSignin.User)
-	database.Connection.Save(session.ActiveSignin)
+	database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Updates(map[string]interface{}{
+		"active_workspace_membership_id":    membership.ID,
+		"active_organization_membership_id": membership.OrganizationMembershipID,
+	})
+	database.Connection.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).Updates(map[string]interface{}{
+		"active_workspace_membership_id":    membership.ID,
+		"active_organization_membership_id": membership.OrganizationMembershipID,
+	})
 	handler.RemoveSessionFromCache(session.ID)
 
 	return handler.SendSuccess(c, session)

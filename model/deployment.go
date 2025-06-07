@@ -47,6 +47,14 @@ type DomainVerificationRecords struct {
 	CustomHostnameVerification []DnsRecord `json:"custom_hostname_verification"`
 }
 
+func (i *DomainVerificationRecords) GormDataType() string {
+	return "jsonb"
+}
+
+func (i *DomainVerificationRecords) GormDBDataType() string {
+	return "jsonb"
+}
+
 func (d *DomainVerificationRecords) Scan(value any) error {
 	bytes, ok := value.([]byte)
 	if !ok {
@@ -63,6 +71,14 @@ type EmailVerificationRecords struct {
 	SesVerification      []DnsRecord `json:"ses_verification"`
 	MailFromVerification []DnsRecord `json:"mail_from_verification"`
 	DkimRecords          []DnsRecord `json:"dkim_records"`
+}
+
+func (e *EmailVerificationRecords) GormDataType() string {
+	return "jsonb"
+}
+
+func (e *EmailVerificationRecords) GormDBDataType() string {
+	return "jsonb"
 }
 
 func (e *EmailVerificationRecords) Scan(value any) error {
@@ -100,6 +116,7 @@ type Deployment struct {
 	KepPair                   DeploymentKeyPair            `json:"-"`
 	DomainVerificationRecords *DomainVerificationRecords   `json:"domain_verification_records"`
 	EmailVerificationRecords  *EmailVerificationRecords    `json:"email_verification_records"`
+	DeletedAt                 gorm.DeletedAt               `gorm:"index"`
 }
 
 func (d *Deployment) IsProduction() bool {

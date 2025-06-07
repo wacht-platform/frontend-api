@@ -48,7 +48,9 @@ func (s *AuthService) FindUserByEmail(
 	email string,
 ) (*model.UserEmailAddress, error) {
 	var userEmail model.UserEmailAddress
-	if res := s.db.Where(&model.UserEmailAddress{EmailAddress: email}).Joins("User").First(&userEmail); res.RowsAffected == 0 {
+	if res := s.db.Where(&model.UserEmailAddress{EmailAddress: email}).Joins("User").Preload("User", func(db *gorm.DB) *gorm.DB {
+		return db.Select("*")
+	}).First(&userEmail); res.RowsAffected == 0 {
 		return nil, handler.ErrUserNotFound
 	} else if res.Error != nil {
 		return nil, res.Error
@@ -61,7 +63,9 @@ func (s *AuthService) FindUserByEmailID(
 	emailId uint64,
 ) (*model.UserEmailAddress, error) {
 	var userEmail model.UserEmailAddress
-	if res := s.db.Where(&model.UserEmailAddress{Model: model.Model{ID: emailId}}).Joins("User").First(&userEmail); res.RowsAffected == 0 {
+	if res := s.db.Where(&model.UserEmailAddress{Model: model.Model{ID: emailId}}).Joins("User").Preload("User", func(db *gorm.DB) *gorm.DB {
+		return db.Select("*")
+	}).First(&userEmail); res.RowsAffected == 0 {
 		return nil, handler.ErrUserNotFound
 	} else if res.Error != nil {
 		return nil, res.Error
