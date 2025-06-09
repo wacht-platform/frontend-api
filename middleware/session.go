@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"errors"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -19,7 +20,7 @@ import (
 const (
 	sessionCookieName = "__session"
 	devSessionHeader  = "X-Development-Session"
-	sessionDuration   = 24 * time.Hour
+	sessionDuration   = 1 * time.Minute
 )
 
 func SetSessionMiddleware(c *fiber.Ctx) error {
@@ -101,21 +102,25 @@ func handleExistingSession(
 	)
 
 	if errors.Is(err, jwt.TokenExpiredError()) {
+		log.Printf("JWT token expired, attempting to refresh session")
 		token, err = utils.ParseJWT(
 			sessionToken,
 			deployment.KepPair,
 			deployment.BackendHost,
 		)
 		if err != nil {
+			log.Printf("Failed to parse expired JWT for refresh: %v", err)
 			return handler.SendUnauthorized(c, err, "Invalid session")
 		}
 		return refreshSession(c, token)
 	} else if err != nil {
+		log.Printf("JWT verification failed: %v", err)
 		return handler.SendUnauthorized(c, err, "Invalid session")
 	}
 
 	sessionID, _, err := extractTokenClaims(token)
 	if err != nil {
+		log.Printf("Failed to extract token claims: %v", err)
 		return handler.SendUnauthorized(c, err, "Invalid session")
 	}
 
@@ -143,6 +148,7 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token) error {
 
 	sessionID, rotatingTokenID, err := extractTokenClaims(expJwt)
 	if err != nil {
+		log.Printf("Failed to extract token claims during refresh: %v", err)
 		return handler.SendUnauthorized(c, err, "Invalid session")
 	}
 
@@ -152,31 +158,37 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token) error {
 	)
 
 	if err != nil {
-		return handler.SendUnauthorized(c, err, "Invalid session")
-	}
-
-	if err := database.Connection.Delete(&rotatingToken).Error; err != nil {
-		return handler.SendInternalServerError(
-			c,
-			err,
-			"Failed to refresh session",
-		)
+		log.Printf("Failed to validate rotating token during refresh for session %d: %v", sessionID, err)
+		log.Printf("Creating new session for session %d due to invalid rotating token", sessionID)
+		return handleNewSession(c, deployment)
 	}
 
 	var token string
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
-		token, err = utils.SignJWT(
+		newToken, err := utils.SignJWT(
 			sessionID,
 			deployment.BackendHost,
 			time.Now().Add(sessionDuration),
 			deployment.KepPair,
 			tx,
 		)
+		if err != nil {
+			log.Printf("Failed to sign new JWT during refresh for session %d: %v", sessionID, err)
+			return err
+		}
 
-		return err
+		if err := tx.Delete(&rotatingToken).Error; err != nil {
+			log.Printf("Failed to delete old rotating token during refresh for session %d: %v", sessionID, err)
+			return err
+		}
+
+		token = newToken
+		return nil
 	})
+
 	if err != nil {
+		log.Printf("Transaction failed during session refresh for session %d: %v", sessionID, err)
 		return handler.SendInternalServerError(
 			c,
 			err,
@@ -184,6 +196,7 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token) error {
 		)
 	}
 
+	log.Printf("Successfully refreshed session %d", sessionID)
 	setSessionToken(c, token, deployment.IsProduction())
 
 	c.Locals("session", sessionID)
@@ -217,11 +230,22 @@ func validateRotatingToken(
 ) (model.RotatingToken, error) {
 	var rotatingToken model.RotatingToken
 	if err := database.Connection.First(&rotatingToken, rotatingTokenID).Error; err != nil {
+		log.Printf("Rotating token %d not found in database: %v", rotatingTokenID, err)
 		return rotatingToken, err
 	}
 
-	if rotatingToken.SessionID != sessionID ||
-		!rotatingToken.IsValid() {
+	if rotatingToken.SessionID != sessionID {
+		log.Printf("Rotating token %d session ID mismatch: expected %d, got %d",
+			rotatingTokenID, sessionID, rotatingToken.SessionID)
+		return rotatingToken, fiber.NewError(
+			fiber.StatusUnauthorized,
+			"Invalid rotating token",
+		)
+	}
+
+	if !rotatingToken.IsValid() {
+		log.Printf("Rotating token %d has expired: valid until %v, current time %v",
+			rotatingTokenID, rotatingToken.ValidUntil, time.Now())
 		return rotatingToken, fiber.NewError(
 			fiber.StatusUnauthorized,
 			"Invalid rotating token",
