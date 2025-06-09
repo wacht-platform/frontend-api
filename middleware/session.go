@@ -24,7 +24,7 @@ import (
 const (
 	sessionCookieName = "__session"
 	devSessionHeader  = "X-Development-Session"
-	sessionDuration   = 1 * time.Minute
+	sessionDuration   = 6 * time.Hour
 )
 
 func SetSessionMiddleware(c *fiber.Ctx) error {
