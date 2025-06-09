@@ -29,7 +29,7 @@ func NewUserService() *UserService {
 }
 
 func (s *UserService) storeOTPInCache(key string, otp string) error {
-	return database.Cache.Set(
+	return database.Redis.Set(
 		context.Background(),
 		fmt.Sprintf("otp:%s", key),
 		otp,
@@ -38,14 +38,14 @@ func (s *UserService) storeOTPInCache(key string, otp string) error {
 }
 
 func (s *UserService) removeOTPFromCache(key string) error {
-	return database.Cache.Del(
+	return database.Redis.Del(
 		context.Background(),
 		fmt.Sprintf("otp:%s", key),
 	).Err()
 }
 
 func (s *UserService) getOTPFromCache(key string) (string, error) {
-	return database.Cache.Get(
+	return database.Redis.Get(
 		context.Background(),
 		fmt.Sprintf("otp:%s", key),
 	).Result()

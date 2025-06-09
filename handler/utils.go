@@ -32,7 +32,7 @@ func GetSession(c *fiber.Ctx) *model.Session {
 }
 
 func RemoveSessionFromCache(id uint64) {
-	database.Cache.Del(
+	database.Redis.Del(
 		context.Background(),
 		fmt.Sprintf("session:%d", id),
 	)
@@ -46,7 +46,7 @@ func getSessionFromCache(id uint64) (*model.Session, error) {
 	)
 	defer cancel()
 
-	v := database.Cache.Get(ctx, fmt.Sprintf("session:%d", id))
+	v := database.Redis.Get(ctx, fmt.Sprintf("session:%d", id))
 	if v.Err() != nil {
 		return nil, v.Err()
 	}
@@ -76,7 +76,7 @@ func getSessionAndSetToCache(sessionId uint64) *model.Session {
 		return nil
 	}
 
-	cmd := database.Cache.Set(
+	cmd := database.Redis.Set(
 		context.Background(),
 		fmt.Sprintf("session:%d", sessionId),
 		json,

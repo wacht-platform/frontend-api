@@ -6,10 +6,13 @@ import (
 	"os"
 	"time"
 
+	celery "github.com/marselester/gopher-celery"
+	celeryredis "github.com/marselester/gopher-celery/goredis"
 	"github.com/redis/go-redis/v9"
 )
 
-var Cache *redis.Client
+var Redis *redis.Client
+var CeleryApp *celery.App
 
 func InitRedisConnection() error {
 	rdb := redis.NewClient(&redis.Options{
@@ -33,7 +36,25 @@ func InitRedisConnection() error {
 		return err
 	}
 
-	Cache = rdb
+	Redis = rdb
+
+	return nil
+}
+
+func InitCeleryApp() error {
+	if Redis == nil {
+		return fmt.Errorf("redis not initialized")
+	}
+
+	broker := celeryredis.NewBroker(
+		celeryredis.WithClient(Redis),
+	)
+
+	app := celery.NewApp(
+		celery.WithBroker(broker),
+	)
+
+	CeleryApp = app
 
 	return nil
 }

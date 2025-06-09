@@ -269,12 +269,7 @@ func validateRotatingToken(
 	return rotatingToken, nil
 }
 
-// Fixed Window Rate Limiting for the API endpoints to prevent abuse of the service by a single user or IP address (7 requests per 10 seconds).
 func RateLimiter() fiber.Handler {
-	// storage :=  redis.New(redis.Config{
-
-	// })
-
 	return limiter.New(limiter.Config{
 		Max:        7,
 		Expiration: 10 * time.Second,
@@ -287,6 +282,5 @@ func RateLimiter() fiber.Handler {
 				"Too many requests, please try again later.",
 			)
 		},
-		//  Storage: storage,
 	})
 }

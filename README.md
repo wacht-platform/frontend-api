@@ -79,17 +79,7 @@ PORT=3000
 ENVIRONMENT=development
 ```
 
-### 4. Database Setup
-
-```bash
-# Create database
-createdb wacht_db
-
-# Run migrations (uncomment in main.go if needed)
-# The application will auto-migrate on startup
-```
-
-### 5. Run the application
+### 4. Run the application
 
 ```bash
 go run main.go

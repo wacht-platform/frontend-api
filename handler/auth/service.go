@@ -557,7 +557,7 @@ const (
 )
 
 func (s *AuthService) StoreOTPInCache(key string, otp string) error {
-	return database.Cache.Set(
+	return database.Redis.Set(
 		context.Background(),
 		fmt.Sprintf("otp:%s", key),
 		otp,
@@ -566,14 +566,14 @@ func (s *AuthService) StoreOTPInCache(key string, otp string) error {
 }
 
 func (s *AuthService) GetOTPFromRedis(key string) (string, error) {
-	return database.Cache.Get(
+	return database.Redis.Get(
 		context.Background(),
 		fmt.Sprintf("otp:%s", key),
 	).Result()
 }
 
 func (s *AuthService) DeleteOTPFromRedis(key string) error {
-	return database.Cache.Del(
+	return database.Redis.Del(
 		context.Background(),
 		fmt.Sprintf("otp:%s", key),
 	).Err()
