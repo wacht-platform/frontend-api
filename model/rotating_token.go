@@ -8,14 +8,17 @@ import (
 
 type RotatingToken struct {
 	Model
-	SessionID  uint64    `json:"session_id"  gorm:"not null"`
-	ValidUntil time.Time `json:"valid_until" gorm:"not null"`
+	SessionID   uint64  `json:"session_id"   gorm:"not null"`
+	ValidUntil  time.Time `json:"valid_until"  gorm:"not null"`
+	NextTokenID *uint64 `json:"next_token_id"`
 }
 
 func (r *RotatingToken) IsValid() bool {
-	return r.ValidUntil.After(
-		time.Now(),
-	)
+	return r.ValidUntil.After(time.Now())
+}
+
+func (r *RotatingToken) HasNextToken() bool {
+	return r.NextTokenID != nil
 }
 
 func NewRotatingToken(

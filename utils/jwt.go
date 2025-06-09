@@ -44,24 +44,20 @@ func SignJWT(
 	}
 
 	privateKeyBlock, _ := pem.Decode([]byte(keypair.PrivateKey))
-	if privateKeyBlock == nil {
-		log.Printf("Failed to decode private key for session %d", sessionID)
-		return "", fmt.Errorf("failed to decode private key")
-	}
-
 	privateKey, err := x509.ParsePKCS8PrivateKey(
 		privateKeyBlock.Bytes,
 	)
 	if err != nil {
-		return "", fmt.Errorf("error parsing private key: %w", err)
+		log.Fatal("Error parsing private key: ", err)
 	}
 
-	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.ES256(), privateKey))
 	if err != nil {
 		return "", err
 	}
 
-	return string(signed), nil
+	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.ES256(), privateKey))
+
+	return string(signed), err
 }
 
 func VerifyJWT(
