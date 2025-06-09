@@ -16,6 +16,7 @@ type DeploymentRestrictions struct {
 	BlockSubaddresses     bool                             `json:"block_subaddresses"      gorm:"not null"`
 	BlockDisposableEmails bool                             `json:"block_disposable_emails" gorm:"not null"`
 	BlockVoipNumbers      bool                             `json:"block_voip_numbers"      gorm:"not null"`
+	WaitlistCollectNames  bool                             `json:"waitlist_collect_names"  gorm:"not null"`
 	CountryRestrictions   CountryRestriction               `json:"country_restrictions"    gorm:"not null"`
 	BannedKeywords        pq.StringArray                   `json:"banned_keywords"         gorm:"type:text[];not null"`
 	AllowlistedResources  pq.StringArray                   `json:"allowlisted_resources"   gorm:"type:text[];not null"`
