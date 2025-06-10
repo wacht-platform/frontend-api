@@ -14,16 +14,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aymerick/raymond"
 	"github.com/godruoyi/go-snowflake"
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/config"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/service"
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/ua-parser/uap-go/uaparser"
-	"github.com/wneessen/go-mail"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/facebook"
 	"golang.org/x/oauth2/github"
@@ -35,12 +34,14 @@ import (
 )
 
 type AuthService struct {
-	db *gorm.DB
+	db     *gorm.DB
+	celery *service.CeleryService
 }
 
 func NewAuthService() *AuthService {
 	return &AuthService{
-		db: database.Connection,
+		db:     database.Connection,
+		celery: service.NewCeleryService(),
 	}
 }
 
@@ -419,56 +420,13 @@ func (s *AuthService) ValidatePassword(password string) error {
 	return nil
 }
 
-func (s *AuthService) SendEmailOTPVerification(
+
+
+func (s *AuthService) SendEmailOTPVerificationAsync(
 	email string,
-	otp string,
 	deployment model.Deployment,
 ) error {
-	smtpHost := os.Getenv("SES_SMTP_HOST")
-	username := os.Getenv("SES_SMTP_USERNAME")
-	password := os.Getenv("SES_SMTP_PASSWORD")
-	from := fmt.Sprintf("%s@%s", deployment.EmailTemplates.VerificationCodeTemplate.TemplateFrom, deployment.MailFromHost)
-
-	ctx := map[string]string{
-		"app_name": deployment.UISettings.AppName,
-		"app_logo": deployment.UISettings.LogoImageURL,
-		"code":     otp,
-	}
-
-	subject, err := raymond.Render(deployment.EmailTemplates.VerificationCodeTemplate.TemplateSubject, ctx)
-	if err != nil {
-		return err
-	}
-
-	tpl := fmt.Sprintf(`<html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>%s</title></head><body>%s</body></html>`, subject, deployment.EmailTemplates.VerificationCodeTemplate.TemplateData)
-
-	htmlBody, err := raymond.Render(tpl, ctx)
-	if err != nil {
-		return err
-	}
-
-	message := mail.NewMsg()
-	mail.WithNoDefaultUserAgent()(message)
-	message.From(from)
-	message.To(email)
-	message.Subject(subject)
-	message.SetBodyString(mail.TypeTextHTML, htmlBody)
-
-	smtpClient, err := mail.NewClient(
-		smtpHost,
-		mail.WithPort(2587),
-		mail.WithSMTPAuth(mail.SMTPAuthPlain),
-		mail.WithUsername(username),
-		mail.WithPassword(password),
-	)
-
-	if err != nil {
-		return err
-	}
-
-	err = smtpClient.DialAndSend(message)
-
-	return err
+	return s.celery.SendEmailAsync("auth_email_verification", deployment.ID, email)
 }
 
 func (s *AuthService) CreateSignupAttempt(

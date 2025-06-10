@@ -649,7 +649,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			if err := h.service.SendEmailOTPVerification(email.EmailAddress, code, deployment); err != nil {
+			if err := h.service.SendEmailOTPVerificationAsync(email.EmailAddress, deployment); err != nil {
 				return handler.SendInternalServerError(
 					c,
 					err,
@@ -703,7 +703,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			if err := h.service.SendEmailOTPVerification(attempt.Email, code, deployment); err != nil {
+			if err := h.service.SendEmailOTPVerificationAsync(attempt.Email, deployment); err != nil {
 				return handler.SendInternalServerError(
 					c,
 					err,

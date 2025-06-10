@@ -14,6 +14,7 @@ import (
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/service"
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwt"
@@ -185,6 +186,8 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token) error {
 			return err
 		}
 
+		service.NewCeleryService().ScheduleTokenCleanup(rotatingToken.ID, sessionID, 1)
+
 		finalRotatingTokenID = uint64(newRotatingToken.ID)
 		return nil
 	})
@@ -247,26 +250,6 @@ func extractTokenClaims(token jwt.Token) (uint64, uint64, error) {
 	}
 
 	return uint64(sessionID), uint64(rotatingTokenIDuint64), nil
-}
-
-func validateRotatingToken(
-	sessionID uint64,
-	rotatingTokenID uint64,
-) (model.RotatingToken, error) {
-	var rotatingToken model.RotatingToken
-	if err := database.Connection.First(&rotatingToken, rotatingTokenID).Error; err != nil {
-		return rotatingToken, err
-	}
-
-	if rotatingToken.SessionID != sessionID ||
-		!rotatingToken.IsValid() {
-		return rotatingToken, fiber.NewError(
-			fiber.StatusUnauthorized,
-			"Invalid rotating token",
-		)
-	}
-
-	return rotatingToken, nil
 }
 
 func RateLimiter() fiber.Handler {

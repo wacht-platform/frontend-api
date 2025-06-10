@@ -291,6 +291,8 @@ func (h *Handler) PrepareEmailVerification(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
 	}
 
+	deployment := handler.GetDeployment(c)
+
 	emailID := c.Params("id")
 	if emailID == "" {
 		return handler.SendBadRequest(
@@ -338,7 +340,10 @@ func (h *Handler) PrepareEmailVerification(c *fiber.Ctx) error {
 		)
 	}
 
-	err = h.service.sendEmailOTPVerification(emailAddress.EmailAddress, code)
+	err = h.service.sendEmailOTPVerificationAsync(
+		deployment.ID,
+		emailAddress.EmailAddress,
+	)
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,
@@ -442,6 +447,8 @@ func (h *Handler) PreparePhoneVerification(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
 	}
 
+	deployment := handler.GetDeployment(c)
+
 	phoneID := c.Params("id")
 	if phoneID == "" {
 		return handler.SendBadRequest(
@@ -489,7 +496,10 @@ func (h *Handler) PreparePhoneVerification(c *fiber.Ctx) error {
 		)
 	}
 
-	err = h.service.sendSmsOTPVerification(phoneNumber.PhoneNumber, code)
+	err = h.service.sendSmsOTPVerificationAsync(
+		deployment.ID,
+		phoneNumber.PhoneNumber,
+	)
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,
