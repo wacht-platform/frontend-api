@@ -2,7 +2,6 @@ package service
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/ilabs/wacht-fe/database"
 	celery "github.com/marselester/gopher-celery"

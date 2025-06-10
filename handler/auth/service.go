@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -419,8 +418,6 @@ func (s *AuthService) ValidatePassword(password string) error {
 	}
 	return nil
 }
-
-
 
 func (s *AuthService) SendEmailOTPVerificationAsync(
 	email string,
