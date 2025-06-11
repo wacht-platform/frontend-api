@@ -32,6 +32,7 @@ func setupUserRoutes(
 	router.Post("/authenticator/attempt-verification", userHandler.VerifyAuthenticator)
 	router.Delete("/authenticator/:id", userHandler.DeleteAuthenticator)
 	router.Post("/backup-codes", userHandler.GenerateBackupCodes)
-	router.Post("/signins", userHandler.GetUserSignins)
+	router.Post("/backup-codes/regenerate", userHandler.RegenerateBackupCodes)
+	router.Get("/signins", userHandler.GetUserSignins)
 	router.Patch("/signins/:id/signout", userHandler.SignOutFromSession)
 }

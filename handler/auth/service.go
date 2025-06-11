@@ -263,7 +263,6 @@ func (s *AuthService) HandleExistingUser(
 		}
 	}
 
-	// Always create a signin for SSO authentication
 	signIn := model.NewSignIn(
 		attempt.SessionID,
 		email.User.ID,
@@ -444,6 +443,25 @@ func (s *AuthService) SendEmailOTPVerificationAsync(
 	return s.celery.SendEmailAsync("auth_email_verification", deployment.ID, email)
 }
 
+func (s *AuthService) CheckMissingRequiredFields(user *model.User, authSettings model.AuthSettings) []string {
+	var missingFields []string
+
+	if authSettings.FirstName.Required && user.FirstName == "" {
+		missingFields = append(missingFields, "first_name")
+	}
+	if authSettings.LastName.Required && user.LastName == "" {
+		missingFields = append(missingFields, "last_name")
+	}
+	if authSettings.Username.Required && user.Username == "" {
+		missingFields = append(missingFields, "username")
+	}
+	if authSettings.PhoneNumber.Required && user.PrimaryPhoneNumberID == nil {
+		missingFields = append(missingFields, "phone_number")
+	}
+
+	return missingFields
+}
+
 func (s *AuthService) CreateSignupAttempt(
 	b *SignUpRequest,
 	hashedPassword string,
@@ -523,6 +541,138 @@ func (s *AuthService) CreateSignupAttempt(
 	}
 
 	return attempt, nil
+}
+
+func (s *AuthService) CreateOAuthSignupAttempt(
+	email string,
+	firstName string,
+	lastName string,
+	username string,
+	provider model.SocialConnectionProvider,
+	accessToken string,
+	refreshToken string,
+	session *model.Session,
+	d model.Deployment,
+) (*model.SignupAttempt, error) {
+	var requiredFields []string
+	var missingFields []string
+
+	if d.AuthSettings.FirstName.Required {
+		requiredFields = append(requiredFields, "first_name")
+		if firstName == "" {
+			missingFields = append(missingFields, "first_name")
+		}
+	}
+	if d.AuthSettings.LastName.Required {
+		requiredFields = append(requiredFields, "last_name")
+		if lastName == "" {
+			missingFields = append(missingFields, "last_name")
+		}
+	}
+	if d.AuthSettings.EmailAddress.Required {
+		requiredFields = append(requiredFields, "email")
+		if email == "" {
+			missingFields = append(missingFields, "email")
+		}
+	}
+	if d.AuthSettings.Username.Required {
+		requiredFields = append(requiredFields, "username")
+		if username == "" {
+			missingFields = append(missingFields, "username")
+		}
+	}
+	if d.AuthSettings.PhoneNumber.Required {
+		requiredFields = append(requiredFields, "phone_number")
+		missingFields = append(missingFields, "phone_number")
+	}
+
+	var steps []model.SignupAttemptStep
+	if d.AuthSettings.VerificationPolicy.Email && email != "" {
+		steps = append(steps, model.SignupAttemptStepVerifyEmail)
+	}
+
+	attempt := &model.SignupAttempt{
+		Model: model.Model{
+			ID: snowflake.ID(),
+		},
+		SessionID:        session.ID,
+		FirstName:        firstName,
+		LastName:         lastName,
+		Email:            email,
+		Username:         username,
+		PhoneNumber:      "",
+		Password:         "",
+		RequiredFields:   datatypes.NewJSONSlice(requiredFields),
+		MissingFields:    datatypes.NewJSONSlice(missingFields),
+		RemainingSteps:   datatypes.NewJSONSlice(steps),
+		SSOProvider:      provider,
+		SSOAccessToken:   accessToken,
+		SSORefreshToken:  refreshToken,
+		IsOAuthSignup:    true,
+	}
+
+	if len(steps) > 0 {
+		attempt.CurrentStep = steps[0]
+	}
+
+	return attempt, nil
+}
+
+func (s *AuthService) CreateOAuthUser(
+	attempt *model.SignupAttempt,
+	d model.Deployment,
+) (*model.User, error) {
+	if !attempt.IsOAuthSignup {
+		return nil, fmt.Errorf("attempt is not an OAuth signup")
+	}
+
+	primaryAddressID := snowflake.ID()
+
+	u := model.User{
+		Model: model.Model{
+			ID: snowflake.ID(),
+		},
+		SchemaVersion:         model.SchemaVersionV1,
+		FirstName:             attempt.FirstName,
+		LastName:              attempt.LastName,
+		Username:              attempt.Username,
+		SecondFactorPolicy:    d.AuthSettings.SecondFactorPolicy,
+		DeploymentID:          d.ID,
+		PrimaryEmailAddressID: &primaryAddressID,
+		UserEmailAddresses: []model.UserEmailAddress{{
+			Model:                model.Model{ID: primaryAddressID},
+			EmailAddress:         attempt.Email,
+			IsPrimary:            true,
+			Verified:             true,
+			VerificationStrategy: model.Otp,
+			VerifiedAt:           time.Now(),
+			DeploymentID:         d.ID,
+		}},
+		SocialConnections: []model.SocialConnection{{
+			Model:              model.Model{ID: snowflake.ID()},
+			Provider:           attempt.SSOProvider,
+			EmailAddress:       attempt.Email,
+			UserEmailAddressID: primaryAddressID,
+			AccessToken:        attempt.SSOAccessToken,
+			RefreshToken:       attempt.SSORefreshToken,
+		}},
+	}
+
+	if attempt.PhoneNumber != "" {
+		phoneID := snowflake.ID()
+		u.UserPhoneNumbers = []model.UserPhoneNumber{{
+			Model:        model.Model{ID: phoneID},
+			PhoneNumber:  attempt.PhoneNumber,
+			IsPrimary:    true,
+			Verified:     false,
+			DeploymentID: d.ID,
+		}}
+		if u.PrimaryPhoneNumberID == nil {
+			u.PrimaryPhoneNumberID = &phoneID
+		}
+	}
+
+	return &u, nil
 }
 
 const (
@@ -1061,7 +1211,6 @@ func (s *AuthService) isDisposableEmail(email string) bool {
 func (s *AuthService) validateEmailMXRecord(email string) error {
 	domain := strings.Split(email, "@")[1]
 
-	// Check if domain has MX records
 	mxRecords, err := net.LookupMX(domain)
 	if err != nil || len(mxRecords) == 0 {
 		_, err := net.LookupHost(domain)

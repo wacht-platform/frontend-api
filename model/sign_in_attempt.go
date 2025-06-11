@@ -76,6 +76,9 @@ type SignInAttempt struct {
 	Completed      bool                                   `json:"completed"       gorm:"not null"`
 	Errored        bool                                   `json:"errored"         gorm:"not null"`
 	Errors         datatypes.JSONSlice[Error]             `json:"errors"`
+	RequiresCompletion bool                               `json:"requires_completion"`
+	MissingFields      datatypes.JSONSlice[string]        `json:"missing_fields"`
+	RequiredFields     datatypes.JSONSlice[string]        `json:"required_fields"`
 }
 
 func NewSignInAttempt(method SignInMethod) *SignInAttempt {

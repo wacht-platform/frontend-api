@@ -63,6 +63,9 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 		)
 	}
 
+	missingFields := h.service.CheckMissingRequiredFields(&email.User, d.AuthSettings)
+	requiresCompletion := len(missingFields) > 0
+
 	authenticated := false
 
 	if b.Password != "" {
@@ -108,6 +111,27 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 		steps,
 		completed,
 	)
+
+	if requiresCompletion {
+		attempt.RequiresCompletion = true
+		attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
+
+		var requiredFields []string
+		if d.AuthSettings.FirstName.Required {
+			requiredFields = append(requiredFields, "first_name")
+		}
+		if d.AuthSettings.LastName.Required {
+			requiredFields = append(requiredFields, "last_name")
+		}
+		if d.AuthSettings.Username.Required {
+			requiredFields = append(requiredFields, "username")
+		}
+		if d.AuthSettings.PhoneNumber.Required {
+			requiredFields = append(requiredFields, "phone_number")
+		}
+		attempt.RequiredFields = datatypes.NewJSONSlice(requiredFields)
+		completed = false
+	}
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(attempt).Error; err != nil {
@@ -339,7 +363,6 @@ func (h *Handler) InitSSO(c *fiber.Ctx) error {
 		)
 	}
 
-	// Check for custom redirect_uri parameter
 	customRedirectURI := c.Query("redirect_uri")
 
 	url, err := utils.GenerateVerificationUrlForDeployment(provider, *attempt, &deployment, customRedirectURI)
@@ -448,13 +471,11 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 				return err
 			}
 
-			// Set the active signin for existing users
 			if signIn != nil {
 				session.Signins = append(session.Signins, *signIn)
 				session.ActiveSigninID = &signIn.ID
 			}
 
-			// Mark attempt as completed
 			attempt.Completed = true
 			if err := tx.Save(&attempt).Error; err != nil {
 				return err
@@ -533,7 +554,6 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		)
 	}
 
-	// Save the updated session with active signin
 	if err := database.Connection.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]interface{}{
 		"active_signin_id": session.ActiveSigninID,
 	}).Error; err != nil {
@@ -544,10 +564,8 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		)
 	}
 
-	// Remove session from cache to force refresh
 	handler.RemoveSessionFromCache(session.ID)
 
-	// Include custom redirect URI in response if provided
 	response := fiber.Map{
 		"session": session,
 	}
@@ -933,7 +951,6 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					return err
 				}
 
-				// Update session's active signin ID without loading associations
 				return tx.Model(&session).Update("active_signin_id", signIn.ID).Error
 			}); err != nil {
 				return handler.SendInternalServerError(c, err, "Something went wrong")
@@ -944,4 +961,236 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 	}
 
 	return handler.SendSuccess(c, session)
+}
+
+func (h *Handler) CompleteOAuthSignup(c *fiber.Ctx) error {
+	attemptID := c.QueryInt("attempt_id")
+	if attemptID == 0 {
+		return handler.SendBadRequest(c, nil, "attempt_id is required")
+	}
+
+	b, validation := handler.Validate[SignUpRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
+	}
+
+	session := handler.GetSession(c)
+	deployment := handler.GetDeployment(c)
+
+	var attempt model.SignupAttempt
+	if err := database.Connection.Where("id = ? AND session_id = ? AND is_oauth_signup = true", attemptID, session.ID).First(&attempt).Error; err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid OAuth signup attempt")
+	}
+
+	if b.FirstName != "" {
+		attempt.FirstName = b.FirstName
+	}
+	if b.LastName != "" {
+		attempt.LastName = b.LastName
+	}
+	if b.Username != "" {
+		attempt.Username = b.Username
+	}
+	if b.PhoneNumber != "" {
+		attempt.PhoneNumber = b.PhoneNumber
+	}
+
+	errors := h.service.ValidateSignUpRequest(b, deployment.AuthSettings)
+	if len(errors) > 0 {
+		return handler.SendBadRequest(c, nil, "Field errors", errors...)
+	}
+
+	var missingFields []string
+	if deployment.AuthSettings.FirstName.Required && attempt.FirstName == "" {
+		missingFields = append(missingFields, "first_name")
+	}
+	if deployment.AuthSettings.LastName.Required && attempt.LastName == "" {
+		missingFields = append(missingFields, "last_name")
+	}
+	if deployment.AuthSettings.Username.Required && attempt.Username == "" {
+		missingFields = append(missingFields, "username")
+	}
+	if deployment.AuthSettings.PhoneNumber.Required && attempt.PhoneNumber == "" {
+		missingFields = append(missingFields, "phone_number")
+	}
+
+	if len(missingFields) > 0 {
+		attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
+		database.Connection.Save(&attempt)
+		return handler.SendBadRequest(c, nil, "Missing required fields", missingFields...)
+	}
+
+	attempt.MissingFields = datatypes.NewJSONSlice([]string{})
+
+	if attempt.PhoneNumber != "" && deployment.AuthSettings.VerificationPolicy.PhoneNumber {
+		steps := attempt.RemainingSteps.Data()
+		steps = append(steps, model.SignupAttemptStepVerifyPhone)
+		attempt.RemainingSteps = datatypes.NewJSONSlice(steps)
+		if attempt.CurrentStep == "" {
+			attempt.CurrentStep = model.SignupAttemptStepVerifyPhone
+		}
+	}
+
+	if len(attempt.RemainingSteps.Data()) == 0 {
+		user, err := h.service.CreateOAuthUser(&attempt, deployment)
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Error creating user")
+		}
+
+		if err := h.service.ValidateIPCountryRestrictions(c, deployment.Restrictions); err != nil {
+			return handler.SendBadRequest(c, nil, err.Error(), handler.ErrCountryRestricted)
+		}
+
+		signIn := model.NewSignIn(session.ID, user.ID)
+		signIn.User = user
+
+		err = database.Connection.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Create(user).Error; err != nil {
+				return err
+			}
+
+			if err := tx.Create(signIn).Error; err != nil {
+				return err
+			}
+
+			return tx.Model(&session).Update("active_signin_id", signIn.ID).Error
+		})
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Error completing signup")
+		}
+
+		handler.RemoveSessionFromCache(session.ID)
+		return handler.SendSuccess(c, session)
+	}
+
+	if err := database.Connection.Save(&attempt).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Error saving attempt")
+	}
+
+	return handler.SendSuccess(c, fiber.Map{
+		"signup_attempt": attempt,
+		"session":        session,
+	})
+}
+
+func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
+	attemptID := c.QueryInt("attempt_id")
+	if attemptID == 0 {
+		return handler.SendBadRequest(c, nil, "attempt_id is required")
+	}
+
+	b, validation := handler.Validate[SignUpRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
+	}
+
+	session := handler.GetSession(c)
+	deployment := handler.GetDeployment(c)
+
+	var attempt model.SignInAttempt
+	if err := database.Connection.Where("id = ? AND session_id = ? AND requires_completion = true", attemptID, session.ID).First(&attempt).Error; err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid signin attempt")
+	}
+
+	var user model.User
+	if err := database.Connection.Where("id = ?", attempt.UserID).First(&user).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Error finding user")
+	}
+
+	if b.FirstName != "" {
+		user.FirstName = b.FirstName
+	}
+	if b.LastName != "" {
+		user.LastName = b.LastName
+	}
+	if b.Username != "" {
+		user.Username = b.Username
+	}
+
+	if b.PhoneNumber != "" {
+		if err := h.service.ValidatePhoneRestrictions(b.PhoneNumber, deployment.Restrictions); err != nil {
+			return handler.SendBadRequest(c, nil, err.Error())
+		}
+
+		phoneID := snowflake.ID()
+		phone := model.UserPhoneNumber{
+			Model:        model.Model{ID: phoneID},
+			PhoneNumber:  b.PhoneNumber,
+			IsPrimary:    true,
+			Verified:     false,
+			DeploymentID: deployment.ID,
+			UserID:       &user.ID,
+		}
+
+		if err := database.Connection.Create(&phone).Error; err != nil {
+			return handler.SendInternalServerError(c, err, "Error creating phone number")
+		}
+
+		user.PrimaryPhoneNumberID = &phoneID
+	}
+
+	missingFields := h.service.CheckMissingRequiredFields(&user, deployment.AuthSettings)
+	if len(missingFields) > 0 {
+		attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
+		database.Connection.Save(&attempt)
+		return handler.SendBadRequest(c, nil, "Missing required fields", missingFields...)
+	}
+
+	attempt.RequiresCompletion = false
+	attempt.MissingFields = datatypes.NewJSONSlice([]string{})
+
+	if b.PhoneNumber != "" && deployment.AuthSettings.VerificationPolicy.PhoneNumber {
+		steps := attempt.RemainingSteps.Data()
+		steps = append(steps, model.SignInAttemptStepVerifyPhone)
+		attempt.RemainingSteps = datatypes.NewJSONSlice(steps)
+		if attempt.CurrentStep == "" {
+			attempt.CurrentStep = model.SignInAttemptStepVerifyPhone
+		}
+	}
+
+	if len(attempt.RemainingSteps.Data()) == 0 {
+		if err := h.service.ValidateIPCountryRestrictions(c, deployment.Restrictions); err != nil {
+			return handler.SendBadRequest(c, nil, err.Error(), handler.ErrCountryRestricted)
+		}
+
+		signIn := model.NewSignIn(session.ID, user.ID)
+		signIn.User = &user
+
+		err := database.Connection.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Save(&user).Error; err != nil {
+				return err
+			}
+
+			if err := tx.Create(signIn).Error; err != nil {
+				return err
+			}
+
+			attempt.Completed = true
+			if err := tx.Save(&attempt).Error; err != nil {
+				return err
+			}
+
+			return tx.Model(&session).Update("active_signin_id", signIn.ID).Error
+		})
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Error completing signin")
+		}
+
+		handler.RemoveSessionFromCache(session.ID)
+		return handler.SendSuccess(c, session)
+	}
+
+	if err := database.Connection.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(&user).Error; err != nil {
+			return err
+		}
+		return tx.Save(&attempt).Error
+	}); err != nil {
+		return handler.SendInternalServerError(c, err, "Error saving attempt")
+	}
+
+	return handler.SendSuccess(c, fiber.Map{
+		"signin_attempt": attempt,
+		"session":        session,
+	})
 }

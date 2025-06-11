@@ -202,6 +202,12 @@ func (h *Handler) CreateUserEmailAddress(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
+	deployment := handler.GetDeployment(c)
+
+	if err := h.service.ValidateEmailRestrictions(b.Email, deployment.Restrictions); err != nil {
+		return handler.SendBadRequest(c, nil, err.Error())
+	}
+
 	newEmail := model.UserEmailAddress{
 		Model: model.Model{
 			ID: snowflake.ID(),
@@ -416,6 +422,12 @@ func (h *Handler) AddPhoneNumber(c *fiber.Ctx) error {
 
 	if validation != nil {
 		return handler.SendBadRequest(c, validation, "Bad request body")
+	}
+
+	deployment := handler.GetDeployment(c)
+
+	if err := h.service.ValidatePhoneRestrictions(b.PhoneNumber, deployment.Restrictions); err != nil {
+		return handler.SendBadRequest(c, nil, err.Error())
 	}
 
 	phoneNumber := model.UserPhoneNumber{
