@@ -1,7 +1,10 @@
 package utils
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -53,19 +56,40 @@ func GenerateVerificationUrl(
 			strconv.FormatUint(uint64(attempt.ID), 10),
 		)
 	case model.SocialConnectionProviderGitLab:
+		conf.Endpoint = config.GitLabOAuthEndpoint
+		url = conf.AuthCodeURL(
+			strconv.FormatUint(uint64(attempt.ID), 10),
+		)
 	case model.SocialConnectionProviderGoogle:
 		conf.Endpoint = google.Endpoint
 		url = conf.AuthCodeURL(
 			strconv.FormatUint(uint64(attempt.ID), 10),
 		)
 	case model.SocialConnectionProviderFacebook:
+		conf.Endpoint = facebook.Endpoint
+		url = conf.AuthCodeURL(
+			strconv.FormatUint(uint64(attempt.ID), 10),
+		)
 	case model.SocialConnectionProviderMicrosoft:
 		conf.Endpoint = microsoft.AzureADEndpoint("")
 		url = conf.AuthCodeURL(
 			strconv.FormatUint(uint64(attempt.ID), 10),
 		)
 	case model.SocialConnectionProviderLinkedIn:
+		conf.Endpoint = linkedin.Endpoint
+		url = conf.AuthCodeURL(
+			strconv.FormatUint(uint64(attempt.ID), 10),
+		)
 	case model.SocialConnectionProviderDiscord:
+		conf.Endpoint = config.DiscordOAuthEndpoint
+		url = conf.AuthCodeURL(
+			strconv.FormatUint(uint64(attempt.ID), 10),
+		)
+	case model.SocialConnectionProviderApple:
+		conf.Endpoint = config.AppleOAuthEndpoint
+		url = conf.AuthCodeURL(
+			strconv.FormatUint(uint64(attempt.ID), 10),
+		)
 	}
 
 	return url
@@ -105,15 +129,26 @@ func GenerateVerificationUrlWithRedirect(
 		conf.Endpoint = github.Endpoint
 		url = conf.AuthCodeURL(state)
 	case model.SocialConnectionProviderGitLab:
+		conf.Endpoint = config.GitLabOAuthEndpoint
+		url = conf.AuthCodeURL(state)
 	case model.SocialConnectionProviderGoogle:
 		conf.Endpoint = google.Endpoint
 		url = conf.AuthCodeURL(state)
 	case model.SocialConnectionProviderFacebook:
+		conf.Endpoint = facebook.Endpoint
+		url = conf.AuthCodeURL(state)
 	case model.SocialConnectionProviderMicrosoft:
 		conf.Endpoint = microsoft.AzureADEndpoint("")
 		url = conf.AuthCodeURL(state)
 	case model.SocialConnectionProviderLinkedIn:
+		conf.Endpoint = linkedin.Endpoint
+		url = conf.AuthCodeURL(state)
 	case model.SocialConnectionProviderDiscord:
+		conf.Endpoint = config.DiscordOAuthEndpoint
+		url = conf.AuthCodeURL(state)
+	case model.SocialConnectionProviderApple:
+		conf.Endpoint = config.AppleOAuthEndpoint
+		url = conf.AuthCodeURL(state)
 	}
 
 	return url
@@ -150,15 +185,26 @@ func GenerateVerificationUrlForDeployment(
 		conf.Endpoint = github.Endpoint
 		url = conf.AuthCodeURL(state)
 	case model.SocialConnectionProviderGitLab:
+		conf.Endpoint = config.GitLabOAuthEndpoint
+		url = conf.AuthCodeURL(state)
 	case model.SocialConnectionProviderGoogle:
 		conf.Endpoint = google.Endpoint
 		url = conf.AuthCodeURL(state)
 	case model.SocialConnectionProviderFacebook:
+		conf.Endpoint = facebook.Endpoint
+		url = conf.AuthCodeURL(state)
 	case model.SocialConnectionProviderMicrosoft:
 		conf.Endpoint = microsoft.AzureADEndpoint("")
 		url = conf.AuthCodeURL(state)
 	case model.SocialConnectionProviderLinkedIn:
+		conf.Endpoint = linkedin.Endpoint
+		url = conf.AuthCodeURL(state)
 	case model.SocialConnectionProviderDiscord:
+		conf.Endpoint = config.DiscordOAuthEndpoint
+		url = conf.AuthCodeURL(state)
+	case model.SocialConnectionProviderApple:
+		conf.Endpoint = config.AppleOAuthEndpoint
+		url = conf.AuthCodeURL(state)
 	}
 
 	return url, nil
@@ -206,6 +252,8 @@ func getOAuthConfigForDeployment(
 			AuthURL:  "https://discord.com/api/oauth2/authorize",
 			TokenURL: "https://discord.com/api/oauth2/token",
 		}
+	case model.SocialConnectionProviderGitLab:
+		conf.Endpoint = config.GitLabOAuthEndpoint
 	}
 
 	return conf, nil
@@ -309,6 +357,33 @@ func ExchangeTokenForUser(
 			Email:     res["email"].(string),
 		}, nil
 	case model.SocialConnectionProviderFacebook:
+		req, err := http.NewRequest(
+			"GET",
+			"https://graph.facebook.com/me?fields=id,name,email,first_name,last_name",
+			nil,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		var res map[string]any
+
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			return nil, err
+		}
+
+		return &OAuthUser{
+			FirstName: res["first_name"].(string),
+			LastName:  res["last_name"].(string),
+			Email:     res["email"].(string),
+		}, nil
 	case model.SocialConnectionProviderMicrosoft:
 		req, err := http.NewRequest(
 			"GET",
@@ -332,13 +407,286 @@ func ExchangeTokenForUser(
 			return nil, err
 		}
 
+		email := ""
+		if res["mail"] != nil {
+			email = res["mail"].(string)
+		} else if res["userPrincipalName"] != nil {
+			email = res["userPrincipalName"].(string)
+		}
+
 		return &OAuthUser{
 			FirstName: res["givenName"].(string),
 			LastName:  res["surname"].(string),
-			Email:     res["mail"].(string),
+			Email:     email,
 		}, nil
 	case model.SocialConnectionProviderLinkedIn:
+		req, err := http.NewRequest(
+			"GET",
+			"https://api.linkedin.com/v2/userinfo",
+			nil,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		var res map[string]any
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			return nil, err
+		}
+
+		// LinkedIn OpenID Connect response format
+		firstName := ""
+		lastName := ""
+		email := ""
+
+		if givenName, ok := res["given_name"].(string); ok {
+			firstName = givenName
+		}
+		if familyName, ok := res["family_name"].(string); ok {
+			lastName = familyName
+		}
+		if emailAddr, ok := res["email"].(string); ok {
+			email = emailAddr
+		}
+
+		if firstName == "" && lastName == "" {
+			if name, ok := res["name"].(string); ok {
+				nameParts := strings.Split(name, " ")
+				if len(nameParts) > 0 {
+					firstName = nameParts[0]
+				}
+				if len(nameParts) > 1 {
+					lastName = strings.Join(nameParts[1:], " ")
+				}
+			}
+		}
+
+		return &OAuthUser{
+			FirstName: firstName,
+			LastName:  lastName,
+			Email:     email,
+		}, nil
 	case model.SocialConnectionProviderDiscord:
+		req, err := http.NewRequest(
+			"GET",
+			"https://discord.com/api/users/@me",
+			nil,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		var res map[string]any
+
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			return nil, err
+		}
+
+		username := res["username"].(string)
+		globalName := ""
+		if res["global_name"] != nil {
+			globalName = res["global_name"].(string)
+		}
+
+		displayName := globalName
+		if displayName == "" {
+			displayName = username
+		}
+
+		nameParts := strings.Split(displayName, " ")
+		firstName := nameParts[0]
+		lastName := ""
+		if len(nameParts) > 1 {
+			lastName = strings.Join(nameParts[1:], " ")
+		}
+
+		return &OAuthUser{
+			FirstName: firstName,
+			LastName:  lastName,
+			Email:     res["email"].(string),
+		}, nil
+	case model.SocialConnectionProviderX:
+		userReq, err := http.NewRequest(
+			"GET",
+			"https://api.twitter.com/2/users/me?user.fields=name,username,verified,profile_image_url",
+			nil,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		userReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
+		userResp, err := http.DefaultClient.Do(userReq)
+		if err != nil {
+			return nil, err
+		}
+		defer userResp.Body.Close()
+
+		var userRes map[string]any
+		if err := json.NewDecoder(userResp.Body).Decode(&userRes); err != nil {
+			return nil, err
+		}
+
+		userData, ok := userRes["data"].(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("invalid X API response format")
+		}
+
+		name, _ := userData["name"].(string)
+		username, _ := userData["username"].(string)
+		userID, _ := userData["id"].(string)
+
+		nameParts := strings.Split(name, " ")
+		firstName := nameParts[0]
+		lastName := ""
+		if len(nameParts) > 1 {
+			lastName = strings.Join(nameParts[1:], " ")
+		}
+
+		emailReq, err := http.NewRequest(
+			"GET",
+			"https://api.twitter.com/2/users/"+userID+"?user.fields=email",
+			nil,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		emailReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
+		emailResp, err := http.DefaultClient.Do(emailReq)
+		if err != nil {
+			return nil, err
+		}
+		defer emailResp.Body.Close()
+
+		var emailRes map[string]any
+		if err := json.NewDecoder(emailResp.Body).Decode(&emailRes); err != nil {
+			return nil, err
+		}
+
+		email := ""
+		if emailData, ok := emailRes["data"].(map[string]any); ok {
+			if emailAddr, ok := emailData["email"].(string); ok {
+				email = emailAddr
+			}
+		}
+
+		if email == "" {
+			return nil, fmt.Errorf("X email not available - ensure users.email scope is approved and user has verified email")
+		}
+
+		return &OAuthUser{
+			FirstName: firstName,
+			LastName:  lastName,
+			Email:     email,
+		}, nil
+	case model.SocialConnectionProviderApple:
+		idToken := token.Extra("id_token")
+		if idToken == nil {
+			return nil, fmt.Errorf("no id_token provided by Apple")
+		}
+
+		idTokenStr, ok := idToken.(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid id_token format from Apple")
+		}
+
+		parts := strings.Split(idTokenStr, ".")
+		if len(parts) != 3 {
+			return nil, fmt.Errorf("invalid JWT format from Apple")
+		}
+
+		payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode Apple JWT payload: %v", err)
+		}
+
+		var claims map[string]any
+		if err := json.Unmarshal(payload, &claims); err != nil {
+			return nil, fmt.Errorf("failed to parse Apple JWT claims: %v", err)
+		}
+
+		email, _ := claims["email"].(string)
+		emailVerified, _ := claims["email_verified"].(bool)
+
+		firstName := ""
+		lastName := ""
+
+		if name, ok := claims["name"].(map[string]any); ok {
+			if givenName, ok := name["firstName"].(string); ok {
+				firstName = givenName
+			}
+			if familyName, ok := name["lastName"].(string); ok {
+				lastName = familyName
+			}
+		}
+
+		if firstName == "" && email != "" {
+			emailParts := strings.Split(email, "@")
+			if len(emailParts) > 0 {
+				firstName = emailParts[0]
+			}
+		}
+
+		if !emailVerified {
+			return nil, fmt.Errorf("Apple email not verified")
+		}
+
+		return &OAuthUser{
+			FirstName: firstName,
+			LastName:  lastName,
+			Email:     email,
+		}, nil
+	case model.SocialConnectionProviderGitLab:
+		req, err := http.NewRequest(
+			"GET",
+			"https://gitlab.com/api/v4/user",
+			nil,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		var res map[string]any
+
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			return nil, err
+		}
+
+		name := res["name"].(string)
+		nameParts := strings.Split(name, " ")
+		firstName := nameParts[0]
+		lastName := ""
+		if len(nameParts) > 1 {
+			lastName = strings.Join(nameParts[1:], " ")
+		}
+
+		return &OAuthUser{
+			FirstName: firstName,
+			LastName:  lastName,
+			Email:     res["email"].(string),
+		}, nil
 	}
 	return nil, nil
 }

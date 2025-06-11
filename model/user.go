@@ -70,7 +70,6 @@ type User struct {
 	DeploymentID                   uint64                  `json:"-"                               gorm:"not null;select:false"`
 	PublicMetadata                 datatypes.JSONMap       `json:"public_metadata"                 gorm:"not null"`
 	PrivateMetadata                datatypes.JSONMap       `json:"-"                               gorm:"not null"`
-	OtpSecret                      string                  `json:"-"                               gorm:"not null"`
 	BackupCodesGenerated           bool                    `json:"backup_codes_generated"          gorm:"not null"`
 	BackupCodes                    pq.StringArray          `json:"-"                               gorm:"type:text[]"`
 }

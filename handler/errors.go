@@ -32,6 +32,14 @@ const (
 	ErrCodeRequiredField                = "REQUIRED_FIELD"
 	ErrCodeBadRequestBody               = "BAD_REQUEST_BODY"
 	ErrCodeProviderNotConfigured        = "PROVIDER_NOT_CONFIGURED"
+	ErrCodeSignupRestricted             = "SIGNUP_RESTRICTED"
+	ErrCodeSignupWaitlistOnly           = "SIGNUP_WAITLIST_ONLY"
+	ErrCodeEmailNotAllowed              = "EMAIL_NOT_ALLOWED"
+	ErrCodeEmailBlocked                 = "EMAIL_BLOCKED"
+	ErrCodeDisposableEmail              = "DISPOSABLE_EMAIL_BLOCKED"
+	ErrCodeCountryRestricted            = "COUNTRY_RESTRICTED"
+	ErrCodeVoipNumberBlocked            = "VOIP_NUMBER_BLOCKED"
+	ErrCodeBannedKeyword                = "BANNED_KEYWORD"
 	ErrorCodeInternal                   = "INTERNAL"
 	ErrorCodeBadSignInAttempt           = "BAD_SIGN_IN_ATTEMPT"
 	ErrorCodeUserAlreadySignedIn        = "USER_ALREADY_SIGNED_IN"
@@ -101,6 +109,38 @@ var (
 	ErrProviderNotConfigured = Error{
 		Code:    ErrCodeProviderNotConfigured,
 		Message: "OAuth provider is not configured for this deployment.",
+	}
+	ErrSignupRestricted = Error{
+		Code:    ErrCodeSignupRestricted,
+		Message: "Signup is currently restricted for this deployment.",
+	}
+	ErrSignupWaitlistOnly = Error{
+		Code:    ErrCodeSignupWaitlistOnly,
+		Message: "Signup is currently in waitlist mode. Please join the waitlist instead.",
+	}
+	ErrEmailNotAllowed = Error{
+		Code:    ErrCodeEmailNotAllowed,
+		Message: "This email address is not allowed.",
+	}
+	ErrEmailBlocked = Error{
+		Code:    ErrCodeEmailBlocked,
+		Message: "This email address is blocked.",
+	}
+	ErrDisposableEmail = Error{
+		Code:    ErrCodeDisposableEmail,
+		Message: "Disposable email addresses are not allowed.",
+	}
+	ErrCountryRestricted = Error{
+		Code:    ErrCodeCountryRestricted,
+		Message: "Signup is not allowed from your country.",
+	}
+	ErrVoipNumberBlocked = Error{
+		Code:    ErrCodeVoipNumberBlocked,
+		Message: "VOIP phone numbers are not allowed.",
+	}
+	ErrBannedKeyword = Error{
+		Code:    ErrCodeBannedKeyword,
+		Message: "Your input contains restricted content.",
 	}
 )
 

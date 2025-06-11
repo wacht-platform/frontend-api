@@ -115,6 +115,10 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 		}
 
 		if completed {
+			if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
+				return err
+			}
+
 			signIn := model.NewSignIn(session.ID, email.User.ID)
 			if err := tx.Create(signIn).Error; err != nil {
 				return err
@@ -162,6 +166,24 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 
 	d := handler.GetDeployment(c)
 	session := handler.GetSession(c)
+
+	if d.Restrictions.SignUpMode == model.DeploymentRestrictionsSignUpModeRestricted {
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Signup is currently restricted for this deployment",
+			handler.ErrSignupRestricted,
+		)
+	}
+
+	if d.Restrictions.SignUpMode == model.DeploymentRestrictionsSignUpModeWaitlist {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Signup is currently in waitlist mode. Please join the waitlist instead",
+			handler.ErrSignupWaitlistOnly,
+		)
+	}
 
 	if err := h.service.ValidateSignUpRequest(b, d); err != nil {
 		return handler.SendBadRequest(
@@ -229,10 +251,6 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 		)
 
 		if len(attempt.RemainingSteps) == 0 {
-			otpSecret, err := totp.Generate(totp.GenerateOpts{
-				Issuer:      d.Project.Name,
-				AccountName: attempt.Email,
-			})
 			if err != nil {
 				return err
 			}
@@ -242,11 +260,14 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 				attempt.Password,
 				d.ID,
 				d.AuthSettings.SecondFactorPolicy,
-				otpSecret.Secret(),
 				!d.AuthSettings.VerificationPolicy.Email,
 			)
 
 			if err := tx.Create(&u).Error; err != nil {
+				return err
+			}
+
+			if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
 				return err
 			}
 
@@ -257,7 +278,6 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 				return err
 			}
 
-			// Update session's active signin ID without loading associations
 			if err := tx.Model(&session).Update("active_signin_id", signIn.ID).Error; err != nil {
 				return err
 			}
@@ -352,7 +372,6 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		)
 	}
 
-	// Parse state parameter which may contain custom redirect URI
 	state := c.Query("state")
 	stateParts := strings.Split(state, ":")
 	attemptID := stateParts[0]
@@ -414,6 +433,10 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
 		if exists {
+			if err := h.service.ValidateIPCountryRestrictions(c, deployment.Restrictions); err != nil {
+				return err
+			}
+
 			signIn, err := h.service.HandleExistingUser(
 				tx,
 				&email,
@@ -440,10 +463,6 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			return nil
 		}
 
-		otpSecret, err := totp.Generate(totp.GenerateOpts{
-			Issuer:      deployment.Project.Name,
-			AccountName: user.Email,
-		})
 		if err != nil {
 			return err
 		}
@@ -457,7 +476,6 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			SchemaVersion:         model.SchemaVersionV1,
 			SecondFactorPolicy:    deployment.AuthSettings.SecondFactorPolicy,
 			DeploymentID:          deployment.ID,
-			OtpSecret:             otpSecret.Secret(),
 			PrimaryEmailAddressID: &primaryAddressID,
 		}
 
@@ -483,6 +501,10 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			user.Email,
 			token,
 		)
+		if err := h.service.ValidateIPCountryRestrictions(c, deployment.Restrictions); err != nil {
+			return err
+		}
+
 		signIn := model.NewSignIn(session.ID, u.ID)
 
 		if err := tx.Create(&connection).Error; err != nil {
@@ -493,11 +515,9 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			return err
 		}
 
-		// Set the active signin for new users
 		session.Signins = append(session.Signins, *signIn)
 		session.ActiveSigninID = &signIn.ID
 
-		// Mark attempt as completed
 		attempt.Completed = true
 		if err := tx.Save(&attempt).Error; err != nil {
 			return err
@@ -627,10 +647,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			code, err := totp.GenerateCode(
-				email.User.OtpSecret,
-				time.Now(),
-			)
+			code, err := utils.GenerateOTP()
 			if err != nil {
 				return handler.SendInternalServerError(
 					c,
@@ -821,6 +838,11 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					}
 
 					if attempt.Completed {
+						d := handler.GetDeployment(c)
+						if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
+							return err
+						}
+
 						if err := tx.Create(signin).Error; err != nil {
 							return err
 						}
@@ -864,13 +886,6 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 		}
 
 		d := handler.GetDeployment(c)
-		otpSecret, err := totp.Generate(totp.GenerateOpts{
-			Issuer:      "wacht",
-			AccountName: attempt.Email,
-		})
-		if err != nil {
-			return handler.SendInternalServerError(c, err, "Error generating OTP secret")
-		}
 
 		attempt.RemainingSteps = attempt.RemainingSteps[1:]
 		if len(attempt.RemainingSteps) > 0 {
@@ -881,9 +896,13 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 			}
 		} else {
 			attempt.CurrentStep = ""
-			user, err := h.service.CreateVerifiedUser(attempt, d, otpSecret.Secret())
+			user, err := h.service.CreateVerifiedUser(attempt, d)
 			if err != nil {
 				return handler.SendInternalServerError(c, err, "Error creating user")
+			}
+
+			if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
+				return handler.SendBadRequest(c, nil, err.Error(), handler.ErrCountryRestricted)
 			}
 
 			signIn := model.NewSignIn(session.ID, user.ID)

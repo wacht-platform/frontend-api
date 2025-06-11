@@ -10,6 +10,7 @@ import (
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/utils"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"gorm.io/gorm/clause"
@@ -314,10 +315,7 @@ func (h *Handler) PrepareEmailVerification(c *fiber.Ctx) error {
 
 	session.ActiveSignin.LoadUser(database.Connection)
 
-	code, err := totp.GenerateCode(
-		session.ActiveSignin.User.OtpSecret,
-		time.Now(),
-	)
+	code, err := utils.GenerateOTP()
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,
@@ -470,10 +468,7 @@ func (h *Handler) PreparePhoneVerification(c *fiber.Ctx) error {
 
 	session.ActiveSignin.LoadUser(database.Connection)
 
-	code, err := totp.GenerateCode(
-		session.ActiveSignin.User.OtpSecret,
-		time.Now(),
-	)
+	code, err := utils.GenerateOTP()
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,

@@ -16,3 +16,8 @@ var XOAuthEndpoint = oauth2.Endpoint{
 	AuthURL:  "https://x.com/i/oauth2/authorize",
 	TokenURL: "https://api.x.com/2/oauth2/token",
 }
+
+var GitLabOAuthEndpoint = oauth2.Endpoint{
+	AuthURL:  "https://gitlab.com/oauth/authorize",
+	TokenURL: "https://gitlab.com/oauth/token",
+}

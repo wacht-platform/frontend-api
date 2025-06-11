@@ -34,7 +34,7 @@ var ssoConfig = map[string]model.OauthCredentials{
 		ClientID:     "",
 		ClientSecret: "",
 		RedirectURI:  "",
-		Scopes:       []string{"users.read", "offline.access"},
+		Scopes:       []string{"users.read", "users.email", "offline.access"},
 	},
 	"facebook_oauth": {
 		ClientID:     "",
@@ -46,19 +46,25 @@ var ssoConfig = map[string]model.OauthCredentials{
 		ClientID:     "",
 		ClientSecret: "",
 		RedirectURI:  "",
-		Scopes:       []string{"email"},
+		Scopes:       []string{"name", "email", "openid"},
 	},
 	"linkedin_oauth": {
 		ClientID:     "",
 		ClientSecret: "",
 		RedirectURI:  "",
-		Scopes:       []string{"r_liteprofile", "r_emailaddress"},
+		Scopes:       []string{"profile", "email", "openid"},
 	},
 	"discord_oauth": {
 		ClientID:     "",
 		ClientSecret: "",
 		RedirectURI:  "",
 		Scopes:       []string{"identify", "email"},
+	},
+	"gitlab_oauth": {
+		ClientID:     "",
+		ClientSecret: "",
+		RedirectURI:  "",
+		Scopes:       []string{"read_user"},
 	},
 }
 
@@ -74,12 +80,9 @@ func GetOAuthCredentialsWithRedirectURI(name string, frontendHost string) model.
 	return creds
 }
 
-// GetDeploymentOAuthCredentials retrieves OAuth credentials for a specific deployment and provider
 func GetDeploymentOAuthCredentials(deployment *model.Deployment, provider model.SocialConnectionProvider) (*model.OauthCredentials, error) {
-	// First, try to find deployment-specific credentials
 	for _, conn := range deployment.SocialConnections {
 		if conn.Provider == provider && conn.Enabled && conn.Credentials != nil {
-			// Use deployment-specific credentials
 			creds := *conn.Credentials
 			if creds.RedirectURI == "" {
 				creds.RedirectURI = deployment.FrontendHost + "/sso-callback"
@@ -88,7 +91,6 @@ func GetDeploymentOAuthCredentials(deployment *model.Deployment, provider model.
 		}
 	}
 
-	// Fallback to default credentials for development/staging
 	if deployment.Mode != model.DeploymentModeProduction {
 		defaultCreds := GetDefaultOAuthCredentials(string(provider))
 		if defaultCreds.ClientID != "" {
