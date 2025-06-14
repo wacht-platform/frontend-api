@@ -23,9 +23,10 @@ func main() {
 	}
 
 	app := fiber.New(fiber.Config{
-		JSONEncoder:  json.Marshal,
-		JSONDecoder:  json.Unmarshal,
-		ErrorHandler: handler.DefaultErrorHandler,
+		JSONEncoder:    json.Marshal,
+		JSONDecoder:    json.Unmarshal,
+		ErrorHandler:   handler.DefaultErrorHandler,
+		TrustedProxies: []string{config.GetEnv("LOAD_BALANCER_IP", "127.0.0.1")},
 	})
 
 	router.Setup(app)
