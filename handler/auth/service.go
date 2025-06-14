@@ -443,7 +443,7 @@ func (s *AuthService) SendEmailOTPVerificationAsync(
 	return s.celery.SendEmailAsync("auth_email_verification", deployment.ID, email)
 }
 
-func (s *AuthService) CheckMissingRequiredFields(user *model.User, authSettings model.AuthSettings) []string {
+func (s *AuthService) CheckMissingRequiredFields(user *model.User, authSettings model.DeploymentAuthSettings) []string {
 	var missingFields []string
 
 	if authSettings.FirstName.Required && user.FirstName == "" {
@@ -663,7 +663,6 @@ func (s *AuthService) CreateOAuthUser(
 		u.UserPhoneNumbers = []model.UserPhoneNumber{{
 			Model:        model.Model{ID: phoneID},
 			PhoneNumber:  attempt.PhoneNumber,
-			IsPrimary:    true,
 			Verified:     false,
 			DeploymentID: d.ID,
 		}}

@@ -186,7 +186,7 @@ func (t *TelesignService) ValidatePhoneNumber(phoneNumber string) (*PhoneValidat
 		result.IsValid = false
 		result.IsVOIP = false
 		result.IsPrepaid = false
-	case "9": /
+	case "9":
 		result.IsHighRisk = true
 		result.IsVOIP = false
 		result.IsPrepaid = false

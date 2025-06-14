@@ -842,6 +842,71 @@ func (h *Handler) GenerateBackupCodes(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, backupCodes)
 }
 
+func (h *Handler) RegenerateBackupCodes(c *fiber.Ctx) error {
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
+	}
+
+	const codeCount = 12
+	const codeLength = 8
+	backupCodes := make([]string, codeCount)
+
+	user := model.User{}
+	if err := database.Connection.First(&user, session.ActiveSignin.UserID).Error; err != nil {
+		return handler.SendInternalServerError(
+			c,
+			nil,
+			"Failed to load user",
+			handler.ErrInternal,
+		)
+	}
+
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz"
+
+	randomBytes := make([]byte, codeLength)
+
+	for i := range codeCount {
+		var code string
+		for len(code) < codeLength {
+			_, err := rand.Read(randomBytes)
+			if err != nil {
+				return handler.SendInternalServerError(
+					c,
+					nil,
+					"Failed to regenerate backup codes",
+					handler.ErrInternal,
+				)
+			}
+
+			for _, b := range randomBytes {
+				if idx := int(b) % len(charset); len(code) < codeLength {
+					code += string(charset[idx])
+				}
+			}
+		}
+
+		if len(code) >= codeLength {
+			formattedCode := code[:4] + "-" + code[4:codeLength]
+			backupCodes[i] = formattedCode
+		}
+	}
+
+	if err := database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Updates(map[string]interface{}{
+		"backup_codes":           backupCodes,
+		"backup_codes_generated": true,
+	}).Error; err != nil {
+		return handler.SendInternalServerError(
+			c,
+			nil,
+			"Failed to save regenerated backup codes",
+			handler.ErrInternal,
+		)
+	}
+
+	return handler.SendSuccess(c, backupCodes)
+}
+
 func (h *Handler) GetUserSignins(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {

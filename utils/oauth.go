@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -264,7 +263,6 @@ func ExchangeTokenForUser(
 	ssoProvider model.SocialConnectionProvider,
 ) (*OAuthUser, error) {
 	switch ssoProvider {
-	case model.SocialConnectionProviderX:
 	case model.SocialConnectionProviderGitHub:
 		req, err := http.NewRequest(
 			"GET",
@@ -328,7 +326,6 @@ func ExchangeTokenForUser(
 				}, nil
 			}
 		}
-	case model.SocialConnectionProviderGitLab:
 	case model.SocialConnectionProviderGoogle:
 		req, err := http.NewRequest(
 			"GET",
@@ -547,7 +544,6 @@ func ExchangeTokenForUser(
 		}
 
 		name, _ := userData["name"].(string)
-		username, _ := userData["username"].(string)
 		userID, _ := userData["id"].(string)
 
 		nameParts := strings.Split(name, " ")
@@ -593,6 +589,42 @@ func ExchangeTokenForUser(
 			FirstName: firstName,
 			LastName:  lastName,
 			Email:     email,
+		}, nil
+	case model.SocialConnectionProviderGitLab:
+		req, err := http.NewRequest(
+			"GET",
+			"https://gitlab.com/api/v4/user",
+			nil,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		var res map[string]any
+
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			return nil, err
+		}
+
+		name := res["name"].(string)
+		nameParts := strings.Split(name, " ")
+		firstName := nameParts[0]
+		lastName := ""
+		if len(nameParts) > 1 {
+			lastName = strings.Join(nameParts[1:], " ")
+		}
+
+		return &OAuthUser{
+			FirstName: firstName,
+			LastName:  lastName,
+			Email:     res["email"].(string),
 		}, nil
 	case model.SocialConnectionProviderApple:
 		idToken := token.Extra("id_token")
@@ -650,42 +682,6 @@ func ExchangeTokenForUser(
 			FirstName: firstName,
 			LastName:  lastName,
 			Email:     email,
-		}, nil
-	case model.SocialConnectionProviderGitLab:
-		req, err := http.NewRequest(
-			"GET",
-			"https://gitlab.com/api/v4/user",
-			nil,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		req.Header.Set("Authorization", "Bearer "+token.AccessToken)
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return nil, err
-		}
-		defer resp.Body.Close()
-
-		var res map[string]any
-
-		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-			return nil, err
-		}
-
-		name := res["name"].(string)
-		nameParts := strings.Split(name, " ")
-		firstName := nameParts[0]
-		lastName := ""
-		if len(nameParts) > 1 {
-			lastName = strings.Join(nameParts[1:], " ")
-		}
-
-		return &OAuthUser{
-			FirstName: firstName,
-			LastName:  lastName,
-			Email:     res["email"].(string),
 		}, nil
 	}
 	return nil, nil

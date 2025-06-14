@@ -14,6 +14,7 @@ import (
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pquerna/otp/totp"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -995,9 +996,9 @@ func (h *Handler) CompleteOAuthSignup(c *fiber.Ctx) error {
 		attempt.PhoneNumber = b.PhoneNumber
 	}
 
-	errors := h.service.ValidateSignUpRequest(b, deployment.AuthSettings)
-	if len(errors) > 0 {
-		return handler.SendBadRequest(c, nil, "Field errors", errors...)
+	err := h.service.ValidateSignUpRequest(b, deployment)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, err.Error())
 	}
 
 	var missingFields []string
@@ -1017,13 +1018,13 @@ func (h *Handler) CompleteOAuthSignup(c *fiber.Ctx) error {
 	if len(missingFields) > 0 {
 		attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
 		database.Connection.Save(&attempt)
-		return handler.SendBadRequest(c, nil, "Missing required fields", missingFields...)
+		return handler.SendBadRequest(c, nil, "Missing required fields")
 	}
 
 	attempt.MissingFields = datatypes.NewJSONSlice([]string{})
 
 	if attempt.PhoneNumber != "" && deployment.AuthSettings.VerificationPolicy.PhoneNumber {
-		steps := attempt.RemainingSteps.Data()
+		steps := []model.SignupAttemptStep(attempt.RemainingSteps)
 		steps = append(steps, model.SignupAttemptStepVerifyPhone)
 		attempt.RemainingSteps = datatypes.NewJSONSlice(steps)
 		if attempt.CurrentStep == "" {
@@ -1031,7 +1032,7 @@ func (h *Handler) CompleteOAuthSignup(c *fiber.Ctx) error {
 		}
 	}
 
-	if len(attempt.RemainingSteps.Data()) == 0 {
+	if len(attempt.RemainingSteps) == 0 {
 		user, err := h.service.CreateOAuthUser(&attempt, deployment)
 		if err != nil {
 			return handler.SendInternalServerError(c, err, "Error creating user")
@@ -1116,10 +1117,9 @@ func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
 		phone := model.UserPhoneNumber{
 			Model:        model.Model{ID: phoneID},
 			PhoneNumber:  b.PhoneNumber,
-			IsPrimary:    true,
 			Verified:     false,
 			DeploymentID: deployment.ID,
-			UserID:       &user.ID,
+			UserID:       user.ID,
 		}
 
 		if err := database.Connection.Create(&phone).Error; err != nil {
@@ -1133,14 +1133,14 @@ func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
 	if len(missingFields) > 0 {
 		attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
 		database.Connection.Save(&attempt)
-		return handler.SendBadRequest(c, nil, "Missing required fields", missingFields...)
+		return handler.SendBadRequest(c, nil, "Missing required fields")
 	}
 
 	attempt.RequiresCompletion = false
 	attempt.MissingFields = datatypes.NewJSONSlice([]string{})
 
 	if b.PhoneNumber != "" && deployment.AuthSettings.VerificationPolicy.PhoneNumber {
-		steps := attempt.RemainingSteps.Data()
+		steps := []model.SignInAttemptStep(attempt.RemainingSteps)
 		steps = append(steps, model.SignInAttemptStepVerifyPhone)
 		attempt.RemainingSteps = datatypes.NewJSONSlice(steps)
 		if attempt.CurrentStep == "" {
@@ -1148,7 +1148,7 @@ func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
 		}
 	}
 
-	if len(attempt.RemainingSteps.Data()) == 0 {
+	if len(attempt.RemainingSteps) == 0 {
 		if err := h.service.ValidateIPCountryRestrictions(c, deployment.Restrictions); err != nil {
 			return handler.SendBadRequest(c, nil, err.Error(), handler.ErrCountryRestricted)
 		}

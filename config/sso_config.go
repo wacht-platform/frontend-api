@@ -2,27 +2,8 @@ package config
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/ilabs/wacht-fe/model"
-	"golang.org/x/oauth2"
-)
-
-var (
-	GitLabOAuthEndpoint = oauth2.Endpoint{
-		AuthURL:  "https://gitlab.com/oauth/authorize",
-		TokenURL: "https://gitlab.com/oauth/token",
-	}
-
-	DiscordOAuthEndpoint = oauth2.Endpoint{
-		AuthURL:  "https://discord.com/api/oauth2/authorize",
-		TokenURL: "https://discord.com/api/oauth2/token",
-	}
-
-	AppleOAuthEndpoint = oauth2.Endpoint{
-		AuthURL:  "https://appleid.apple.com/auth/authorize",
-		TokenURL: "https://appleid.apple.com/auth/token",
-	}
 )
 
 func getSSOConfig() map[string]model.OauthCredentials {
