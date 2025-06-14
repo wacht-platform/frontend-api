@@ -74,8 +74,6 @@ func AutoMigratePg() error {
 		&model.DeploymentSmsTemplate{},
 		&model.DeploymentInvitation{},
 		&model.DeploymentWaitlistUser{},
-
-		// AI Models
 		&model.AIKnowledgeBase{},
 		&model.AIKnowledgeBaseDocument{},
 		&model.AIAgent{},
