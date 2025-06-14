@@ -104,7 +104,7 @@ type Deployment struct {
 	B2BSettings               DeploymentB2bSettings        `json:"b2b_settings"`
 	AuthSettings              DeploymentAuthSettings       `json:"auth_settings"`
 	Restrictions              DeploymentRestrictions       `json:"restrictions"`
-	SocialConnections         []DeploymentSocialConnection `json:"social_connections"`
+	SocialConnections         []DeploymentSocialConnection `json:"social_connections" gorm:"type:jsonb"`
 	JwtTemplates              []DeploymentJwtTemplate      `json:"-"`
 	WorkspaceRoles            []WorkspaceRole              `json:"-"`
 	OrgRoles                  []OrganizationRole           `json:"-"`

@@ -40,15 +40,17 @@ func SetDeploymentMiddleware(c *fiber.Ctx) error {
 
 	deployment := new(model.Deployment)
 	rawSQL := `
-		SELECT d.*, das.*, dbs.*, dds.*, dr.*, det.*, dst.*
+		SELECT d.*, das.*, dbs.*, dds.*, dr.*, det.*, dst.*, json_agg(sc) as social_connections
 		FROM deployments d
 		LEFT JOIN deployment_auth_settings das ON d.id = das.deployment_id
 		LEFT JOIN deployment_b2b_settings dbs ON d.id = dbs.deployment_id
-		LEFT JOIN deployment_display_settings dds ON d.id = dds.deployment_id
+		LEFT JOIN deployment_ui_settings dds ON d.id = dds.deployment_id
 		LEFT JOIN deployment_restrictions dr ON d.id = dr.deployment_id
 		LEFT JOIN deployment_email_templates det ON d.id = det.deployment_id
 		LEFT JOIN deployment_sms_templates dst ON d.id = dst.deployment_id
+		LEFT JOIN deployment_social_connections sc ON d.id = sc.deployment_id
 		WHERE d.backend_host = ?
+		GROUP BY d.id, das.id, dbs.id, dds.id, dr.id, det.id, dst.id
 	`
 	err = database.Connection.Raw(rawSQL, host).Scan(&deployment).Error
 
