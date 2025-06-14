@@ -58,6 +58,7 @@ func handleNewSession(
 ) error {
 	var token string
 	session := model.NewSession()
+
 	deployment.LoadKepPair(database.Connection)
 
 	err := database.Connection.Transaction(func(tx *gorm.DB) error {

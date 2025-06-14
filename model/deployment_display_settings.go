@@ -67,6 +67,7 @@ type DeploymentUISettings struct {
 	SignInPageURL                          string            `json:"sign_in_page_url"                            gorm:"not null"`
 	SignUpPageURL                          string            `json:"sign_up_page_url"                            gorm:"not null"`
 	WaitlistPageURL                        string            `json:"waitlist_page_url"                           gorm:"not null"`
+	SupportPageURL                         string            `json:"support_page_url"                            gorm:"not null"`
 	AfterLogoClickURL                      string            `json:"after_logo_click_url"                        gorm:"not null"`
 	UserProfileURL                         string            `json:"user_profile_url"                            gorm:"not null"`
 	OrganizationProfileURL                 string            `json:"organization_profile_url"                    gorm:"not null"`

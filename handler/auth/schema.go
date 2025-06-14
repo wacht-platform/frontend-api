@@ -38,9 +38,14 @@ type PrepareVerificationRequest struct {
 	Email string `json:"email"`
 }
 
+type ForgotPasswordRequest struct {
+	Email string `json:"email"`
+}
+
 type ResetPasswordRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	OTP      string `json:"otp"`
 }
 
 type SetupAuthenticatorRequest struct {

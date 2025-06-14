@@ -20,4 +20,6 @@ func setupAuthRoutes(
 	router.Get("/identifier-availability", authHandler.CheckIdentifierAvailability)
 	router.Post("/prepare-verification", authHandler.PrepareVerification)
 	router.Post("/attempt-verification", authHandler.AttemptVerification)
+	router.Post("/forgot-password", authHandler.ForgotPassword)
+	router.Post("/reset-password", authHandler.ResetPassword)
 }

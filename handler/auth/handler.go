@@ -1194,3 +1194,133 @@ func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
 		"session":        session,
 	})
 }
+
+func (h *Handler) ForgotPassword(c *fiber.Ctx) error {
+	b, validation := handler.Validate[ForgotPasswordRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
+	}
+
+	d := handler.GetDeployment(c)
+
+	email, err := h.service.FindUserByEmail(b.Email)
+	if err != nil {
+		if err == handler.ErrUserNotFound {
+			return handler.SendNotFound(
+				c,
+				nil,
+				err.Error(),
+				handler.ErrUserNotFound,
+			)
+		}
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Something went wrong",
+		)
+	}
+
+	if err = h.service.ValidateUserStatus(email); err != nil {
+		return handler.SendForbidden(
+			c,
+			nil,
+			err.Error(),
+			handler.ErrUserDisabled,
+		)
+	}
+
+	code, err := utils.GenerateOTP()
+	if err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Error generating OTP",
+			handler.ErrInternal,
+		)
+	}
+
+	if err := h.service.StoreOTPInCache(fmt.Sprintf("password-reset:%d", email.UserID), code); err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Error storing OTP",
+			handler.ErrInternal,
+		)
+	}
+
+	if err := h.service.SendEmailOTPVerificationAsync(email.EmailAddress, d); err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Error sending email OTP verification",
+		)
+	}
+
+	return handler.SendSuccess[any](c, nil)
+}
+
+func (h *Handler) ResetPassword(c *fiber.Ctx) error {
+	b, validation := handler.Validate[ResetPasswordRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
+	}
+
+	if err := h.service.ValidatePassword(b.Password); err != nil {
+		return handler.SendBadRequest(c, nil, err.Error())
+	}
+
+	email, err := h.service.FindUserByEmail(b.Email)
+	if err != nil {
+		if err == handler.ErrUserNotFound {
+			return handler.SendNotFound(
+				c,
+				nil,
+				err.Error(),
+				handler.ErrUserNotFound,
+			)
+		}
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Something went wrong",
+		)
+	}
+
+	storedOTP, err := h.service.GetOTPFromRedis(fmt.Sprintf("password-reset:%d", email.UserID))
+	if err != nil {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Invalid or expired OTP",
+		)
+	}
+
+	if storedOTP != b.OTP {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Invalid OTP",
+		)
+	}
+
+	hashedPassword, err := h.service.HashPassword(b.Password)
+	if err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Error hashing password",
+		)
+	}
+
+	if err := database.Connection.Model(&email.User).Update("password", hashedPassword).Error; err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Error updating password",
+		)
+	}
+
+	h.service.DeleteOTPFromRedis(fmt.Sprintf("password-reset:%d", email.UserID))
+
+	return handler.SendSuccess[any](c, nil)
+}
