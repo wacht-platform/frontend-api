@@ -25,7 +25,7 @@ type DeploymentQueryResult struct {
 }
 
 func SetDeploymentMiddleware(c *fiber.Ctx) error {
-	host := c.Hostname()
+	host := c.Get("x-forwarded-host")
 	path := c.Path()
 
 	if strings.HasPrefix(path, "/.well") {
