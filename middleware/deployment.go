@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"strings"
 	"time"
 
@@ -26,6 +27,10 @@ type DeploymentQueryResult struct {
 
 func SetDeploymentMiddleware(c *fiber.Ctx) error {
 	host := c.Hostname()
+
+	if net.ParseIP(host) != nil {
+		return c.Status(404).JSON(fiber.Map{"message": "Deployment not found"})
+	}
 
 	path := c.Path()
 
