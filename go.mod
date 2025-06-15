@@ -13,11 +13,11 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lestrrat-go/jwx/v3 v3.0.0-alpha1
 	github.com/lib/pq v1.10.9
+	github.com/marselester/gopher-celery v1.0.0
 	github.com/matthewhartstonge/argon2 v1.1.1
 	github.com/pquerna/otp v1.4.0
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/ua-parser/uap-go v0.0.0-20250213224047-9c035f085b90
-	github.com/wneessen/go-mail v0.6.2
 	golang.org/x/oauth2 v0.29.0
 	gorm.io/datatypes v1.2.5
 	gorm.io/driver/postgres v1.5.11
@@ -54,7 +54,6 @@ require (
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
 	github.com/lestrrat-go/httprc/v3 v3.0.0-beta1 // indirect
 	github.com/lestrrat-go/option v1.0.1 // indirect
-	github.com/marselester/gopher-celery v1.0.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
