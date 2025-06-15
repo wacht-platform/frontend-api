@@ -6,6 +6,7 @@ import (
 
 	"github.com/lib/pq"
 	"gorm.io/datatypes"
+	"gorm.io/gorm"
 )
 
 type SchemaVersion string
@@ -72,6 +73,7 @@ type User struct {
 	PrivateMetadata                datatypes.JSONMap       `json:"-"                               gorm:"not null"`
 	BackupCodesGenerated           bool                    `json:"backup_codes_generated"          gorm:"not null"`
 	BackupCodes                    pq.StringArray          `json:"-"                               gorm:"type:text[]"`
+	DeletedAt                      gorm.DeletedAt          `gorm:"index"`
 }
 
 type PublicUserData struct {

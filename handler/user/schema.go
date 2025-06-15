@@ -23,3 +23,16 @@ type VerifyAuthenticatorSchema struct {
 	AuthenticatorID string   `json:"authenticator_id" validate:"required"`
 	Codes           []string `json:"codes"            validate:"required,min=2,max=2"`
 }
+
+type UpdatePasswordSchema struct {
+	CurrentPassword string `json:"current_password" validate:"required"`
+	NewPassword     string `json:"new_password"     validate:"required"`
+}
+
+type DeleteAccountSchema struct {
+	Password string `json:"password" validate:"required"`
+}
+
+type RemovePasswordSchema struct {
+	CurrentPassword string `json:"current_password" validate:"required"`
+}

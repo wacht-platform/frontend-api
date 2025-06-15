@@ -429,3 +429,54 @@ func (s *UserService) isDisposableEmail(email string) bool {
 
 	return false
 }
+
+func (s *UserService) ValidatePasswordRemoval(user *model.User, deployment *model.Deployment) error {
+	authSettings := deployment.AuthSettings
+	hasAlternativeMethod := false
+
+	if authSettings.FirstFactor == model.FirstFactorEmailOTP {
+		for _, email := range user.UserEmailAddresses {
+			if email.Verified {
+				hasAlternativeMethod = true
+				break
+			}
+		}
+	}
+
+	if authSettings.MagicLink != nil && authSettings.MagicLink.Enabled {
+		for _, email := range user.UserEmailAddresses {
+			if email.Verified {
+				hasAlternativeMethod = true
+				break
+			}
+		}
+	}
+
+	if authSettings.Passkey != nil && authSettings.Passkey.Enabled {
+		hasAlternativeMethod = true
+	}
+
+	if len(user.SocialConnections) > 0 {
+		for _, socialConn := range deployment.SocialConnections {
+			if socialConn.Enabled {
+				hasAlternativeMethod = true
+				break
+			}
+		}
+	}
+
+	if authSettings.AuthFactorsEnabled.PhoneOTP {
+		for _, phone := range user.UserPhoneNumbers {
+			if phone.Verified && phone.CanUseForSecondFactor {
+				hasAlternativeMethod = true
+				break
+			}
+		}
+	}
+
+	if !hasAlternativeMethod {
+		return handler.ErrNoAlternativeAuthMethod
+	}
+
+	return nil
+}

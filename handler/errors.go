@@ -40,6 +40,7 @@ const (
 	ErrCodeCountryRestricted            = "COUNTRY_RESTRICTED"
 	ErrCodeVoipNumberBlocked            = "VOIP_NUMBER_BLOCKED"
 	ErrCodeBannedKeyword                = "BANNED_KEYWORD"
+	ErrCodeNoAlternativeAuthMethod      = "NO_ALTERNATIVE_AUTH_METHOD"
 	ErrorCodeInternal                   = "INTERNAL"
 	ErrorCodeBadSignInAttempt           = "BAD_SIGN_IN_ATTEMPT"
 	ErrorCodeUserAlreadySignedIn        = "USER_ALREADY_SIGNED_IN"
@@ -141,6 +142,10 @@ var (
 	ErrBannedKeyword = Error{
 		Code:    ErrCodeBannedKeyword,
 		Message: "Your input contains restricted content.",
+	}
+	ErrNoAlternativeAuthMethod = Error{
+		Code:    ErrCodeNoAlternativeAuthMethod,
+		Message: "Cannot remove password. You must have at least one alternative authentication method configured (verified email for OTP/magic link, social connection, or passkey).",
 	}
 )
 

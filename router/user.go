@@ -35,4 +35,10 @@ func setupUserRoutes(
 	router.Post("/backup-codes/regenerate", userHandler.RegenerateBackupCodes)
 	router.Get("/signins", userHandler.GetUserSignins)
 	router.Patch("/signins/:id/signout", userHandler.SignOutFromSession)
+	router.Post("/email-addresses/:id/make-primary", userHandler.MakeEmailPrimary)
+	router.Post("/phone-numbers/:id/make-primary", userHandler.MakePhonePrimary)
+	router.Post("/update-password", userHandler.UpdatePassword)
+	router.Delete("/password", userHandler.RemovePassword)
+	router.Delete("/account", userHandler.DeleteAccount)
+	router.Delete("/social-connections/:id", userHandler.DisconnectSocialConnection)
 }

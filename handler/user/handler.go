@@ -1047,3 +1047,199 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 
 	return handler.SendSuccess(c, memberships)
 }
+
+func (h *Handler) MakeEmailPrimary(c *fiber.Ctx) error {
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
+	}
+
+	emailID := c.Params("id")
+	if emailID == "" {
+		return handler.SendBadRequest(c, nil, "Email address ID is required")
+	}
+
+	var emailAddress model.UserEmailAddress
+	if err := database.Connection.Where("id = ? AND user_id = ? AND verified = ?", emailID, session.ActiveSignin.UserID, true).First(&emailAddress).Error; err != nil {
+		return handler.SendBadRequest(c, nil, "Email address not found or not verified")
+	}
+
+	if err := database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Update("primary_email_address_id", emailID).Error; err != nil {
+		return handler.SendInternalServerError(c, nil, "Failed to update primary email", handler.ErrInternal)
+	}
+
+	return handler.SendSuccess(c, "Primary email updated successfully")
+}
+
+func (h *Handler) MakePhonePrimary(c *fiber.Ctx) error {
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
+	}
+
+	phoneID := c.Params("id")
+	if phoneID == "" {
+		return handler.SendBadRequest(c, nil, "Phone number ID is required")
+	}
+
+	var phoneNumber model.UserPhoneNumber
+	if err := database.Connection.Where("id = ? AND user_id = ? AND verified = ?", phoneID, session.ActiveSignin.UserID, true).First(&phoneNumber).Error; err != nil {
+		return handler.SendBadRequest(c, nil, "Phone number not found or not verified")
+	}
+
+	if err := database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Update("primary_phone_number_id", phoneID).Error; err != nil {
+		return handler.SendInternalServerError(c, nil, "Failed to update primary phone", handler.ErrInternal)
+	}
+
+	return handler.SendSuccess(c, "Primary phone updated successfully")
+}
+
+func (h *Handler) UpdatePassword(c *fiber.Ctx) error {
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
+	}
+
+	b, validation := handler.Validate[UpdatePasswordSchema](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
+	}
+
+	var user model.User
+	if err := database.Connection.First(&user, session.ActiveSignin.UserID).Error; err != nil {
+		return handler.SendInternalServerError(c, nil, "Failed to load user")
+	}
+
+	isValid, err := utils.ComparePassword(user.Password, b.CurrentPassword)
+	if err != nil || !isValid {
+		return handler.SendBadRequest(c, nil, "Current password is incorrect")
+	}
+
+	if len(b.NewPassword) < 6 || len(b.NewPassword) > 125 {
+		return handler.SendBadRequest(c, nil, "Password must be 6-125 characters long")
+	}
+
+	hashedPassword, err := utils.HashPassword(b.NewPassword)
+	if err != nil {
+		return handler.SendInternalServerError(c, nil, "Failed to hash password")
+	}
+
+	if err := database.Connection.Model(&user).Update("password", hashedPassword).Error; err != nil {
+		return handler.SendInternalServerError(c, nil, "Failed to update password")
+	}
+
+	return handler.SendSuccess(c, "Password updated successfully")
+}
+
+func (h *Handler) RemovePassword(c *fiber.Ctx) error {
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
+	}
+
+	b, validation := handler.Validate[RemovePasswordSchema](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
+	}
+
+	var user model.User
+	if err := database.Connection.Preload("UserEmailAddresses").
+		Preload("UserPhoneNumbers").
+		Preload("SocialConnections").
+		Preload("UserAuthenticator").
+		First(&user, session.ActiveSignin.UserID).Error; err != nil {
+		return handler.SendInternalServerError(c, nil, "Failed to load user")
+	}
+
+	deployment := handler.GetDeployment(c)
+
+	isValid, err := utils.ComparePassword(user.Password, b.CurrentPassword)
+	if err != nil || !isValid {
+		return handler.SendBadRequest(c, nil, "Current password is incorrect")
+	}
+
+	if err := h.service.ValidatePasswordRemoval(&user, &deployment); err != nil {
+		return handler.SendBadRequest(c, nil, err.Error())
+	}
+
+	if err := database.Connection.Model(&user).Update("password", "").Error; err != nil {
+		return handler.SendInternalServerError(c, nil, "Failed to remove password")
+	}
+
+	return handler.SendSuccess(c, "Password removed successfully")
+}
+
+
+
+func (h *Handler) DeleteAccount(c *fiber.Ctx) error {
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
+	}
+
+	b, validation := handler.Validate[DeleteAccountSchema](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
+	}
+
+	var user model.User
+	if err := database.Connection.First(&user, session.ActiveSignin.UserID).Error; err != nil {
+		return handler.SendInternalServerError(c, nil, "Failed to load user")
+	}
+
+	isValid, err := utils.ComparePassword(user.Password, b.Password)
+	if err != nil || !isValid {
+		return handler.SendBadRequest(c, nil, "Password is incorrect")
+	}
+
+	tx := database.Connection.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Where("user_id = ?", user.ID).Delete(&model.Signin{}).Error; err != nil {
+		tx.Rollback()
+		return handler.SendInternalServerError(c, nil, "Failed to delete user sessions")
+	}
+
+	if err := tx.Delete(&user).Error; err != nil {
+		tx.Rollback()
+		return handler.SendInternalServerError(c, nil, "Failed to delete account")
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return handler.SendInternalServerError(c, nil, "Failed to complete account deletion")
+	}
+
+	handler.RemoveSessionFromCache(session.ID)
+
+	return handler.SendSuccess(c, "Account deleted successfully")
+}
+
+func (h *Handler) DisconnectSocialConnection(c *fiber.Ctx) error {
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
+	}
+
+	connectionID := c.Params("id")
+	if connectionID == "" {
+		return handler.SendBadRequest(c, nil, "Social connection ID is required")
+	}
+
+	query := database.Connection.Where("id = ? AND user_id = ?", connectionID, session.ActiveSignin.UserID).
+		Delete(&model.SocialConnection{})
+	if query.Error != nil {
+		return handler.SendInternalServerError(c, nil, "Failed to disconnect social connection", handler.ErrInternal)
+	}
+
+	if query.RowsAffected == 0 {
+		return handler.SendBadRequest(c, nil, "Social connection not found")
+	}
+
+	return handler.SendSuccess(c, "Social connection disconnected successfully")
+}
+
+
