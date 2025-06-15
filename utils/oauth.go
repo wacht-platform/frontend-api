@@ -25,134 +25,6 @@ type OAuthUser struct {
 	ImageUrl  string `json:"image_url"`
 }
 
-func GenerateVerificationUrl(
-	ssoProvider model.SocialConnectionProvider,
-	attempt model.SignInAttempt,
-) string {
-	url := ""
-
-	defcred := config.GetDefaultOAuthCredentials(string(ssoProvider))
-
-	conf := &oauth2.Config{
-		ClientID:     defcred.ClientID,
-		ClientSecret: defcred.ClientSecret,
-		RedirectURL:  defcred.RedirectURI,
-		Scopes:       defcred.Scopes,
-	}
-
-	switch ssoProvider {
-	case model.SocialConnectionProviderX:
-		conf.Endpoint = oauth2.Endpoint{
-			AuthURL:  "https://x.com/i/oauth2/authorize",
-			TokenURL: "https://x.com/i/oauth2/token",
-		}
-		url = conf.AuthCodeURL(
-			strconv.FormatUint(uint64(attempt.ID), 10),
-		)
-	case model.SocialConnectionProviderGitHub:
-		conf.Endpoint = github.Endpoint
-		url = conf.AuthCodeURL(
-			strconv.FormatUint(uint64(attempt.ID), 10),
-		)
-	case model.SocialConnectionProviderGitLab:
-		conf.Endpoint = config.GitLabOAuthEndpoint
-		url = conf.AuthCodeURL(
-			strconv.FormatUint(uint64(attempt.ID), 10),
-		)
-	case model.SocialConnectionProviderGoogle:
-		conf.Endpoint = google.Endpoint
-		url = conf.AuthCodeURL(
-			strconv.FormatUint(uint64(attempt.ID), 10),
-		)
-	case model.SocialConnectionProviderFacebook:
-		conf.Endpoint = facebook.Endpoint
-		url = conf.AuthCodeURL(
-			strconv.FormatUint(uint64(attempt.ID), 10),
-		)
-	case model.SocialConnectionProviderMicrosoft:
-		conf.Endpoint = microsoft.AzureADEndpoint("")
-		url = conf.AuthCodeURL(
-			strconv.FormatUint(uint64(attempt.ID), 10),
-		)
-	case model.SocialConnectionProviderLinkedIn:
-		conf.Endpoint = linkedin.Endpoint
-		url = conf.AuthCodeURL(
-			strconv.FormatUint(uint64(attempt.ID), 10),
-		)
-	case model.SocialConnectionProviderDiscord:
-		conf.Endpoint = config.DiscordOAuthEndpoint
-		url = conf.AuthCodeURL(
-			strconv.FormatUint(uint64(attempt.ID), 10),
-		)
-	case model.SocialConnectionProviderApple:
-		conf.Endpoint = config.AppleOAuthEndpoint
-		url = conf.AuthCodeURL(
-			strconv.FormatUint(uint64(attempt.ID), 10),
-		)
-	}
-
-	return url
-}
-
-func GenerateVerificationUrlWithRedirect(
-	ssoProvider model.SocialConnectionProvider,
-	attempt model.SignInAttempt,
-	frontendHost string,
-	customRedirectURI string,
-) string {
-	url := ""
-
-	cred := config.GetOAuthCredentialsWithRedirectURI(string(ssoProvider), frontendHost)
-
-	conf := &oauth2.Config{
-		ClientID:     cred.ClientID,
-		ClientSecret: cred.ClientSecret,
-		RedirectURL:  cred.RedirectURI,
-		Scopes:       cred.Scopes,
-	}
-
-	// Add custom redirect_uri as a parameter if provided
-	state := strconv.FormatUint(uint64(attempt.ID), 10)
-	if customRedirectURI != "" {
-		state += ":" + customRedirectURI
-	}
-
-	switch ssoProvider {
-	case model.SocialConnectionProviderX:
-		conf.Endpoint = oauth2.Endpoint{
-			AuthURL:  "https://x.com/i/oauth2/authorize",
-			TokenURL: "https://x.com/i/oauth2/token",
-		}
-		url = conf.AuthCodeURL(state)
-	case model.SocialConnectionProviderGitHub:
-		conf.Endpoint = github.Endpoint
-		url = conf.AuthCodeURL(state)
-	case model.SocialConnectionProviderGitLab:
-		conf.Endpoint = config.GitLabOAuthEndpoint
-		url = conf.AuthCodeURL(state)
-	case model.SocialConnectionProviderGoogle:
-		conf.Endpoint = google.Endpoint
-		url = conf.AuthCodeURL(state)
-	case model.SocialConnectionProviderFacebook:
-		conf.Endpoint = facebook.Endpoint
-		url = conf.AuthCodeURL(state)
-	case model.SocialConnectionProviderMicrosoft:
-		conf.Endpoint = microsoft.AzureADEndpoint("")
-		url = conf.AuthCodeURL(state)
-	case model.SocialConnectionProviderLinkedIn:
-		conf.Endpoint = linkedin.Endpoint
-		url = conf.AuthCodeURL(state)
-	case model.SocialConnectionProviderDiscord:
-		conf.Endpoint = config.DiscordOAuthEndpoint
-		url = conf.AuthCodeURL(state)
-	case model.SocialConnectionProviderApple:
-		conf.Endpoint = config.AppleOAuthEndpoint
-		url = conf.AuthCodeURL(state)
-	}
-
-	return url
-}
-
 func GenerateVerificationUrlForDeployment(
 	ssoProvider model.SocialConnectionProvider,
 	attempt model.SignInAttempt,
@@ -161,13 +33,11 @@ func GenerateVerificationUrlForDeployment(
 ) (string, error) {
 	url := ""
 
-	// Get deployment-specific OAuth config
-	conf, err := getOAuthConfigForDeployment(ssoProvider, deployment)
+	conf, err := GetOAuthConfigForDeployment(ssoProvider, deployment, customRedirectURI)
 	if err != nil {
 		return "", err
 	}
 
-	// Add custom redirect_uri as a parameter if provided
 	state := strconv.FormatUint(uint64(attempt.ID), 10)
 	if customRedirectURI != "" {
 		state += ":" + customRedirectURI
@@ -209,9 +79,10 @@ func GenerateVerificationUrlForDeployment(
 	return url, nil
 }
 
-func getOAuthConfigForDeployment(
+func GetOAuthConfigForDeployment(
 	provider model.SocialConnectionProvider,
 	deployment *model.Deployment,
+	customRedirectURI string,
 ) (*oauth2.Config, error) {
 	cred, err := config.GetDeploymentOAuthCredentials(deployment, provider)
 	if err != nil {
@@ -221,8 +92,20 @@ func getOAuthConfigForDeployment(
 	conf := &oauth2.Config{
 		ClientID:     cred.ClientID,
 		ClientSecret: cred.ClientSecret,
-		RedirectURL:  cred.RedirectURI,
 		Scopes:       cred.Scopes,
+	}
+
+	if deployment.Mode == "production" {
+		conf.RedirectURL = fmt.Sprintf(
+			"https://%s/sso-callback?redirect_uri=%s",
+			deployment.FrontendHost,
+			customRedirectURI,
+		)
+	} else {
+		conf.RedirectURL = fmt.Sprintf(
+			"https://shared.sso.wacht.services/?host=%s",
+			fmt.Sprintf("https://%s/sso-callback?redirect_uri=%s", deployment.FrontendHost, customRedirectURI),
+		)
 	}
 
 	switch provider {

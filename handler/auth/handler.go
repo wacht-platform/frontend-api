@@ -401,7 +401,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 	attemptID := stateParts[0]
 	var customRedirectURI string
 	if len(stateParts) > 1 {
-		customRedirectURI = strings.Join(stateParts[1:], ":")
+		customRedirectURI = stateParts[1]
 	}
 
 	var attempt model.SignInAttempt
@@ -414,7 +414,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		)
 	}
 
-	conf, err := getOAuthConfigForDeployment(attempt.SSOProvider, &deployment)
+	conf, err := utils.GetOAuthConfigForDeployment(attempt.SSOProvider, &deployment, customRedirectURI)
 	if err != nil {
 		return handler.SendBadRequest(
 			c,

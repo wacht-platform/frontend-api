@@ -11,13 +11,11 @@ func getSSOConfig() map[string]model.OauthCredentials {
 		"google_oauth": {
 			ClientID:     GetEnv("GOOGLE_CLIENT_ID", ""),
 			ClientSecret: GetEnv("GOOGLE_CLIENT_SECRET", ""),
-			RedirectURI:  GetEnv("GOOGLE_REDIRECT_URI", ""),
 			Scopes:       []string{"openid", "email", "profile"},
 		},
 		"microsoft_oauth": {
 			ClientID:     GetEnv("MICROSOFT_CLIENT_ID", ""),
 			ClientSecret: GetEnv("MICROSOFT_CLIENT_SECRET", ""),
-			RedirectURI:  GetEnv("MICROSOFT_REDIRECT_URI", ""),
 			Scopes: []string{
 				"openid",
 				"email",
@@ -28,43 +26,36 @@ func getSSOConfig() map[string]model.OauthCredentials {
 		"github_oauth": {
 			ClientID:     GetEnv("GITHUB_CLIENT_ID", ""),
 			ClientSecret: GetEnv("GITHUB_CLIENT_SECRET", ""),
-			RedirectURI:  GetEnv("GITHUB_REDIRECT_URI", ""),
 			Scopes:       []string{"user"},
 		},
 		"x_oauth": {
 			ClientID:     GetEnv("X_CLIENT_ID", ""),
 			ClientSecret: GetEnv("X_CLIENT_SECRET", ""),
-			RedirectURI:  GetEnv("X_REDIRECT_URI", ""),
 			Scopes:       []string{"users.read", "users.email", "offline.access"},
 		},
 		"facebook_oauth": {
 			ClientID:     GetEnv("FACEBOOK_CLIENT_ID", ""),
 			ClientSecret: GetEnv("FACEBOOK_CLIENT_SECRET", ""),
-			RedirectURI:  GetEnv("FACEBOOK_REDIRECT_URI", ""),
 			Scopes:       []string{"email"},
 		},
 		"apple_oauth": {
 			ClientID:     GetEnv("APPLE_CLIENT_ID", ""),
 			ClientSecret: GetEnv("APPLE_CLIENT_SECRET", ""),
-			RedirectURI:  GetEnv("APPLE_REDIRECT_URI", ""),
 			Scopes:       []string{"name", "email", "openid"},
 		},
 		"linkedin_oauth": {
 			ClientID:     GetEnv("LINKEDIN_CLIENT_ID", ""),
 			ClientSecret: GetEnv("LINKEDIN_CLIENT_SECRET", ""),
-			RedirectURI:  GetEnv("LINKEDIN_REDIRECT_URI", ""),
 			Scopes:       []string{"profile", "email", "openid"},
 		},
 		"discord_oauth": {
 			ClientID:     GetEnv("DISCORD_CLIENT_ID", ""),
 			ClientSecret: GetEnv("DISCORD_CLIENT_SECRET", ""),
-			RedirectURI:  GetEnv("DISCORD_REDIRECT_URI", ""),
 			Scopes:       []string{"identify", "email"},
 		},
 		"gitlab_oauth": {
 			ClientID:     GetEnv("GITLAB_CLIENT_ID", ""),
 			ClientSecret: GetEnv("GITLAB_CLIENT_SECRET", ""),
-			RedirectURI:  GetEnv("GITLAB_REDIRECT_URI", ""),
 			Scopes:       []string{"read_user"},
 		},
 	}
@@ -76,9 +67,6 @@ func GetDefaultOAuthCredentials(name string) model.OauthCredentials {
 
 func GetOAuthCredentialsWithRedirectURI(name string, frontendHost string) model.OauthCredentials {
 	creds := getSSOConfig()[name]
-	if creds.RedirectURI == "" {
-		creds.RedirectURI = frontendHost + "/sso-callback"
-	}
 	return creds
 }
 
@@ -86,9 +74,6 @@ func GetDeploymentOAuthCredentials(deployment *model.Deployment, provider model.
 	for _, conn := range deployment.SocialConnections {
 		if conn.Provider == provider && conn.Enabled && conn.Credentials != nil {
 			creds := *conn.Credentials
-			if creds.RedirectURI == "" {
-				creds.RedirectURI = deployment.FrontendHost + "/sso-callback"
-			}
 			return &creds, nil
 		}
 	}
@@ -96,9 +81,6 @@ func GetDeploymentOAuthCredentials(deployment *model.Deployment, provider model.
 	if deployment.Mode != model.DeploymentModeProduction {
 		defaultCreds := GetDefaultOAuthCredentials(string(provider))
 		if defaultCreds.ClientID != "" {
-			if defaultCreds.RedirectURI == "" {
-				defaultCreds.RedirectURI = deployment.FrontendHost + "/sso-callback"
-			}
 			return &defaultCreds, nil
 		}
 	}

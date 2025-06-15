@@ -55,7 +55,6 @@ func (p SocialConnectionProvider) VerificationStrategy() VerificationStrategy {
 type OauthCredentials struct {
 	ClientID     string
 	ClientSecret string
-	RedirectURI  string
 	Scopes       []string
 }
 

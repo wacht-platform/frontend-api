@@ -24,11 +24,6 @@ import (
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/ua-parser/uap-go/uaparser"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/facebook"
-	"golang.org/x/oauth2/github"
-	"golang.org/x/oauth2/google"
-	"golang.org/x/oauth2/linkedin"
-	"golang.org/x/oauth2/microsoft"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
@@ -308,46 +303,6 @@ func (s *AuthService) CheckUserphoneExists(phone string) bool {
 	return count > 0
 }
 
-func getOAuthConfigForDeployment(
-	provider model.SocialConnectionProvider,
-	deployment *model.Deployment,
-) (*oauth2.Config, error) {
-	cred, err := config.GetDeploymentOAuthCredentials(deployment, provider)
-	if err != nil {
-		return nil, err
-	}
-
-	conf := &oauth2.Config{
-		ClientID:     cred.ClientID,
-		ClientSecret: cred.ClientSecret,
-		RedirectURL:  cred.RedirectURI,
-		Scopes:       cred.Scopes,
-	}
-
-	switch provider {
-	case model.SocialConnectionProviderGitHub:
-		conf.Endpoint = github.Endpoint
-	case model.SocialConnectionProviderGoogle:
-		conf.Endpoint = google.Endpoint
-	case model.SocialConnectionProviderMicrosoft:
-		conf.Endpoint = microsoft.AzureADEndpoint("")
-	case model.SocialConnectionProviderFacebook:
-		conf.Endpoint = facebook.Endpoint
-	case model.SocialConnectionProviderLinkedIn:
-		conf.Endpoint = linkedin.Endpoint
-	case model.SocialConnectionProviderX:
-		conf.Endpoint = config.XOAuthEndpoint
-	case model.SocialConnectionProviderApple:
-		conf.Endpoint = config.AppleOAuthEndpoint
-	case model.SocialConnectionProviderDiscord:
-		conf.Endpoint = config.DiscordOAuthEndpoint
-	case model.SocialConnectionProviderGitLab:
-		conf.Endpoint = config.GitLabOAuthEndpoint
-	}
-
-	return conf, nil
-}
-
 func (s *AuthService) CheckIdentifierAvailability(
 	identifier string,
 	identifierType string,
@@ -595,20 +550,20 @@ func (s *AuthService) CreateOAuthSignupAttempt(
 		Model: model.Model{
 			ID: snowflake.ID(),
 		},
-		SessionID:        session.ID,
-		FirstName:        firstName,
-		LastName:         lastName,
-		Email:            email,
-		Username:         username,
-		PhoneNumber:      "",
-		Password:         "",
-		RequiredFields:   datatypes.NewJSONSlice(requiredFields),
-		MissingFields:    datatypes.NewJSONSlice(missingFields),
-		RemainingSteps:   datatypes.NewJSONSlice(steps),
-		SSOProvider:      provider,
-		SSOAccessToken:   accessToken,
-		SSORefreshToken:  refreshToken,
-		IsOAuthSignup:    true,
+		SessionID:       session.ID,
+		FirstName:       firstName,
+		LastName:        lastName,
+		Email:           email,
+		Username:        username,
+		PhoneNumber:     "",
+		Password:        "",
+		RequiredFields:  datatypes.NewJSONSlice(requiredFields),
+		MissingFields:   datatypes.NewJSONSlice(missingFields),
+		RemainingSteps:  datatypes.NewJSONSlice(steps),
+		SSOProvider:     provider,
+		SSOAccessToken:  accessToken,
+		SSORefreshToken: refreshToken,
+		IsOAuthSignup:   true,
 	}
 
 	if len(steps) > 0 {
@@ -776,7 +731,7 @@ func (s *AuthService) getIPLocation(ip string) IPLocation {
 	}
 
 	if ip == "127.0.0.1" || ip == "::1" || strings.HasPrefix(ip, "192.168.") ||
-	   strings.HasPrefix(ip, "10.") || strings.HasPrefix(ip, "172.") {
+		strings.HasPrefix(ip, "10.") || strings.HasPrefix(ip, "172.") {
 		return defaultLocation
 	}
 
@@ -840,17 +795,17 @@ func (s *AuthService) getIPLocationFallback(ip string, client *http.Client) IPLo
 	}
 
 	var fallbackResponse struct {
-		IP          string `json:"ip"`
-		City        string `json:"city"`
-		Region      string `json:"region"`
-		RegionCode  string `json:"region_code"`
-		Country     string `json:"country_name"`
-		CountryCode string `json:"country_code"`
-		Continent   string `json:"continent_code"`
+		IP          string  `json:"ip"`
+		City        string  `json:"city"`
+		Region      string  `json:"region"`
+		RegionCode  string  `json:"region_code"`
+		Country     string  `json:"country_name"`
+		CountryCode string  `json:"country_code"`
+		Continent   string  `json:"continent_code"`
 		Latitude    float64 `json:"latitude"`
 		Longitude   float64 `json:"longitude"`
-		Timezone    string `json:"timezone"`
-		Error       bool   `json:"error"`
+		Timezone    string  `json:"timezone"`
+		Error       bool    `json:"error"`
 	}
 
 	err = json.Unmarshal(body, &fallbackResponse)
@@ -1220,8 +1175,6 @@ func (s *AuthService) validateEmailMXRecord(email string) error {
 
 	return nil
 }
-
-
 
 func (s *AuthService) extractCountryCodeFromPhone(phoneNumber string) string {
 	digits := regexp.MustCompile(`\D`).ReplaceAllString(phoneNumber, "")
