@@ -75,7 +75,7 @@ func SetDeploymentMiddleware(c *fiber.Ctx) error {
 		LEFT JOIN deployment_sms_templates dst ON d.id = dst.deployment_id
 		LEFT JOIN deployment_key_pairs kp ON d.id = kp.deployment_id
 		LEFT JOIN social_connections_agg sca ON d.id = sca.deployment_id
-		WHERE d.backend_host = ?
+		WHERE d.backend_host = ? AND d.deleted_at IS NULL
 	`
 	err = database.Connection.Raw(rawSQL, host).Scan(queryResult).Error
 
