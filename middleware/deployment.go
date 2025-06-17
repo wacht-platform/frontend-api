@@ -93,6 +93,8 @@ func SetDeploymentMiddleware(c *fiber.Ctx) error {
 
 	if queryResult.SocialConnections != nil && string(queryResult.SocialConnections) != "null" {
 		json.Unmarshal(queryResult.SocialConnections, &deployment.SocialConnections)
+	} else {
+		deployment.SocialConnections = []model.DeploymentSocialConnection{}
 	}
 	deployment.KepPair = queryResult.KepPair
 
