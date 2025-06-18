@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"os"
 	"time"
@@ -21,8 +22,9 @@ func InitRedisConnection() error {
 			os.Getenv("REDIS_HOST"),
 			os.Getenv("REDIS_PORT"),
 		),
-		Username: os.Getenv("REDIS_USERNAME"),
-		Password: os.Getenv("REDIS_PASSWORD"),
+		Username:  os.Getenv("REDIS_USERNAME"),
+		Password:  os.Getenv("REDIS_PASSWORD"),
+		TLSConfig: &tls.Config{},
 	})
 
 	ctx, cancel := context.WithTimeout(
