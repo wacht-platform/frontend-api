@@ -55,7 +55,6 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 	}
 }
 
-
 func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
 	user, err := h.service.FindUserByUsername(b.Username)
 	if err != nil {
@@ -110,15 +109,15 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 	secondFactorEnforced := user.SecondFactorPolicy == model.SecondFactorPolicyEnforced
 
 	steps, completed := h.service.DetermineAuthenticationStep(
-		true, 
+		true,
 		authenticated,
 		secondFactorEnforced,
 		d.AuthSettings,
 	)
 
 	attempt := h.service.CreateSignInAttempt(
-		user.ID,
-		0, 
+		&user.ID,
+		nil,
 		session.ID,
 		model.SignInMethodPlainUsername,
 		steps,
@@ -252,8 +251,8 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 	)
 
 	attempt := h.service.CreateSignInAttempt(
-		*email.UserID,
-		email.ID,
+		email.UserID,
+		&email.ID,
 		session.ID,
 		model.SignInMethodPlainEmail,
 		steps,
@@ -332,49 +331,41 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, d model.Deploym
 
 	if method == model.SignInMethodEmailOTP {
 		email, err := h.service.FindUserByEmail(b.Email)
-		if err != nil {
-			if err == handler.ErrUserNotFound {
-				return handler.SendUnauthorized(c, nil, "Invalid credentials", handler.ErrInvalidCredentials)
-			}
-			return handler.SendInternalServerError(c, err, "Something went wrong")
-		}
 
 		if err = h.service.ValidateUserStatus(email); err != nil {
 			return handler.SendForbidden(c, nil, err.Error(), handler.ErrUserDisabled)
 		}
 
-		userID = *email.UserID
-		identifierID = email.ID
+		if email != nil {
+			userID = *email.UserID
+			identifierID = email.ID
+		}
+
 	} else if method == model.SignInMethodPhoneOTP {
 		phone, err := h.service.FindUserByPhoneNumber(b.Phone)
-		if err != nil {
-			if err == handler.ErrUserNotFound {
-				return handler.SendUnauthorized(c, nil, "Invalid credentials", handler.ErrInvalidCredentials)
-			}
-			return handler.SendInternalServerError(c, err, "Something went wrong")
-		}
 
 		if err = h.service.ValidatePhoneUserStatus(phone); err != nil {
 			return handler.SendForbidden(c, nil, err.Error(), handler.ErrUserDisabled)
 		}
 
-		userID = phone.User.ID
-		identifierID = phone.ID
+		if phone != nil {
+			userID = phone.User.ID
+			identifierID = phone.ID
+		}
 	}
 
-	// Always create attempt with email/phone verification step
 	steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyEmailOTP}
 	if method == model.SignInMethodPhoneOTP {
 		steps = []model.SignInAttemptStep{model.SignInAttemptStepVerifyPhoneOTP}
 	}
 
 	attempt := h.service.CreateSignInAttempt(
-		userID,
-		identifierID,
+		&userID,
+		&identifierID,
 		session.ID,
 		method,
 		steps,
-		false, 
+		false,
 	)
 
 	err := database.Connection.Create(attempt).Error
@@ -424,19 +415,18 @@ func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.D
 
 	secondFactorEnforced := email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced
 
-	// Always create attempt with magic link verification step
 	steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyEmailOTP}
 	if secondFactorEnforced {
 		steps = append(steps, model.SignInAttemptStepVerifySecondFactor)
 	}
 
 	attempt := h.service.CreateSignInAttempt(
-		*email.UserID,
-		email.ID,
+		email.UserID,
+		&email.ID,
 		session.ID,
 		model.SignInMethodMagicLink,
 		steps,
-		false, // Never completed initially for magic link
+		false,
 	)
 
 	if requiresCompletion {
@@ -949,8 +939,12 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 
 		switch attempt.CurrentStep {
 		case model.SignInAttemptStepVerifyEmailOTP:
+			if attempt.IdentifierID != nil {
+				return handler.SendSuccess[any](c, nil)
+			}
+
 			email, err := h.service.FindUserByEmailID(
-				attempt.IdentifierID,
+				*attempt.IdentifierID,
 			)
 			if err != nil {
 				return handler.SendInternalServerError(
@@ -971,9 +965,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			// Handle different verification strategies
 			if strategy == "magic_link" || attempt.Method == model.SignInMethodMagicLink {
-				// Generate and send magic link
 				magicLink, err := h.service.GenerateMagicLink(attempt.ID, deployment, redirectURI)
 				if err != nil {
 					return handler.SendInternalServerError(
@@ -992,7 +984,6 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 					)
 				}
 			} else {
-				// Generate and send OTP
 				code, err := utils.GenerateOTP()
 				if err != nil {
 					return handler.SendInternalServerError(
@@ -1021,8 +1012,12 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				}
 			}
 		case model.SignInAttemptStepVerifyPhoneOTP:
+			if attempt.IdentifierID != nil {
+				return handler.SendSuccess[any](c, nil)
+			}
+
 			phone, err := h.service.FindUserByPhoneNumberID(
-				attempt.IdentifierID,
+				*attempt.IdentifierID,
 			)
 			if err != nil {
 				return handler.SendInternalServerError(
@@ -1161,7 +1156,11 @@ func (h *Handler) VerifyMagicLink(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 	deployment := handler.GetDeployment(c)
 
-	email, err := h.service.FindUserByEmailID(attempt.IdentifierID)
+	if attempt.IdentifierID == nil {
+		return handler.SendBadRequest(c, nil, "Invalid or expired magic link")
+	}
+
+	email, err := h.service.FindUserByEmailID(*attempt.IdentifierID)
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Error fetching user")
 	}
@@ -1222,15 +1221,12 @@ func (h *Handler) VerifyMagicLink(c *fiber.Ctx) error {
 			return handler.SendInternalServerError(c, err, "Error updating attempt")
 		}
 
-		// Use custom redirect URI if provided, otherwise default to signin page
 		var redirectURL string
 		if redirectURI != "" {
-			// Parse and validate the redirect URI
 			parsedURL, err := url.Parse(redirectURI)
 			if err != nil {
 				redirectURL = fmt.Sprintf("https://%s/auth/signin?magic_link=verified&continue=true", deployment.FrontendHost)
 			} else {
-				// Add magic_link=verified and continue=true parameters to the redirect URI
 				query := parsedURL.Query()
 				query.Set("magic_link", "verified")
 				query.Set("continue", "true")
@@ -1289,8 +1285,16 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 		case model.SignInAttemptStepVerifyEmail,
 			model.SignInAttemptStepVerifyEmailOTP:
 			{
+				if attempt.IdentifierID != nil {
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"Invalid or expired OTP",
+					)
+				}
+
 				email, err := h.service.FindUserByEmailID(
-					attempt.IdentifierID,
+					*attempt.IdentifierID,
 				)
 				if err != nil {
 					return handler.SendInternalServerError(
@@ -1380,8 +1384,16 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 		case model.SignInAttemptStepVerifyPhone,
 			model.SignInAttemptStepVerifyPhoneOTP:
 			{
+				if attempt.IdentifierID != nil {
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"Invalid or expired OTP",
+					)
+				}
+
 				phone, err := h.service.FindUserByPhoneNumberID(
-					attempt.IdentifierID,
+					*attempt.IdentifierID,
 				)
 				if err != nil {
 					return handler.SendInternalServerError(

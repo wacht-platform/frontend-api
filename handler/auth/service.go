@@ -215,8 +215,8 @@ func (s *AuthService) DetermineMagicLinkAuthenticationStep(
 }
 
 func (s *AuthService) CreateSignInAttempt(
-	userID uint64,
-	identifierID uint64,
+	userID *uint64,
+	identifierID *uint64,
 	sessionID uint64,
 	method model.SignInMethod,
 	steps []model.SignInAttemptStep,
