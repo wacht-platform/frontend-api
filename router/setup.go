@@ -32,10 +32,8 @@ func setupMiddleware(app *fiber.App) {
 func corsSettings() cors.Config {
 	corsSetting := cors.ConfigDefault
 
-	// if os.Getenv("MODE") == "staging" {
 	corsSetting.AllowHeaders = "X-Development-Session,Content-Type"
 	corsSetting.ExposeHeaders = "X-Development-Session"
-	// }
 
 	return corsSetting
 }

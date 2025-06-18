@@ -46,9 +46,16 @@ func SetSessionMiddleware(c *fiber.Ctx) error {
 }
 
 func getSessionToken(c *fiber.Ctx) string {
+	deployment := handler.GetDeployment(c)
+
 	if token := c.Cookies(sessionCookieName); token != "" {
 		return token
 	}
+
+	if !deployment.IsProduction() {
+		return ""
+	}
+
 	return c.Get(devSessionHeader)
 }
 
@@ -132,12 +139,22 @@ func handleExistingSession(
 }
 
 func setSessionToken(c *fiber.Ctx, token string, isProduction bool) {
+	deployment := handler.GetDeployment(c)
+	var domain string
+
+	split := strings.Split(deployment.FrontendHost, ".")
+	if len(split) > 1 {
+		domain = strings.Join(split[1:], ".")
+	}
+
 	if isProduction {
 		c.Cookie(&fiber.Cookie{
 			Name:     sessionCookieName,
 			Value:    token,
-			Expires:  time.Now().Add(sessionDuration),
+			Expires:  time.Now().Add(time.Duration(deployment.AuthSettings.SessionInactiveTimeout) * time.Second),
 			HTTPOnly: true,
+			Secure:   true,
+			Domain:   domain,
 		})
 	} else {
 		c.Set(devSessionHeader, token)
