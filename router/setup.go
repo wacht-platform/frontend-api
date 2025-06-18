@@ -37,10 +37,12 @@ func setupMiddleware(app *fiber.App) {
 
 func corsSettings(c *fiber.Ctx) cors.Config {
 	deployment, ok := c.Locals("deployment").(model.Deployment)
+	fmt.Println(deployment, ok)
 	if !ok {
 		return cors.Config{
 			AllowOrigins:     "",
 			AllowCredentials: true,
+			AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH",
 		}
 	}
 
@@ -52,6 +54,7 @@ func corsSettings(c *fiber.Ctx) cors.Config {
 			AllowOrigins:     host,
 			ExposeHeaders:    "X-Development-Session",
 			AllowCredentials: true,
+			AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH",
 		}
 	}
 	return cors.Config{
@@ -59,5 +62,6 @@ func corsSettings(c *fiber.Ctx) cors.Config {
 		AllowOrigins:     host,
 		ExposeHeaders:    "X-Development-Session",
 		AllowCredentials: true,
+		AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH",
 	}
 }
