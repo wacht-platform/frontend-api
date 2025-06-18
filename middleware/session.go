@@ -144,7 +144,7 @@ func setSessionToken(c *fiber.Ctx, token string, isProduction bool) {
 
 	split := strings.Split(deployment.FrontendHost, ".")
 	if len(split) > 1 {
-		domain = strings.Join(split[1:], ".")
+		domain = fmt.Sprintf(".%s", strings.Join(split[1:], "."))
 	}
 
 	if isProduction {
