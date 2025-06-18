@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -44,9 +45,7 @@ func (s *AuthService) FindUserByEmail(
 	email string,
 ) (*model.UserEmailAddress, error) {
 	var userEmail model.UserEmailAddress
-	if res := s.db.Where(&model.UserEmailAddress{EmailAddress: email}).Joins("User").Preload("User", func(db *gorm.DB) *gorm.DB {
-		return db.Select("*")
-	}).First(&userEmail); res.RowsAffected == 0 {
+	if res := s.db.Where(&model.UserEmailAddress{EmailAddress: email}).Joins("User").First(&userEmail); res.RowsAffected == 0 {
 		return nil, handler.ErrUserNotFound
 	} else if res.Error != nil {
 		return nil, res.Error
@@ -59,9 +58,7 @@ func (s *AuthService) FindUserByEmailID(
 	emailId uint64,
 ) (*model.UserEmailAddress, error) {
 	var userEmail model.UserEmailAddress
-	if res := s.db.Where(&model.UserEmailAddress{Model: model.Model{ID: emailId}}).Joins("User").Preload("User", func(db *gorm.DB) *gorm.DB {
-		return db.Select("*")
-	}).First(&userEmail); res.RowsAffected == 0 {
+	if res := s.db.Where(&model.UserEmailAddress{Model: model.Model{ID: emailId}}).Joins("User").First(&userEmail); res.RowsAffected == 0 {
 		return nil, handler.ErrUserNotFound
 	} else if res.Error != nil {
 		return nil, res.Error
@@ -69,10 +66,65 @@ func (s *AuthService) FindUserByEmailID(
 	return &userEmail, nil
 }
 
+func (s *AuthService) FindUserByPhoneNumber(
+	phoneNumber string,
+) (*model.UserPhoneNumber, error) {
+	var userPhone model.UserPhoneNumber
+	if res := s.db.Where(&model.UserPhoneNumber{PhoneNumber: phoneNumber}).Joins("User").First(&userPhone); res.RowsAffected == 0 {
+		return nil, handler.ErrUserNotFound
+	} else if res.Error != nil {
+		return nil, res.Error
+	}
+
+	return &userPhone, nil
+}
+
+func (s *AuthService) FindUserByPhoneNumberID(
+	phoneId uint64,
+) (*model.UserPhoneNumber, error) {
+	var userPhone model.UserPhoneNumber
+	if res := s.db.Where(&model.UserPhoneNumber{Model: model.Model{ID: phoneId}}).Joins("User").First(&userPhone); res.RowsAffected == 0 {
+		return nil, handler.ErrUserNotFound
+	} else if res.Error != nil {
+		return nil, res.Error
+	}
+	return &userPhone, nil
+}
+
+func (s *AuthService) FindUserByUsername(
+	username string,
+) (*model.User, error) {
+	var user model.User
+	if res := s.db.Where(&model.User{Username: username}).First(&user); res.RowsAffected == 0 {
+		return nil, handler.ErrUserNotFound
+	} else if res.Error != nil {
+		return nil, res.Error
+	}
+	return &user, nil
+}
+
 func (s *AuthService) ValidateUserStatus(
 	user *model.UserEmailAddress,
 ) error {
 	if user.User.Disabled {
+		return handler.ErrUserDisabled
+	}
+	return nil
+}
+
+func (s *AuthService) ValidatePhoneUserStatus(
+	user *model.UserPhoneNumber,
+) error {
+	if user.User.Disabled {
+		return handler.ErrUserDisabled
+	}
+	return nil
+}
+
+func (s *AuthService) ValidateUsernameUserStatus(
+	user *model.User,
+) error {
+	if user.Disabled {
 		return handler.ErrUserDisabled
 	}
 	return nil
@@ -91,6 +143,62 @@ func (s *AuthService) DetermineAuthenticationStep(
 
 	if !authenticated &&
 		authSettings.FirstFactor == model.FirstFactorEmailOTP {
+		steps = append(steps, model.SignInAttemptStepVerifyEmailOTP)
+	}
+
+	if secondFactorEnforced {
+		steps = append(
+			steps,
+			model.SignInAttemptStepVerifySecondFactor,
+		)
+	}
+
+	completed = len(steps) == 0
+
+	return steps, completed
+}
+
+func (s *AuthService) DeterminePhoneAuthenticationStep(
+	verified, authenticated, secondFactorEnforced bool,
+	authSettings model.DeploymentAuthSettings,
+) ([]model.SignInAttemptStep, bool) {
+	var steps []model.SignInAttemptStep
+	completed := false
+
+	if !verified && authenticated {
+		steps = append(steps, model.SignInAttemptStepVerifyPhone)
+	}
+
+	if !authenticated &&
+		authSettings.FirstFactor == model.FirstFactorPhoneOTP {
+		steps = append(steps, model.SignInAttemptStepVerifyPhoneOTP)
+	}
+
+	if secondFactorEnforced {
+		steps = append(
+			steps,
+			model.SignInAttemptStepVerifySecondFactor,
+		)
+	}
+
+	completed = len(steps) == 0
+
+	return steps, completed
+}
+
+func (s *AuthService) DetermineMagicLinkAuthenticationStep(
+	verified, authenticated, secondFactorEnforced bool,
+	authSettings model.DeploymentAuthSettings,
+) ([]model.SignInAttemptStep, bool) {
+	var steps []model.SignInAttemptStep
+	completed := false
+
+	if !verified && authenticated {
+		steps = append(steps, model.SignInAttemptStepVerifyEmail)
+	}
+
+	if !authenticated &&
+		authSettings.FirstFactor == model.FirstFactorMagicLink {
 		steps = append(steps, model.SignInAttemptStepVerifyEmailOTP)
 	}
 
@@ -396,6 +504,65 @@ func (s *AuthService) SendEmailOTPVerificationAsync(
 	deployment model.Deployment,
 ) error {
 	return s.celery.SendEmailAsync("auth_email_verification", deployment.ID, email)
+}
+
+func (s *AuthService) SendSmsOTPVerificationAsync(
+	phoneNumber string,
+	deployment model.Deployment,
+) error {
+	return s.celery.SendSMSAsync("auth_sms_verification", deployment.ID, phoneNumber)
+}
+
+func (s *AuthService) GenerateMagicLink(
+	attemptID uint64,
+	deployment model.Deployment,
+	redirectURI string,
+) (string, error) {
+	token, err := utils.GenerateSecureToken(32)
+	if err != nil {
+		return "", err
+	}
+
+	key := fmt.Sprintf("magic_link:%d", attemptID)
+	if err := s.StoreOTPInCache(key, token); err != nil {
+		return "", err
+	}
+
+	magicLink := fmt.Sprintf("https://%s/verify-magic-link?token=%s&attempt=%d",
+		deployment.FrontendHost, token, attemptID)
+
+	// Add redirect_uri parameter if provided
+	if redirectURI != "" {
+		magicLink += "&redirect_uri=" + url.QueryEscape(redirectURI)
+	}
+
+	return magicLink, nil
+}
+
+func (s *AuthService) SendMagicLinkAsync(
+	email string,
+	magicLink string,
+	deployment model.Deployment,
+) error {
+	return s.celery.SendEmailAsync("auth_magic_link", deployment.ID, email)
+}
+
+func (s *AuthService) VerifyMagicLinkToken(
+	attemptID uint64,
+	token string,
+) error {
+	key := fmt.Sprintf("magic_link:%d", attemptID)
+	storedToken, err := s.GetOTPFromRedis(key)
+	if err != nil {
+		return err
+	}
+
+	if storedToken != token {
+		return errors.New("invalid magic link token")
+	}
+
+	s.DeleteOTPFromRedis(key)
+	return nil
 }
 
 func (s *AuthService) CheckMissingRequiredFields(user *model.User, authSettings model.DeploymentAuthSettings) []string {

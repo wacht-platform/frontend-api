@@ -2,7 +2,8 @@ package auth
 
 import (
 	"fmt"
-	"log"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,15 +39,163 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 	d := handler.GetDeployment(c)
 	session := handler.GetSession(c)
 
+	switch b.Strategy {
+	case model.SignInMethodEmailOTP:
+		return h.handleOTPSignIn(c, *b, d, session, model.SignInMethodEmailOTP)
+	case model.SignInMethodPhoneOTP:
+		return h.handleOTPSignIn(c, *b, d, session, model.SignInMethodPhoneOTP)
+	case model.SignInMethodMagicLink:
+		return h.handleMagicLinkSignIn(c, *b, d, session)
+	case model.SignInMethodPlainUsername:
+		return h.handleUsernameSignIn(c, *b, d, session)
+	case model.SignInMethodPlainEmail:
+		return h.handleEmailPasswordSignIn(c, *b, d, session)
+	default:
+		return handler.SendBadRequest(c, nil, "Invalid or missing strategy")
+	}
+}
+
+
+func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
+	user, err := h.service.FindUserByUsername(b.Username)
+	if err != nil {
+		if err == handler.ErrUserNotFound {
+			return handler.SendUnauthorized(c, nil, "Invalid credentials", handler.ErrInvalidCredentials)
+		}
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Something went wrong",
+		)
+	}
+
+	if err = h.service.ValidateUsernameUserStatus(user); err != nil {
+		return handler.SendForbidden(
+			c,
+			nil,
+			err.Error(),
+			handler.ErrUserDisabled,
+		)
+	}
+
+	missingFields := h.service.CheckMissingRequiredFields(user, d.AuthSettings)
+	requiresCompletion := len(missingFields) > 0
+
+	authenticated := false
+
+	if b.Password != "" {
+		match, err := h.service.VerifyPassword(
+			user.Password,
+			b.Password,
+		)
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Error comparing password")
+		}
+
+		if !match {
+			return handler.SendUnauthorized(c, nil, "Invalid credentials", handler.ErrInvalidCredentials)
+		}
+		authenticated = true
+	}
+
+	if !authenticated && b.Password != "" {
+		return handler.SendUnauthorized(
+			c,
+			nil,
+			"Invalid credentials",
+			handler.ErrInvalidCredentials,
+		)
+	}
+
+	secondFactorEnforced := user.SecondFactorPolicy == model.SecondFactorPolicyEnforced
+
+	steps, completed := h.service.DetermineAuthenticationStep(
+		true, 
+		authenticated,
+		secondFactorEnforced,
+		d.AuthSettings,
+	)
+
+	attempt := h.service.CreateSignInAttempt(
+		user.ID,
+		0, 
+		session.ID,
+		model.SignInMethodPlainUsername,
+		steps,
+		completed,
+	)
+
+	if requiresCompletion {
+		attempt.RequiresCompletion = true
+		attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
+
+		var requiredFields []string
+		if d.AuthSettings.FirstName.Required {
+			requiredFields = append(requiredFields, "first_name")
+		}
+		if d.AuthSettings.LastName.Required {
+			requiredFields = append(requiredFields, "last_name")
+		}
+		if d.AuthSettings.EmailAddress.Required {
+			requiredFields = append(requiredFields, "email_address")
+		}
+		if d.AuthSettings.PhoneNumber.Required {
+			requiredFields = append(requiredFields, "phone_number")
+		}
+		attempt.RequiredFields = datatypes.NewJSONSlice(requiredFields)
+		completed = false
+	}
+
+	err = database.Connection.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(attempt).Error; err != nil {
+			return err
+		}
+
+		if completed {
+			if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
+				return err
+			}
+
+			signIn := model.NewSignIn(session.ID, user.ID)
+			if err := tx.Create(signIn).Error; err != nil {
+				return err
+			}
+
+			if err := tx.Model(&session).Update("active_signin_id", signIn.ID).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil &&
+		err.(*pgconn.PgError).ConstraintName == "idx_session_user_id" {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"User already signed in",
+			handler.ErrUserAlreadySignedIn,
+		)
+	}
+
+	if err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Something went wrong",
+		)
+	}
+
+	handler.RemoveSessionFromCache(session.ID)
+	return handler.SendSuccess(c, session)
+}
+
+func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
 	email, err := h.service.FindUserByEmail(b.Email)
 	if err != nil {
 		if err == handler.ErrUserNotFound {
-			return handler.SendNotFound(
-				c,
-				nil,
-				err.Error(),
-				handler.ErrUserNotFound,
-			)
+			return handler.SendUnauthorized(c, nil, "Invalid credentials", handler.ErrInvalidCredentials)
 		}
 		return handler.SendInternalServerError(
 			c,
@@ -70,8 +219,6 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 	authenticated := false
 
 	if b.Password != "" {
-		log.Println(email.User)
-
 		match, err := h.service.VerifyPassword(
 			email.User.Password,
 			b.Password,
@@ -86,7 +233,7 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 		authenticated = true
 	}
 
-	if !authenticated && b.Password != "" {
+	if !authenticated {
 		return handler.SendUnauthorized(
 			c,
 			nil,
@@ -156,6 +303,163 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 
 		return nil
 	})
+
+	if err != nil &&
+		err.(*pgconn.PgError).ConstraintName == "idx_session_user_id" {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"User already signed in",
+			handler.ErrUserAlreadySignedIn,
+		)
+	}
+
+	if err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Something went wrong",
+		)
+	}
+
+	handler.RemoveSessionFromCache(session.ID)
+	return handler.SendSuccess(c, session)
+}
+
+func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session, method model.SignInMethod) error {
+	var userID uint64
+	var identifierID uint64
+
+	if method == model.SignInMethodEmailOTP {
+		email, err := h.service.FindUserByEmail(b.Email)
+		if err != nil {
+			if err == handler.ErrUserNotFound {
+				return handler.SendUnauthorized(c, nil, "Invalid credentials", handler.ErrInvalidCredentials)
+			}
+			return handler.SendInternalServerError(c, err, "Something went wrong")
+		}
+
+		if err = h.service.ValidateUserStatus(email); err != nil {
+			return handler.SendForbidden(c, nil, err.Error(), handler.ErrUserDisabled)
+		}
+
+		userID = *email.UserID
+		identifierID = email.ID
+	} else if method == model.SignInMethodPhoneOTP {
+		phone, err := h.service.FindUserByPhoneNumber(b.Phone)
+		if err != nil {
+			if err == handler.ErrUserNotFound {
+				return handler.SendUnauthorized(c, nil, "Invalid credentials", handler.ErrInvalidCredentials)
+			}
+			return handler.SendInternalServerError(c, err, "Something went wrong")
+		}
+
+		if err = h.service.ValidatePhoneUserStatus(phone); err != nil {
+			return handler.SendForbidden(c, nil, err.Error(), handler.ErrUserDisabled)
+		}
+
+		userID = phone.User.ID
+		identifierID = phone.ID
+	}
+
+	// Always create attempt with email/phone verification step
+	steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyEmailOTP}
+	if method == model.SignInMethodPhoneOTP {
+		steps = []model.SignInAttemptStep{model.SignInAttemptStepVerifyPhoneOTP}
+	}
+
+	attempt := h.service.CreateSignInAttempt(
+		userID,
+		identifierID,
+		session.ID,
+		method,
+		steps,
+		false, 
+	)
+
+	err := database.Connection.Create(attempt).Error
+
+	if err != nil &&
+		err.(*pgconn.PgError).ConstraintName == "idx_session_user_id" {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"User already signed in",
+			handler.ErrUserAlreadySignedIn,
+		)
+	}
+
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Something went wrong")
+	}
+
+	handler.RemoveSessionFromCache(session.ID)
+	return handler.SendSuccess(c, session)
+}
+
+func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
+	email, err := h.service.FindUserByEmail(b.Email)
+	if err != nil {
+		if err == handler.ErrUserNotFound {
+			return handler.SendUnauthorized(c, nil, "Invalid credentials", handler.ErrInvalidCredentials)
+		}
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Something went wrong",
+		)
+	}
+
+	if err = h.service.ValidateUserStatus(email); err != nil {
+		return handler.SendForbidden(
+			c,
+			nil,
+			err.Error(),
+			handler.ErrUserDisabled,
+		)
+	}
+
+	missingFields := h.service.CheckMissingRequiredFields(&email.User, d.AuthSettings)
+	requiresCompletion := len(missingFields) > 0
+
+	secondFactorEnforced := email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced
+
+	// Always create attempt with magic link verification step
+	steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyEmailOTP}
+	if secondFactorEnforced {
+		steps = append(steps, model.SignInAttemptStepVerifySecondFactor)
+	}
+
+	attempt := h.service.CreateSignInAttempt(
+		*email.UserID,
+		email.ID,
+		session.ID,
+		model.SignInMethodMagicLink,
+		steps,
+		false, // Never completed initially for magic link
+	)
+
+	if requiresCompletion {
+		attempt.RequiresCompletion = true
+		attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
+
+		var requiredFields []string
+		if d.AuthSettings.FirstName.Required {
+			requiredFields = append(requiredFields, "first_name")
+		}
+		if d.AuthSettings.LastName.Required {
+			requiredFields = append(requiredFields, "last_name")
+		}
+		if d.AuthSettings.Username.Required {
+			requiredFields = append(requiredFields, "username")
+		}
+		if d.AuthSettings.PhoneNumber.Required {
+			requiredFields = append(requiredFields, "phone_number")
+		}
+		attempt.RequiredFields = datatypes.NewJSONSlice(requiredFields)
+	}
+
+	err = database.Connection.Create(attempt).Error
 
 	if err != nil &&
 		err.(*pgconn.PgError).ConstraintName == "idx_session_user_id" {
@@ -600,6 +904,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 	attemptIdentifier := c.QueryInt("attempt_identifier")
 	identifierType := c.Query("identifier_type")
 	strategy := c.Query("strategy")
+	redirectURI := c.Query("redirect_uri")
 	deployment := handler.GetDeployment(c)
 
 	if attemptIdentifier == 0 {
@@ -666,6 +971,78 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
+			// Handle different verification strategies
+			if strategy == "magic_link" || attempt.Method == model.SignInMethodMagicLink {
+				// Generate and send magic link
+				magicLink, err := h.service.GenerateMagicLink(attempt.ID, deployment, redirectURI)
+				if err != nil {
+					return handler.SendInternalServerError(
+						c,
+						err,
+						"Error generating magic link",
+						handler.ErrInternal,
+					)
+				}
+
+				if err := h.service.SendMagicLinkAsync(email.EmailAddress, magicLink, deployment); err != nil {
+					return handler.SendInternalServerError(
+						c,
+						err,
+						"Error sending magic link",
+					)
+				}
+			} else {
+				// Generate and send OTP
+				code, err := utils.GenerateOTP()
+				if err != nil {
+					return handler.SendInternalServerError(
+						c,
+						err,
+						"Error generating OTP",
+						handler.ErrInternal,
+					)
+				}
+
+				if err := h.service.StoreOTPInCache(fmt.Sprintf("signin:%d", attempt.ID), code); err != nil {
+					return handler.SendInternalServerError(
+						c,
+						err,
+						"Error storing OTP",
+						handler.ErrInternal,
+					)
+				}
+
+				if err := h.service.SendEmailOTPVerificationAsync(email.EmailAddress, deployment); err != nil {
+					return handler.SendInternalServerError(
+						c,
+						err,
+						"Error sending email OTP verification",
+					)
+				}
+			}
+		case model.SignInAttemptStepVerifyPhoneOTP:
+			phone, err := h.service.FindUserByPhoneNumberID(
+				attempt.IdentifierID,
+			)
+			if err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error fetching user",
+					handler.ErrInvalidSignInAttempt,
+				)
+			}
+
+			if attempt.CurrentStep == model.SignInAttemptStepVerifyPhoneOTP &&
+				phone.Verified {
+				return handler.SendBadRequest(
+					c,
+					nil,
+					"Phone number already verified",
+					handler.ErrInvalidSignInAttempt,
+				)
+			}
+
 			code, err := utils.GenerateOTP()
 			if err != nil {
 				return handler.SendInternalServerError(
@@ -685,15 +1062,13 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			if err := h.service.SendEmailOTPVerificationAsync(email.EmailAddress, deployment); err != nil {
+			if err := h.service.SendSmsOTPVerificationAsync(phone.PhoneNumber, deployment); err != nil {
 				return handler.SendInternalServerError(
 					c,
 					err,
-					"Error sending email OTP verification",
+					"Error sending SMS OTP verification",
 				)
 			}
-		case model.SignInAttemptStepVerifyPhoneOTP:
-			return handler.SendSuccess[any](c, nil)
 		default:
 			return handler.SendBadRequest(c, nil, "Invalid step")
 		}
@@ -754,6 +1129,120 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 	}
 
 	return handler.SendSuccess[any](c, nil)
+}
+
+func (h *Handler) VerifyMagicLink(c *fiber.Ctx) error {
+	token := c.Query("token")
+	attemptIDStr := c.Query("attempt")
+	redirectURI := c.Query("redirect_uri")
+
+	if token == "" || attemptIDStr == "" {
+		return handler.SendBadRequest(c, nil, "Missing token or attempt ID")
+	}
+
+	attemptID, err := strconv.ParseUint(attemptIDStr, 10, 64)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid attempt ID")
+	}
+
+	attempt, err := h.service.GetSignInAttempt(attemptID)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid signin attempt")
+	}
+
+	if attempt.Method != model.SignInMethodMagicLink {
+		return handler.SendBadRequest(c, nil, "Invalid signin method")
+	}
+
+	if err := h.service.VerifyMagicLinkToken(attemptID, token); err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid or expired magic link")
+	}
+
+	session := handler.GetSession(c)
+	deployment := handler.GetDeployment(c)
+
+	email, err := h.service.FindUserByEmailID(attempt.IdentifierID)
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Error fetching user")
+	}
+
+	if len(attempt.RemainingSteps) == 1 {
+		attempt.Completed = true
+		attempt.RemainingSteps = nil
+
+		if err := h.service.ValidateIPCountryRestrictions(c, deployment.Restrictions); err != nil {
+			return handler.SendBadRequest(c, nil, err.Error(), handler.ErrCountryRestricted)
+		}
+
+		signIn := model.NewSignIn(session.ID, email.User.ID)
+		signIn.User = &email.User
+
+		err = database.Connection.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Create(signIn).Error; err != nil {
+				return err
+			}
+
+			if err := tx.Model(&session).Update("active_signin_id", signIn.ID).Error; err != nil {
+				return err
+			}
+
+			return tx.Save(&attempt).Error
+		})
+
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Error completing signin")
+		}
+
+		handler.RemoveSessionFromCache(session.ID)
+
+		// Use custom redirect URI if provided, otherwise default to signin page
+		var redirectURL string
+		if redirectURI != "" {
+			// Parse and validate the redirect URI
+			parsedURL, err := url.Parse(redirectURI)
+			if err != nil {
+				redirectURL = fmt.Sprintf("https://%s/auth/signin?magic_link=verified", deployment.FrontendHost)
+			} else {
+				// Add magic_link=verified parameter to the redirect URI
+				query := parsedURL.Query()
+				query.Set("magic_link", "verified")
+				parsedURL.RawQuery = query.Encode()
+				redirectURL = parsedURL.String()
+			}
+		} else {
+			redirectURL = fmt.Sprintf("https://%s/auth/signin?magic_link=verified", deployment.FrontendHost)
+		}
+
+		return c.Redirect(redirectURL)
+	} else {
+		attempt.RemainingSteps = attempt.RemainingSteps[1:]
+		attempt.CurrentStep = attempt.RemainingSteps[0]
+
+		if err := database.Connection.Save(&attempt).Error; err != nil {
+			return handler.SendInternalServerError(c, err, "Error updating attempt")
+		}
+
+		// Use custom redirect URI if provided, otherwise default to signin page
+		var redirectURL string
+		if redirectURI != "" {
+			// Parse and validate the redirect URI
+			parsedURL, err := url.Parse(redirectURI)
+			if err != nil {
+				redirectURL = fmt.Sprintf("https://%s/auth/signin?magic_link=verified&continue=true", deployment.FrontendHost)
+			} else {
+				// Add magic_link=verified and continue=true parameters to the redirect URI
+				query := parsedURL.Query()
+				query.Set("magic_link", "verified")
+				query.Set("continue", "true")
+				parsedURL.RawQuery = query.Encode()
+				redirectURL = parsedURL.String()
+			}
+		} else {
+			redirectURL = fmt.Sprintf("https://%s/auth/signin?magic_link=verified&continue=true", deployment.FrontendHost)
+		}
+
+		return c.Redirect(redirectURL)
+	}
 }
 
 func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
@@ -853,6 +1342,99 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 
 				if err := database.Connection.Transaction(func(tx *gorm.DB) error {
 					if err := tx.Save(email).Error; err != nil {
+						return err
+					}
+
+					if attempt.Completed {
+						d := handler.GetDeployment(c)
+						if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
+							return err
+						}
+
+						if err := tx.Create(signin).Error; err != nil {
+							return err
+						}
+					}
+
+					if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]interface{}{
+						"active_signin_id": session.ActiveSigninID,
+					}).Error; err != nil {
+						return err
+					}
+
+					handler.RemoveSessionFromCache(session.ID)
+
+					return tx.Save(attempt).Error
+				}); err != nil {
+					return handler.SendInternalServerError(
+						c,
+						err,
+						"Something went wrong",
+					)
+				}
+
+				h.service.DeleteOTPFromRedis(
+					fmt.Sprintf("signin:%d", attempt.ID),
+				)
+			}
+		case model.SignInAttemptStepVerifyPhone,
+			model.SignInAttemptStepVerifyPhoneOTP:
+			{
+				phone, err := h.service.FindUserByPhoneNumberID(
+					attempt.IdentifierID,
+				)
+				if err != nil {
+					return handler.SendInternalServerError(
+						c,
+						err,
+						"Error fetching user",
+					)
+				}
+				if attempt.CurrentStep == model.SignInAttemptStepVerifyPhoneOTP &&
+					phone.Verified {
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"Phone number already verified",
+					)
+				}
+
+				storedOTP, err := h.service.GetOTPFromRedis(
+					fmt.Sprintf("signin:%d", attempt.ID),
+				)
+				if err != nil {
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"Invalid or expired OTP",
+					)
+				}
+
+				if storedOTP != b.VerificationCode {
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"Invalid OTP",
+					)
+				}
+
+				if len(attempt.RemainingSteps) == 1 {
+					attempt.Completed = true
+					attempt.RemainingSteps = nil
+					signin = model.NewSignIn(session.ID, phone.User.ID)
+					signin.User = &phone.User
+
+					session.Signins = append(session.Signins, *signin)
+					session.ActiveSigninID = &signin.ID
+				} else {
+					attempt.RemainingSteps = attempt.RemainingSteps[1:]
+					attempt.CurrentStep = attempt.RemainingSteps[0]
+				}
+
+				if err := database.Connection.Transaction(func(tx *gorm.DB) error {
+					phone.Verified = true
+					phone.VerifiedAt = time.Now()
+					if err := tx.Save(phone).Error; err != nil {
 						return err
 					}
 
