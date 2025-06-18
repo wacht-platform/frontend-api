@@ -140,12 +140,6 @@ func handleExistingSession(
 
 func setSessionToken(c *fiber.Ctx, token string, isProduction bool) {
 	deployment := handler.GetDeployment(c)
-	var domain string
-
-	split := strings.Split(deployment.FrontendHost, ".")
-	if len(split) > 1 {
-		domain = fmt.Sprintf(".%s", strings.Join(split[1:], "."))
-	}
 
 	if isProduction {
 		c.Cookie(&fiber.Cookie{
@@ -154,7 +148,7 @@ func setSessionToken(c *fiber.Ctx, token string, isProduction bool) {
 			Expires:  time.Now().Add(time.Duration(deployment.AuthSettings.SessionInactiveTimeout) * time.Second),
 			HTTPOnly: true,
 			Secure:   true,
-			Domain:   domain,
+			Domain:   deployment.BackendHost,
 		})
 	} else {
 		c.Set(devSessionHeader, token)
