@@ -392,6 +392,7 @@ func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.D
 	steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyEmailOTP}
 	requiresCompletion := false
 	missingFields := []string{}
+	var attempt *model.SignInAttempt
 
 	if email != nil {
 		if err := h.service.ValidateUserStatus(email); err != nil {
@@ -411,16 +412,25 @@ func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.D
 		if secondFactorEnforced {
 			steps = append(steps, model.SignInAttemptStepVerifySecondFactor)
 		}
-	}
 
-	attempt := h.service.CreateSignInAttempt(
-		email.UserID,
-		&email.ID,
-		session.ID,
-		model.SignInMethodMagicLink,
-		steps,
-		false,
-	)
+		attempt = h.service.CreateSignInAttempt(
+			email.UserID,
+			&email.ID,
+			session.ID,
+			model.SignInMethodMagicLink,
+			steps,
+			false,
+		)
+	} else {
+		attempt = h.service.CreateSignInAttempt(
+			nil,
+			nil,
+			session.ID,
+			model.SignInMethodMagicLink,
+			steps,
+			false,
+		)
+	}
 
 	if requiresCompletion {
 		attempt.RequiresCompletion = true
