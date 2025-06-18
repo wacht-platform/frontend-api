@@ -41,9 +41,9 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 
 	switch b.Strategy {
 	case model.SignInMethodEmailOTP:
-		return h.handleOTPSignIn(c, *b, d, session, model.SignInMethodEmailOTP)
+		return h.handleOTPSignIn(c, *b, session, model.SignInMethodEmailOTP)
 	case model.SignInMethodPhoneOTP:
-		return h.handleOTPSignIn(c, *b, d, session, model.SignInMethodPhoneOTP)
+		return h.handleOTPSignIn(c, *b, session, model.SignInMethodPhoneOTP)
 	case model.SignInMethodMagicLink:
 		return h.handleMagicLinkSignIn(c, *b, d, session)
 	case model.SignInMethodPlainUsername:
@@ -325,7 +325,7 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 	return handler.SendSuccess(c, session)
 }
 
-func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session, method model.SignInMethod) error {
+func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.Session, method model.SignInMethod) error {
 	var userID uint64
 	var identifierID uint64
 
@@ -388,35 +388,29 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, d model.Deploym
 }
 
 func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
-	email, err := h.service.FindUserByEmail(b.Email)
-	if err != nil {
-		if err == handler.ErrUserNotFound {
-			return handler.SendUnauthorized(c, nil, "Invalid credentials", handler.ErrInvalidCredentials)
-		}
-		return handler.SendInternalServerError(
-			c,
-			err,
-			"Something went wrong",
-		)
-	}
-
-	if err = h.service.ValidateUserStatus(email); err != nil {
-		return handler.SendForbidden(
-			c,
-			nil,
-			err.Error(),
-			handler.ErrUserDisabled,
-		)
-	}
-
-	missingFields := h.service.CheckMissingRequiredFields(&email.User, d.AuthSettings)
-	requiresCompletion := len(missingFields) > 0
-
-	secondFactorEnforced := email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced
-
+	email, _ := h.service.FindUserByEmail(b.Email)
 	steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyEmailOTP}
-	if secondFactorEnforced {
-		steps = append(steps, model.SignInAttemptStepVerifySecondFactor)
+	requiresCompletion := false
+	missingFields := []string{}
+
+	if email != nil {
+		if err := h.service.ValidateUserStatus(email); err != nil {
+			return handler.SendForbidden(
+				c,
+				nil,
+				err.Error(),
+				handler.ErrUserDisabled,
+			)
+		}
+
+		missingFields = h.service.CheckMissingRequiredFields(&email.User, d.AuthSettings)
+		requiresCompletion = len(missingFields) > 0
+
+		secondFactorEnforced := email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced
+
+		if secondFactorEnforced {
+			steps = append(steps, model.SignInAttemptStepVerifySecondFactor)
+		}
 	}
 
 	attempt := h.service.CreateSignInAttempt(
@@ -448,7 +442,7 @@ func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.D
 		attempt.RequiredFields = datatypes.NewJSONSlice(requiredFields)
 	}
 
-	err = database.Connection.Create(attempt).Error
+	err := database.Connection.Create(attempt).Error
 
 	if err != nil &&
 		err.(*pgconn.PgError).ConstraintName == "idx_session_user_id" {
