@@ -332,25 +332,24 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, d model.Deploym
 	if method == model.SignInMethodEmailOTP {
 		email, err := h.service.FindUserByEmail(b.Email)
 
-		if err = h.service.ValidateUserStatus(email); err != nil {
-			return handler.SendForbidden(c, nil, err.Error(), handler.ErrUserDisabled)
-		}
-
 		if email != nil {
 			userID = *email.UserID
 			identifierID = email.ID
-		}
 
+			if err = h.service.ValidateUserStatus(email); err != nil {
+				return handler.SendForbidden(c, nil, err.Error(), handler.ErrUserDisabled)
+			}
+		}
 	} else if method == model.SignInMethodPhoneOTP {
 		phone, err := h.service.FindUserByPhoneNumber(b.Phone)
-
-		if err = h.service.ValidatePhoneUserStatus(phone); err != nil {
-			return handler.SendForbidden(c, nil, err.Error(), handler.ErrUserDisabled)
-		}
 
 		if phone != nil {
 			userID = phone.User.ID
 			identifierID = phone.ID
+
+			if err = h.service.ValidatePhoneUserStatus(phone); err != nil {
+				return handler.SendForbidden(c, nil, err.Error(), handler.ErrUserDisabled)
+			}
 		}
 	}
 
