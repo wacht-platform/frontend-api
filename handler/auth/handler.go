@@ -962,16 +962,6 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			if attempt.CurrentStep == model.SignInAttemptStepVerifyEmailOTP &&
-				email.Verified {
-				return handler.SendBadRequest(
-					c,
-					nil,
-					"Email already verified",
-					handler.ErrInvalidSignInAttempt,
-				)
-			}
-
 			code, err := utils.GenerateOTP()
 			if err != nil {
 				return handler.SendInternalServerError(
@@ -999,7 +989,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 		case model.SignInAttemptStepVerifyPhoneOTP:
-			if attempt.IdentifierID != nil {
+			if attempt.IdentifierID == nil {
 				return handler.SendSuccess[any](c, nil)
 			}
 
@@ -1011,16 +1001,6 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 					c,
 					err,
 					"Error fetching user",
-					handler.ErrInvalidSignInAttempt,
-				)
-			}
-
-			if attempt.CurrentStep == model.SignInAttemptStepVerifyPhoneOTP &&
-				phone.Verified {
-				return handler.SendBadRequest(
-					c,
-					nil,
-					"Phone number already verified",
 					handler.ErrInvalidSignInAttempt,
 				)
 			}
@@ -1138,7 +1118,32 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 		case model.SignupAttemptStepVerifyPhone:
-			return handler.SendSuccess[any](c, nil)
+			code, err := utils.GenerateOTP()
+			if err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error generating OTP",
+					handler.ErrInternal,
+				)
+			}
+
+			if err := h.service.StoreOTPInCache(fmt.Sprintf("signin:%d", attempt.ID), code); err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error storing OTP",
+					handler.ErrInternal,
+				)
+			}
+
+			if err := h.service.SendSmsOTPVerificationAsync(attempt.PhoneNumber, deployment); err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error sending SMS OTP verification",
+				)
+			}
 		default:
 			return handler.SendBadRequest(c, nil, "Invalid step")
 		}
