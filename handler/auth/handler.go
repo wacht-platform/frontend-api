@@ -946,7 +946,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 
 		switch attempt.CurrentStep {
 		case model.SignInAttemptStepVerifyEmailOTP:
-			if attempt.IdentifierID != nil {
+			if attempt.IdentifierID == nil {
 				return handler.SendSuccess[any](c, nil)
 			}
 
@@ -1052,7 +1052,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 		case model.SignInAttemptStepVerifyEmailLink:
-			if attempt.IdentifierID != nil {
+			if attempt.IdentifierID == nil {
 				return handler.SendSuccess[any](c, nil)
 			}
 
