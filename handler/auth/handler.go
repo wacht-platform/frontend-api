@@ -186,6 +186,7 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 		)
 	}
 
+	session.SigninAttempts = append(session.SigninAttempts, *attempt)
 	handler.RemoveSessionFromCache(session.ID)
 	return handler.SendSuccess(c, session)
 }
@@ -321,6 +322,7 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 		)
 	}
 
+	session.SigninAttempts = append(session.SigninAttempts, *attempt)
 	handler.RemoveSessionFromCache(session.ID)
 	return handler.SendSuccess(c, session)
 }
@@ -383,6 +385,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 		return handler.SendInternalServerError(c, err, "Something went wrong")
 	}
 
+	session.SigninAttempts = append(session.SigninAttempts, *attempt)
 	handler.RemoveSessionFromCache(session.ID)
 	return handler.SendSuccess(c, session)
 }
@@ -472,6 +475,7 @@ func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.D
 		)
 	}
 
+	session.SigninAttempts = append(session.SigninAttempts, *attempt)
 	handler.RemoveSessionFromCache(session.ID)
 	return handler.SendSuccess(c, session)
 }
