@@ -60,7 +60,6 @@ func corsSettings(c *fiber.Ctx) cors.Config {
 	return cors.Config{
 		AllowHeaders:     "Content-Type,X-Development-Session",
 		AllowOrigins:     host,
-		ExposeHeaders:    "X-Development-Session",
 		AllowCredentials: true,
 		AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
 	}
