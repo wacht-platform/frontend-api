@@ -1052,6 +1052,10 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 		case model.SignInAttemptStepVerifyEmailLink:
+			if attempt.IdentifierID != nil {
+				return handler.SendSuccess[any](c, nil)
+			}
+
 			email, err := h.service.FindUserByEmailID(
 				*attempt.IdentifierID,
 			)
