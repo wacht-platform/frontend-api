@@ -57,7 +57,7 @@ var (
 	}
 	ErrInvalidCredentials = Error{
 		Code:    ErrCodeInvalidCredentials,
-		Message: "Incorrect password. Please try again.",
+		Message: "Invalid credentials. Please try again.",
 	}
 	ErrEmailExists = Error{
 		Code:    ErrCodeEmailExists,
