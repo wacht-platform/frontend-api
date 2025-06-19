@@ -42,7 +42,7 @@ func corsSettings(c *fiber.Ctx) cors.Config {
 		return cors.Config{
 			AllowOrigins:     "",
 			AllowCredentials: true,
-			AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH",
+			AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
 		}
 	}
 
