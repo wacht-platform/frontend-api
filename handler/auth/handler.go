@@ -392,7 +392,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 
 func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
 	email, _ := h.service.FindUserByEmail(b.Email)
-	steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyEmailOTP}
+	steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyEmailLink}
 	requiresCompletion := false
 	missingFields := []string{}
 	var attempt *model.SignInAttempt
@@ -972,51 +972,31 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			if strategy == "magic_link" || attempt.Method == model.SignInMethodMagicLink {
-				magicLink, err := h.service.GenerateMagicLink(attempt.ID, deployment, redirectURI)
-				if err != nil {
-					return handler.SendInternalServerError(
-						c,
-						err,
-						"Error generating magic link",
-						handler.ErrInternal,
-					)
-				}
+			code, err := utils.GenerateOTP()
+			if err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error generating OTP",
+					handler.ErrInternal,
+				)
+			}
 
-				if err := h.service.SendMagicLinkAsync(email.EmailAddress, magicLink, deployment); err != nil {
-					return handler.SendInternalServerError(
-						c,
-						err,
-						"Error sending magic link",
-					)
-				}
-			} else {
-				code, err := utils.GenerateOTP()
-				if err != nil {
-					return handler.SendInternalServerError(
-						c,
-						err,
-						"Error generating OTP",
-						handler.ErrInternal,
-					)
-				}
+			if err := h.service.StoreOTPInCache(fmt.Sprintf("signin:%d", attempt.ID), code); err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error storing OTP",
+					handler.ErrInternal,
+				)
+			}
 
-				if err := h.service.StoreOTPInCache(fmt.Sprintf("signin:%d", attempt.ID), code); err != nil {
-					return handler.SendInternalServerError(
-						c,
-						err,
-						"Error storing OTP",
-						handler.ErrInternal,
-					)
-				}
-
-				if err := h.service.SendEmailOTPVerificationAsync(email.EmailAddress, deployment); err != nil {
-					return handler.SendInternalServerError(
-						c,
-						err,
-						"Error sending email OTP verification",
-					)
-				}
+			if err := h.service.SendEmailOTPVerificationAsync(email.EmailAddress, deployment); err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error sending email OTP verification",
+				)
 			}
 		case model.SignInAttemptStepVerifyPhoneOTP:
 			if attempt.IdentifierID != nil {
@@ -1069,6 +1049,36 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 					c,
 					err,
 					"Error sending SMS OTP verification",
+				)
+			}
+		case model.SignInAttemptStepVerifyEmailLink:
+			email, err := h.service.FindUserByEmailID(
+				*attempt.IdentifierID,
+			)
+			if err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error fetching user",
+					handler.ErrInvalidSignInAttempt,
+				)
+			}
+
+			magicLink, err := h.service.GenerateMagicLink(attempt.ID, deployment, redirectURI)
+			if err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error generating magic link",
+					handler.ErrInternal,
+				)
+			}
+
+			if err := h.service.SendMagicLinkAsync(email.EmailAddress, magicLink, deployment); err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error sending magic link",
 				)
 			}
 		default:
