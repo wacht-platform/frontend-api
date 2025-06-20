@@ -127,20 +127,7 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 	if requiresCompletion {
 		attempt.RequiresCompletion = true
 		attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
-
-		var requiredFields []string
-		if d.AuthSettings.FirstName.Required {
-			requiredFields = append(requiredFields, "first_name")
-		}
-		if d.AuthSettings.LastName.Required {
-			requiredFields = append(requiredFields, "last_name")
-		}
-		if d.AuthSettings.EmailAddress.Required {
-			requiredFields = append(requiredFields, "email_address")
-		}
-		if d.AuthSettings.PhoneNumber.Required {
-			requiredFields = append(requiredFields, "phone_number")
-		}
+		requiredFields := h.service.GetRequiredFields(d.AuthSettings)
 		attempt.RequiredFields = datatypes.NewJSONSlice(requiredFields)
 		completed = false
 	}
@@ -263,20 +250,7 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 	if requiresCompletion {
 		attempt.RequiresCompletion = true
 		attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
-
-		var requiredFields []string
-		if d.AuthSettings.FirstName.Required {
-			requiredFields = append(requiredFields, "first_name")
-		}
-		if d.AuthSettings.LastName.Required {
-			requiredFields = append(requiredFields, "last_name")
-		}
-		if d.AuthSettings.Username.Required {
-			requiredFields = append(requiredFields, "username")
-		}
-		if d.AuthSettings.PhoneNumber.Required {
-			requiredFields = append(requiredFields, "phone_number")
-		}
+		requiredFields := h.service.GetRequiredFields(d.AuthSettings)
 		attempt.RequiredFields = datatypes.NewJSONSlice(requiredFields)
 		completed = false
 	}
@@ -438,20 +412,7 @@ func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.D
 	if requiresCompletion {
 		attempt.RequiresCompletion = true
 		attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
-
-		var requiredFields []string
-		if d.AuthSettings.FirstName.Required {
-			requiredFields = append(requiredFields, "first_name")
-		}
-		if d.AuthSettings.LastName.Required {
-			requiredFields = append(requiredFields, "last_name")
-		}
-		if d.AuthSettings.Username.Required {
-			requiredFields = append(requiredFields, "username")
-		}
-		if d.AuthSettings.PhoneNumber.Required {
-			requiredFields = append(requiredFields, "phone_number")
-		}
+		requiredFields := h.service.GetRequiredFields(d.AuthSettings)
 		attempt.RequiredFields = datatypes.NewJSONSlice(requiredFields)
 	}
 
@@ -1584,6 +1545,41 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, session)
 }
 
+func (h *Handler) CompleteProfile(c *fiber.Ctx) error {
+	attemptID := c.QueryInt("attempt_id")
+	if attemptID == 0 {
+		return handler.SendBadRequest(c, nil, "attempt_id is required")
+	}
+
+	b, validation := handler.Validate[SignUpRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
+	}
+
+	session := handler.GetSession(c)
+	deployment := handler.GetDeployment(c)
+
+	// Try to find a signin attempt first
+	var signinAttempt model.SignInAttempt
+	signinErr := database.Connection.Where("id = ? AND session_id = ? AND requires_completion = true", attemptID, session.ID).First(&signinAttempt).Error
+
+	if signinErr == nil {
+		// Handle signin profile completion
+		return h.handleSigninProfileCompletion(c, &signinAttempt, b, session, deployment)
+	}
+
+	// Try to find an OAuth signup attempt
+	var signupAttempt model.SignupAttempt
+	signupErr := database.Connection.Where("id = ? AND session_id = ? AND is_oauth_signup = true", attemptID, session.ID).First(&signupAttempt).Error
+
+	if signupErr == nil {
+		// Handle OAuth signup completion
+		return h.handleOAuthSignupCompletion(c, &signupAttempt, b, session, deployment)
+	}
+
+	return handler.SendBadRequest(c, nil, "Invalid attempt ID or attempt not found")
+}
+
 func (h *Handler) CompleteOAuthSignup(c *fiber.Ctx) error {
 	attemptID := c.QueryInt("attempt_id")
 	if attemptID == 0 {
@@ -1621,19 +1617,15 @@ func (h *Handler) CompleteOAuthSignup(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, err.Error())
 	}
 
-	var missingFields []string
-	if deployment.AuthSettings.FirstName.Required && attempt.FirstName == "" {
-		missingFields = append(missingFields, "first_name")
+	data := ProfileCompletionData{
+		FirstName:   attempt.FirstName,
+		LastName:    attempt.LastName,
+		Username:    attempt.Username,
+		Email:       attempt.Email,
+		PhoneNumber: attempt.PhoneNumber,
 	}
-	if deployment.AuthSettings.LastName.Required && attempt.LastName == "" {
-		missingFields = append(missingFields, "last_name")
-	}
-	if deployment.AuthSettings.Username.Required && attempt.Username == "" {
-		missingFields = append(missingFields, "username")
-	}
-	if deployment.AuthSettings.PhoneNumber.Required && attempt.PhoneNumber == "" {
-		missingFields = append(missingFields, "phone_number")
-	}
+
+	missingFields := h.service.CheckMissingFieldsFromData(data, deployment.AuthSettings)
 
 	if len(missingFields) > 0 {
 		attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
@@ -1943,4 +1935,229 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 	h.service.DeleteOTPFromRedis(fmt.Sprintf("password-reset:%d", email.UserID))
 
 	return handler.SendSuccess[any](c, nil)
+}
+
+func (h *Handler) handleOAuthSignupCompletion(c *fiber.Ctx, attempt *model.SignupAttempt, b *SignUpRequest, session *model.Session, deployment model.Deployment) error {
+	if b.FirstName != "" {
+		attempt.FirstName = b.FirstName
+	}
+	if b.LastName != "" {
+		attempt.LastName = b.LastName
+	}
+	if b.Username != "" {
+		attempt.Username = b.Username
+	}
+	if b.PhoneNumber != "" {
+		attempt.PhoneNumber = b.PhoneNumber
+	}
+
+	err := h.service.ValidateSignUpRequest(b, deployment)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, err.Error())
+	}
+
+	data := ProfileCompletionData{
+		FirstName:   attempt.FirstName,
+		LastName:    attempt.LastName,
+		Username:    attempt.Username,
+		Email:       attempt.Email,
+		PhoneNumber: attempt.PhoneNumber,
+	}
+
+	missingFields := h.service.CheckMissingFieldsFromData(data, deployment.AuthSettings)
+
+	if len(missingFields) > 0 {
+		attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
+		database.Connection.Save(attempt)
+		return handler.SendBadRequest(c, nil, "Missing required fields")
+	}
+
+	attempt.MissingFields = datatypes.NewJSONSlice([]string{})
+
+	// Determine verification steps needed for the completed profile data
+	verificationSteps := h.service.DetermineVerificationStepsForProfileCompletion(data, nil, deployment.AuthSettings)
+
+	// Convert string steps to SignupAttemptStep and add to existing steps
+	steps := []model.SignupAttemptStep(attempt.RemainingSteps)
+	for _, step := range verificationSteps {
+		switch step {
+		case "verify_email":
+			steps = append(steps, model.SignupAttemptStepVerifyEmail)
+		case "verify_phone":
+			steps = append(steps, model.SignupAttemptStepVerifyPhone)
+		}
+	}
+
+	// Update remaining steps and current step
+	if len(steps) > len(attempt.RemainingSteps) {
+		attempt.RemainingSteps = datatypes.NewJSONSlice(steps)
+		if attempt.CurrentStep == "" && len(steps) > 0 {
+			attempt.CurrentStep = steps[0]
+		}
+	}
+
+	if len(attempt.RemainingSteps) == 0 {
+		user, err := h.service.CreateOAuthUser(attempt, deployment)
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Error creating user")
+		}
+
+		if err := h.service.ValidateIPCountryRestrictions(c, deployment.Restrictions); err != nil {
+			return handler.SendBadRequest(c, nil, err.Error(), handler.ErrCountryRestricted)
+		}
+
+		signIn := model.NewSignIn(session.ID, user.ID)
+		signIn.User = user
+
+		err = database.Connection.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Create(user).Error; err != nil {
+				return err
+			}
+
+			if err := tx.Create(signIn).Error; err != nil {
+				return err
+			}
+
+			return tx.Model(session).Update("active_signin_id", signIn.ID).Error
+		})
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Error completing signup")
+		}
+
+		handler.RemoveSessionFromCache(session.ID)
+		return handler.SendSuccess(c, session)
+	}
+
+	if err := database.Connection.Save(attempt).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Error saving attempt")
+	}
+
+	return handler.SendSuccess(c, fiber.Map{
+		"signup_attempt": *attempt,
+		"session":        *session,
+	})
+}
+
+func (h *Handler) handleSigninProfileCompletion(c *fiber.Ctx, attempt *model.SignInAttempt, b *SignUpRequest, session *model.Session, deployment model.Deployment) error {
+	var user model.User
+	if err := database.Connection.Where("id = ?", attempt.UserID).First(&user).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Error finding user")
+	}
+
+	if b.FirstName != "" {
+		user.FirstName = b.FirstName
+	}
+	if b.LastName != "" {
+		user.LastName = b.LastName
+	}
+	if b.Username != "" {
+		user.Username = b.Username
+	}
+
+	if b.PhoneNumber != "" {
+		if err := h.service.ValidatePhoneRestrictions(b.PhoneNumber, deployment.Restrictions); err != nil {
+			return handler.SendBadRequest(c, nil, err.Error())
+		}
+
+		phoneID := snowflake.ID()
+		phone := model.UserPhoneNumber{
+			Model:        model.Model{ID: phoneID},
+			PhoneNumber:  b.PhoneNumber,
+			Verified:     false,
+			DeploymentID: deployment.ID,
+			UserID:       user.ID,
+		}
+
+		if err := database.Connection.Create(&phone).Error; err != nil {
+			return handler.SendInternalServerError(c, err, "Error creating phone number")
+		}
+
+		user.PrimaryPhoneNumberID = &phoneID
+	}
+
+	missingFields := h.service.CheckMissingRequiredFields(&user, deployment.AuthSettings)
+	if len(missingFields) > 0 {
+		attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
+		database.Connection.Save(attempt)
+		return handler.SendBadRequest(c, nil, "Missing required fields")
+	}
+
+	attempt.RequiresCompletion = false
+	attempt.MissingFields = datatypes.NewJSONSlice([]string{})
+
+	// Determine verification steps needed for the completed profile data
+	data := ProfileCompletionData{
+		FirstName:   b.FirstName,
+		LastName:    b.LastName,
+		Username:    b.Username,
+		Email:       b.Email,
+		PhoneNumber: b.PhoneNumber,
+	}
+
+	verificationSteps := h.service.DetermineVerificationStepsForProfileCompletion(data, &user.ID, deployment.AuthSettings)
+
+	// Convert string steps to SignInAttemptStep and add to existing steps
+	steps := []model.SignInAttemptStep(attempt.RemainingSteps)
+	for _, step := range verificationSteps {
+		switch step {
+		case "verify_email":
+			steps = append(steps, model.SignInAttemptStepVerifyEmail)
+		case "verify_phone":
+			steps = append(steps, model.SignInAttemptStepVerifyPhone)
+		}
+	}
+
+	// Update remaining steps and current step
+	if len(steps) > len(attempt.RemainingSteps) {
+		attempt.RemainingSteps = datatypes.NewJSONSlice(steps)
+		if attempt.CurrentStep == "" && len(steps) > 0 {
+			attempt.CurrentStep = steps[0]
+		}
+	}
+
+	if len(attempt.RemainingSteps) == 0 {
+		if err := h.service.ValidateIPCountryRestrictions(c, deployment.Restrictions); err != nil {
+			return handler.SendBadRequest(c, nil, err.Error(), handler.ErrCountryRestricted)
+		}
+
+		signIn := model.NewSignIn(session.ID, user.ID)
+		signIn.User = &user
+
+		err := database.Connection.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Save(&user).Error; err != nil {
+				return err
+			}
+
+			if err := tx.Create(signIn).Error; err != nil {
+				return err
+			}
+
+			attempt.Completed = true
+			if err := tx.Save(attempt).Error; err != nil {
+				return err
+			}
+
+			return tx.Model(session).Update("active_signin_id", signIn.ID).Error
+		})
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Error completing signin")
+		}
+
+		handler.RemoveSessionFromCache(session.ID)
+		return handler.SendSuccess(c, session)
+	}
+
+	if err := database.Connection.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(&user).Error; err != nil {
+			return err
+		}
+		return tx.Save(attempt).Error
+	}); err != nil {
+		return handler.SendInternalServerError(c, err, "Error saving attempt")
+	}
+
+	return handler.SendSuccess(c, fiber.Map{
+		"signin_attempt": *attempt,
+		"session":        *session,
+	})
 }

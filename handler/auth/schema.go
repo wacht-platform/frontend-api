@@ -52,6 +52,14 @@ type SetupAuthenticatorRequest struct {
 	Email string `json:"email"`
 }
 
+type ProfileCompletionData struct {
+	FirstName   string
+	LastName    string
+	Username    string
+	Email       string
+	PhoneNumber string
+}
+
 type IPLocation struct {
 	Status        string  `json:"status"`
 	Continent     string  `json:"continent"`

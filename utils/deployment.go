@@ -88,8 +88,16 @@ func GetDeploymentByHost(host string) (*model.Deployment, error) {
 	deploymentToCache.KepPair = model.DeploymentKeyPair{}
 	deploymentJSON, _ := json.Marshal(deploymentToCache)
 
-	database.Redis.Set(context.Background(), "deployment:"+host, deploymentJSON, 1*time.Hour)
-	database.Redis.Set(context.Background(), "keypair:"+host, keyPairJSON, 1*time.Hour)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		database.Redis.Set(ctx, "deployment:"+host, deploymentJSON, 1*time.Hour)
+		database.Redis.Set(ctx, "keypair:"+host, keyPairJSON, 1*time.Hour)
+		if !deployment.IsProduction() {
+			return
+		}
+		database.Redis.Set(ctx, "frontend:"+host, deployment.FrontendHost, 24*time.Hour)
+	}()
 
 	return deployment, nil
 }

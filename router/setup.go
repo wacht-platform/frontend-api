@@ -1,13 +1,16 @@
 package router
 
 import (
-	"fmt"
+	"context"
+	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/middleware"
-	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/utils"
 )
 
 func Setup(app *fiber.App) {
@@ -27,28 +30,18 @@ func setupRoutes(app *fiber.App) {
 
 func setupMiddleware(app *fiber.App) {
 	app.Use(recover.New())
-	app.Use(middleware.SetDeploymentMiddleware)
 	app.Use(func(c *fiber.Ctx) error {
 		cfg := corsSettings(c)
 		return cors.New(cfg)(c)
 	})
+	app.Use(middleware.SetDeploymentMiddleware)
 	app.Use(middleware.SetSessionMiddleware)
 }
 
 func corsSettings(c *fiber.Ctx) cors.Config {
-	deployment, ok := c.Locals("deployment").(model.Deployment)
-	fmt.Println(deployment, ok)
-	if !ok {
-		return cors.Config{
-			AllowOrigins:     "",
-			AllowCredentials: true,
-			AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
-		}
-	}
+	host := c.Hostname()
 
-	host := fmt.Sprintf("https://%s", deployment.FrontendHost)
-
-	if deployment.Mode == model.DeploymentModeStaging {
+	if strings.HasSuffix(host, "backend-api.services") {
 		return cors.Config{
 			AllowHeaders:     "X-Development-Session,Content-Type",
 			AllowCredentials: true,
@@ -58,8 +51,20 @@ func corsSettings(c *fiber.Ctx) cors.Config {
 	}
 
 	return cors.Config{
-		AllowHeaders:     "Content-Type,X-Development-Session",
-		AllowOrigins:     host,
+		AllowHeaders: "Content-Type,X-Development-Session",
+		AllowOriginsFunc: func(origin string) bool {
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+			frontend, err := database.Redis.Get(ctx, "frontend:"+host).Result()
+			if err == nil && frontend != "" {
+				return frontend == origin
+			}
+			deployment, err := utils.GetDeploymentByHost(host)
+			if err == nil && deployment != nil {
+				return deployment.FrontendHost == origin
+			}
+			return false
+		},
 		AllowCredentials: true,
 		AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
 	}

@@ -565,6 +565,26 @@ func (s *AuthService) VerifyMagicLinkToken(
 	return nil
 }
 
+func (s *AuthService) GetRequiredFields(authSettings model.DeploymentAuthSettings) []string {
+	var requiredFields []string
+	if authSettings.FirstName.Required {
+		requiredFields = append(requiredFields, "first_name")
+	}
+	if authSettings.LastName.Required {
+		requiredFields = append(requiredFields, "last_name")
+	}
+	if authSettings.EmailAddress.Required {
+		requiredFields = append(requiredFields, "email_address")
+	}
+	if authSettings.Username.Required {
+		requiredFields = append(requiredFields, "username")
+	}
+	if authSettings.PhoneNumber.Required {
+		requiredFields = append(requiredFields, "phone_number")
+	}
+	return requiredFields
+}
+
 func (s *AuthService) CheckMissingRequiredFields(user *model.User, authSettings model.DeploymentAuthSettings) []string {
 	var missingFields []string
 
@@ -584,54 +604,89 @@ func (s *AuthService) CheckMissingRequiredFields(user *model.User, authSettings 
 	return missingFields
 }
 
+func (s *AuthService) CheckMissingFieldsFromData(data ProfileCompletionData, authSettings model.DeploymentAuthSettings) []string {
+	var missingFields []string
+
+	if authSettings.FirstName.Required && data.FirstName == "" {
+		missingFields = append(missingFields, "first_name")
+	}
+	if authSettings.LastName.Required && data.LastName == "" {
+		missingFields = append(missingFields, "last_name")
+	}
+	if authSettings.EmailAddress.Required && data.Email == "" {
+		missingFields = append(missingFields, "email_address")
+	}
+	if authSettings.Username.Required && data.Username == "" {
+		missingFields = append(missingFields, "username")
+	}
+	if authSettings.PhoneNumber.Required && data.PhoneNumber == "" {
+		missingFields = append(missingFields, "phone_number")
+	}
+
+	return missingFields
+}
+
+func (s *AuthService) ValidateProfileCompletionData(data ProfileCompletionData, requiredFields []string) error {
+	for _, field := range requiredFields {
+		switch field {
+		case "first_name":
+			if data.FirstName == "" {
+				return handler.ErrRequiredField("First name")
+			}
+		case "last_name":
+			if data.LastName == "" {
+				return handler.ErrRequiredField("Last name")
+			}
+		case "email_address":
+			if data.Email == "" {
+				return handler.ErrRequiredField("Email address")
+			}
+		case "username":
+			if data.Username == "" {
+				return handler.ErrRequiredField("Username")
+			}
+		case "phone_number":
+			if data.PhoneNumber == "" {
+				return handler.ErrRequiredField("Phone number")
+			}
+		}
+	}
+	return nil
+}
+
+func (s *AuthService) ProcessProfileCompletion(
+	data ProfileCompletionData,
+	authSettings model.DeploymentAuthSettings,
+) (bool, []string, []string, error) {
+	requiredFields := s.GetRequiredFields(authSettings)
+
+	if err := s.ValidateProfileCompletionData(data, requiredFields); err != nil {
+		return false, nil, nil, err
+	}
+
+	missingFields := s.CheckMissingFieldsFromData(data, authSettings)
+	requiresCompletion := len(missingFields) > 0
+
+	return requiresCompletion, missingFields, requiredFields, nil
+}
+
 func (s *AuthService) CreateSignupAttempt(
 	b *SignUpRequest,
 	hashedPassword string,
 	session *model.Session,
 	d model.Deployment,
 ) (*model.SignupAttempt, error) {
-	var requiredFields []string
-	if d.AuthSettings.FirstName.Required {
-		requiredFields = append(requiredFields, "first_name")
-	}
-	if d.AuthSettings.LastName.Required {
-		requiredFields = append(requiredFields, "last_name")
-	}
-	if d.AuthSettings.EmailAddress.Required {
-		requiredFields = append(requiredFields, "email")
-	}
-	if d.AuthSettings.Username.Required {
-		requiredFields = append(requiredFields, "username")
-	}
-	if d.AuthSettings.PhoneNumber.Required {
-		requiredFields = append(requiredFields, "phone_number")
+	requiredFields := s.GetRequiredFields(d.AuthSettings)
+
+	data := ProfileCompletionData{
+		FirstName:   b.FirstName,
+		LastName:    b.LastName,
+		Username:    b.Username,
+		Email:       b.Email,
+		PhoneNumber: b.PhoneNumber,
 	}
 
-	var missingFields []string
-	for _, field := range requiredFields {
-		switch field {
-		case "first_name":
-			if b.FirstName == "" {
-				missingFields = append(missingFields, field)
-			}
-		case "last_name":
-			if b.LastName == "" {
-				missingFields = append(missingFields, field)
-			}
-		case "email":
-			if b.Email == "" {
-				missingFields = append(missingFields, field)
-			}
-		case "username":
-			if b.Username == "" {
-				missingFields = append(missingFields, field)
-			}
-		case "phone_number":
-			if b.PhoneNumber == "" {
-				missingFields = append(missingFields, field)
-			}
-		}
-	}
+	missingFields := s.CheckMissingFieldsFromData(data, d.AuthSettings)
 
 	var steps []model.SignupAttemptStep
 	if d.AuthSettings.VerificationPolicy.Email && b.Email != "" {
@@ -676,35 +731,19 @@ func (s *AuthService) CreateOAuthSignupAttempt(
 	session *model.Session,
 	d model.Deployment,
 ) (*model.SignupAttempt, error) {
-	var requiredFields []string
-	var missingFields []string
+	requiredFields := s.GetRequiredFields(d.AuthSettings)
 
-	if d.AuthSettings.FirstName.Required {
-		requiredFields = append(requiredFields, "first_name")
-		if firstName == "" {
-			missingFields = append(missingFields, "first_name")
-		}
+	data := ProfileCompletionData{
+		FirstName:   firstName,
+		LastName:    lastName,
+		Username:    username,
+		Email:       email,
+		PhoneNumber: "",
 	}
-	if d.AuthSettings.LastName.Required {
-		requiredFields = append(requiredFields, "last_name")
-		if lastName == "" {
-			missingFields = append(missingFields, "last_name")
-		}
-	}
-	if d.AuthSettings.EmailAddress.Required {
-		requiredFields = append(requiredFields, "email")
-		if email == "" {
-			missingFields = append(missingFields, "email")
-		}
-	}
-	if d.AuthSettings.Username.Required {
-		requiredFields = append(requiredFields, "username")
-		if username == "" {
-			missingFields = append(missingFields, "username")
-		}
-	}
+
+	missingFields := s.CheckMissingFieldsFromData(data, d.AuthSettings)
+
 	if d.AuthSettings.PhoneNumber.Required {
-		requiredFields = append(requiredFields, "phone_number")
 		missingFields = append(missingFields, "phone_number")
 	}
 
@@ -1341,6 +1380,50 @@ func (s *AuthService) validateEmailMXRecord(email string) error {
 	}
 
 	return nil
+}
+
+func (s *AuthService) DetermineVerificationStepsForProfileCompletion(
+	data ProfileCompletionData,
+	userID *uint64,
+	authSettings model.DeploymentAuthSettings,
+) []string {
+	var steps []string
+
+	// Check if email verification is needed
+	if data.Email != "" && authSettings.VerificationPolicy.Email {
+		needsEmailVerification := true
+
+		// If this is for an existing user (signin completion), check if email is already verified
+		if userID != nil {
+			var existingEmail model.UserEmailAddress
+			err := s.db.Where("user_id = ? AND email_address = ? AND verified = true",
+				*userID, data.Email).First(&existingEmail).Error
+			needsEmailVerification = err != nil // If no verified email found, verification is needed
+		}
+
+		if needsEmailVerification {
+			steps = append(steps, "verify_email")
+		}
+	}
+
+	// Check if phone verification is needed
+	if data.PhoneNumber != "" && authSettings.VerificationPolicy.PhoneNumber {
+		needsPhoneVerification := true
+
+		// If this is for an existing user (signin completion), check if phone is already verified
+		if userID != nil {
+			var existingPhone model.UserPhoneNumber
+			err := s.db.Where("user_id = ? AND phone_number = ? AND verified = true",
+				*userID, data.PhoneNumber).First(&existingPhone).Error
+			needsPhoneVerification = err != nil // If no verified phone found, verification is needed
+		}
+
+		if needsPhoneVerification {
+			steps = append(steps, "verify_phone")
+		}
+	}
+
+	return steps
 }
 
 func (s *AuthService) extractCountryCodeFromPhone(phoneNumber string) string {
