@@ -50,10 +50,9 @@ func corsSettings(c *fiber.Ctx) cors.Config {
 
 	if deployment.Mode == model.DeploymentModeStaging {
 		return cors.Config{
-			AllowHeaders:     "X-Development-Session,Content-Type",
-			AllowOrigins:     "*",
-			AllowCredentials: true,
-			AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
+			AllowHeaders: "X-Development-Session,Content-Type",
+			AllowOrigins: "*",
+			AllowMethods: "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
 		}
 	}
 
