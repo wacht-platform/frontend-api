@@ -31,33 +31,33 @@ type InitSSOResponse struct {
 }
 
 type VerifyOTPRequest struct {
-	VerificationCode string `json:"verification_code"`
+	VerificationCode string `form:"verification_code"`
 }
 
 type PrepareVerificationRequest struct {
-	Email string `json:"email"`
+	Email string `form:"email"`
 }
 
 type ForgotPasswordRequest struct {
-	Email string `json:"email"`
+	Email string `form:"email"`
 }
 
 type ResetPasswordRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	OTP      string `json:"otp"`
+	Email    string `form:"email"`
+	Password string `form:"password"`
+	OTP      string `form:"otp"`
 }
 
 type SetupAuthenticatorRequest struct {
-	Email string `json:"email"`
+	Email string `form:"email"`
 }
 
 type ProfileCompletionData struct {
-	FirstName   string
-	LastName    string
-	Username    string
-	Email       string
-	PhoneNumber string
+	FirstName   string `form:"first_name"`
+	LastName    string `form:"last_name"`
+	Username    string `form:"username"`
+	Email       string `form:"email"`
+	PhoneNumber string `form:"phone_number"`
 }
 
 type IPLocation struct {

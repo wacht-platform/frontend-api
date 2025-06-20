@@ -27,25 +27,25 @@ type InviteMemberRequest struct {
 }
 
 type AddDomainRequest struct {
-	Domain string `json:"domain" validate:"required,fqdn"`
+	Domain string `form:"domain" validate:"required,fqdn"`
 }
 
 type VerifyDomainRequest struct {
-	Domain string `json:"domain" validate:"required,fqdn"`
+	Domain string `form:"domain" validate:"required,fqdn"`
 }
 
 type BillingAddressRequest struct {
-	Address    string `json:"address" validate:"required"`
-	City       string `json:"city" validate:"required"`
-	State      string `json:"state" validate:"required"`
-	Country    string `json:"country" validate:"required"`
-	PostalCode string `json:"postal_code" validate:"required"`
+	Address    string `form:"address" validate:"required"`
+	City       string `form:"city" validate:"required"`
+	State      string `form:"state" validate:"required"`
+	Country    string `form:"country" validate:"required"`
+	PostalCode string `form:"postal_code" validate:"required"`
 }
 
 type UpdateBillingAddressRequest struct {
-	Address    string `json:"address" validate:"required"`
-	City       string `json:"city" validate:"required"`
-	State      string `json:"state" validate:"required"`
-	Country    string `json:"country" validate:"required"`
-	PostalCode string `json:"postal_code" validate:"required"`
+	Address    string `form:"address" validate:"required"`
+	City       string `form:"city" validate:"required"`
+	State      string `form:"state" validate:"required"`
+	Country    string `form:"country" validate:"required"`
+	PostalCode string `form:"postal_code" validate:"required"`
 }

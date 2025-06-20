@@ -3,36 +3,36 @@ package user
 import "github.com/ilabs/wacht-fe/model"
 
 type UpdateUserSchema struct {
-	FirstName             string                   `json:"first_name"`
-	LastName              string                   `json:"last_name"`
-	Username              string                   `json:"username"`
-	PrimaryEmailAddressID string                   `json:"primary_email_address_id"`
-	PrimaryPhoneNumberID  string                   `json:"primary_phone_number_id"`
-	SecondFactorPolicy    model.SecondFactorPolicy `json:"second_factor_policy"     validate:"oneof=none optional enforced"`
+	FirstName             string                   `form:"first_name"`
+	LastName              string                   `form:"last_name"`
+	Username              string                   `form:"username"`
+	PrimaryEmailAddressID string                   `form:"primary_email_address_id"`
+	PrimaryPhoneNumberID  string                   `form:"primary_phone_number_id"`
+	SecondFactorPolicy    model.SecondFactorPolicy `form:"second_factor_policy"     validate:"oneof=none optional enforced"`
 }
 
 type AddUserEmailAddressSchema struct {
-	Email string `json:"email" validate:"required,email"`
+	Email string `form:"email" validate:"required,email"`
 }
 
 type AddUserPhoneNumberSchema struct {
-	PhoneNumber string `json:"phone_number" validate:"required"`
+	PhoneNumber string `form:"phone_number" validate:"required"`
 }
 
 type VerifyAuthenticatorSchema struct {
-	AuthenticatorID string   `json:"authenticator_id" validate:"required"`
-	Codes           []string `json:"codes"            validate:"required,min=2,max=2"`
+	AuthenticatorID string   `form:"authenticator_id" validate:"required"`
+	Codes           []string `form:"codes"            validate:"required,min=2,max=2"`
 }
 
 type UpdatePasswordSchema struct {
-	CurrentPassword string `json:"current_password" validate:"required"`
-	NewPassword     string `json:"new_password"     validate:"required"`
+	CurrentPassword string `form:"current_password" validate:"required"`
+	NewPassword     string `form:"new_password"     validate:"required"`
 }
 
 type DeleteAccountSchema struct {
-	Password string `json:"password" validate:"required"`
+	Password string `form:"password" validate:"required"`
 }
 
 type RemovePasswordSchema struct {
-	CurrentPassword string `json:"current_password" validate:"required"`
+	CurrentPassword string `form:"current_password" validate:"required"`
 }
