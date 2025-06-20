@@ -266,7 +266,7 @@ func (h *Handler) GetToken(
 	c *fiber.Ctx,
 ) error {
 	deployment := handler.GetDeployment(c)
-	deployment.LoadKepPair(database.Connection)
+	deployment.LoadPrivateKey(database.Connection)
 	templatename := c.Query("template", "default")
 
 	template := new(model.DeploymentJwtTemplate)

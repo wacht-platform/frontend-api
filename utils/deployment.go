@@ -1,14 +1,14 @@
 package utils
 
 import (
-	"context"
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"time"
+	"net/http"
+	"os"
 
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
-	"github.com/redis/go-redis/v9"
 )
 
 type DeploymentQueryResult struct {
@@ -24,21 +24,13 @@ type DeploymentQueryResult struct {
 }
 
 func GetDeploymentByHost(host string) (*model.Deployment, error) {
-	val, err := database.Redis.Get(context.Background(), "deployment:"+host).Result()
-	if err == nil {
+	resp, err := http.Get(os.Getenv("CACHE_WORKER") + "?q=" + host)
+	if err == nil && resp.StatusCode == 200 {
+		defer resp.Body.Close()
 		deployment := new(model.Deployment)
-		if json.Unmarshal([]byte(val), &deployment) == nil {
-			keyPairVal, err := database.Redis.Get(context.Background(), "keypair:"+host).Result()
-			if err == nil {
-				keyPair := new(model.DeploymentKeyPair)
-				if json.Unmarshal([]byte(keyPairVal), &keyPair) == nil {
-					deployment.KepPair = *keyPair
-				}
-			}
+		if json.NewDecoder(resp.Body).Decode(&deployment) == nil {
 			return deployment, nil
 		}
-	} else if err != redis.Nil {
-		return nil, fmt.Errorf("redis error: %w", err)
 	}
 
 	queryResult := new(DeploymentQueryResult)
@@ -50,14 +42,12 @@ func GetDeploymentByHost(host string) (*model.Deployment, error) {
 			FROM deployment_social_connections sc
 			GROUP BY deployment_id
 		)
-		SELECT d.*, das.*, dbs.*, dds.*, dr.*, det.*, dst.*, sca.social_connections, kp.*
+		SELECT d.*, das.*, dbs.*, dds.*, dr.*, sca.social_connections, kp.*
 		FROM deployments d
 		LEFT JOIN deployment_auth_settings das ON d.id = das.deployment_id
 		LEFT JOIN deployment_b2b_settings dbs ON d.id = dbs.deployment_id
 		LEFT JOIN deployment_ui_settings dds ON d.id = dds.deployment_id
 		LEFT JOIN deployment_restrictions dr ON d.id = dr.deployment_id
-		LEFT JOIN deployment_email_templates det ON d.id = det.deployment_id
-		LEFT JOIN deployment_sms_templates dst ON d.id = dst.deployment_id
 		LEFT JOIN deployment_key_pairs kp ON d.id = kp.deployment_id
 		LEFT JOIN social_connections_agg sca ON d.id = sca.deployment_id
 		WHERE (d.backend_host = ? OR d.frontend_host = ?) AND d.deleted_at IS NULL
@@ -83,21 +73,34 @@ func GetDeploymentByHost(host string) (*model.Deployment, error) {
 	}
 	deployment.KepPair = queryResult.KepPair
 
-	keyPairJSON, _ := json.Marshal(deployment.KepPair)
-	deploymentToCache := *deployment
-	deploymentToCache.KepPair = model.DeploymentKeyPair{}
-	deploymentJSON, _ := json.Marshal(deploymentToCache)
-
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		database.Redis.Set(ctx, "deployment:"+host, deploymentJSON, 1*time.Hour)
-		database.Redis.Set(ctx, "keypair:"+host, keyPairJSON, 1*time.Hour)
-		if !deployment.IsProduction() {
-			return
-		}
-		database.Redis.Set(ctx, "frontend:"+host, deployment.FrontendHost, 24*time.Hour)
-	}()
+	go setDeploymentCache(*deployment)
 
 	return deployment, nil
+}
+
+func setDeploymentCache(deployment model.Deployment) {
+	url := fmt.Sprintf(
+		"https://api.cloudflare.com/client/v4/accounts/%s/storage/kv/namespaces/%s/values/%s",
+		os.Getenv("CLOUDFLARE_ACCOUNT_ID"),
+		os.Getenv("CLOUDFLARE_NAMESPACE_ID"),
+		deployment.BackendHost,
+	)
+
+	payload, err := json.Marshal(map[string]any{
+		"value":          deployment,
+		"expiration_ttl": 86400,
+	})
+	if err != nil {
+		return
+	}
+
+	_, err = http.NewRequest(
+		"PUT",
+		url,
+		bytes.NewBuffer(payload),
+	)
+
+	if err != nil {
+		return
+	}
 }

@@ -1,14 +1,11 @@
 package router
 
 import (
-	"context"
 	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/middleware"
 	"github.com/ilabs/wacht-fe/utils"
 )
@@ -53,12 +50,6 @@ func corsSettings(c *fiber.Ctx) cors.Config {
 	return cors.Config{
 		AllowHeaders: "Content-Type,X-Development-Session",
 		AllowOriginsFunc: func(origin string) bool {
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-			defer cancel()
-			frontend, err := database.Redis.Get(ctx, "frontend:"+host).Result()
-			if err == nil && frontend != "" {
-				return frontend == strings.TrimPrefix(origin, "https://")
-			}
 			deployment, err := utils.GetDeploymentByHost(host)
 			if err == nil && deployment != nil {
 				return deployment.FrontendHost == strings.TrimPrefix(origin, "https://")

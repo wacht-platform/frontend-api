@@ -113,7 +113,7 @@ type Deployment struct {
 	ProjectID                 uint64                       `json:"project_id"         gorm:"not null"`
 	Project                   Project                      `json:"-"`
 	Mode                      DeploymentMode               `json:"mode"               gorm:"not null"`
-	KepPair                   DeploymentKeyPair            `json:"-"`
+	KepPair                   DeploymentKeyPair            `json:"key_pair"`
 	DomainVerificationRecords *DomainVerificationRecords   `json:"domain_verification_records"`
 	EmailVerificationRecords  *EmailVerificationRecords    `json:"email_verification_records"`
 	DeletedAt                 gorm.DeletedAt               `gorm:"index"`
@@ -123,14 +123,14 @@ func (d *Deployment) IsProduction() bool {
 	return d.Mode == DeploymentModeProduction
 }
 
-func (d *Deployment) LoadKepPair(db *gorm.DB) error {
+func (d *Deployment) LoadPrivateKey(db *gorm.DB) error {
 	keypair := new(DeploymentKeyPair)
-	err := db.Where("deployment_id = ?", d.ID).First(&keypair).Error
+	err := db.Where("deployment_id = ?", d.ID).Select("private_key").First(&keypair).Error
 
 	if err != nil {
 		return err
 	}
 
-	d.KepPair = *keypair
+	d.KepPair.PrivateKey = *&keypair.PrivateKey
 	return nil
 }
