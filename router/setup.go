@@ -57,11 +57,11 @@ func corsSettings(c *fiber.Ctx) cors.Config {
 			defer cancel()
 			frontend, err := database.Redis.Get(ctx, "frontend:"+host).Result()
 			if err == nil && frontend != "" {
-				return frontend == origin
+				return frontend == strings.TrimPrefix(origin, "https://")
 			}
 			deployment, err := utils.GetDeploymentByHost(host)
 			if err == nil && deployment != nil {
-				return deployment.FrontendHost == origin
+				return deployment.FrontendHost == strings.TrimPrefix(origin, "https://")
 			}
 			return false
 		},
