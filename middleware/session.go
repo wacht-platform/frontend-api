@@ -53,10 +53,10 @@ func getSessionToken(c *fiber.Ctx) string {
 	}
 
 	if !deployment.IsProduction() {
-		return ""
+		return c.Get(devSessionHeader)
 	}
 
-	return c.Get(devSessionHeader)
+	return ""
 }
 
 func handleNewSession(
