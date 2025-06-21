@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 
@@ -13,14 +14,12 @@ import (
 
 type DeploymentQueryResult struct {
 	model.Deployment
-	AuthSettings      model.DeploymentAuthSettings  `gorm:"embedded"`
-	B2BSettings       model.DeploymentB2bSettings   `gorm:"embedded"`
-	UISettings        model.DeploymentUISettings    `gorm:"embedded"`
-	Restrictions      model.DeploymentRestrictions  `gorm:"embedded"`
-	EmailTemplates    model.DeploymentEmailTemplate `gorm:"embedded"`
-	SmsTemplates      model.DeploymentSmsTemplate   `gorm:"embedded"`
-	SocialConnections json.RawMessage               `gorm:"column:social_connections"`
-	KepPair           model.DeploymentKeyPair       `gorm:"embedded"`
+	AuthSettings      model.DeploymentAuthSettings `gorm:"embedded"`
+	B2BSettings       model.DeploymentB2bSettings  `gorm:"embedded"`
+	UISettings        model.DeploymentUISettings   `gorm:"embedded"`
+	Restrictions      model.DeploymentRestrictions `gorm:"embedded"`
+	SocialConnections json.RawMessage              `gorm:"column:social_connections"`
+	KepPair           model.DeploymentKeyPair      `gorm:"embedded"`
 }
 
 func GetDeploymentByHost(host string) (*model.Deployment, error) {
@@ -50,9 +49,9 @@ func GetDeploymentByHost(host string) (*model.Deployment, error) {
 		LEFT JOIN deployment_restrictions dr ON d.id = dr.deployment_id
 		LEFT JOIN deployment_key_pairs kp ON d.id = kp.deployment_id
 		LEFT JOIN social_connections_agg sca ON d.id = sca.deployment_id
-		WHERE (d.backend_host = ? OR d.frontend_host = ?) AND d.deleted_at IS NULL
+		WHERE d.backend_host = ? AND d.deleted_at IS NULL
 	`
-	err = database.Connection.Raw(rawSQL, host, host).Scan(queryResult).Error
+	err = database.Connection.Raw(rawSQL, host).Scan(queryResult).Error
 
 	if err != nil || queryResult.ID == 0 {
 		return nil, fmt.Errorf("deployment not found")
@@ -63,8 +62,6 @@ func GetDeploymentByHost(host string) (*model.Deployment, error) {
 	deployment.B2BSettings = queryResult.B2BSettings
 	deployment.UISettings = queryResult.UISettings
 	deployment.Restrictions = queryResult.Restrictions
-	deployment.EmailTemplates = &queryResult.EmailTemplates
-	deployment.SmsTemplates = &queryResult.SmsTemplates
 
 	if queryResult.SocialConnections != nil && string(queryResult.SocialConnections) != "null" {
 		json.Unmarshal(queryResult.SocialConnections, &deployment.SocialConnections)
@@ -101,10 +98,11 @@ func setDeploymentCache(deployment model.Deployment) {
 	)
 
 	req.Header.Set("Authorization", "Bearer "+os.Getenv("CLOUDFLARE_API_KEY"))
-	req.Header.Set("Content-Type", "multipart/form-data")
+	req.Header.Set("Content-Type", "application/json")
 
 	_, err = http.DefaultClient.Do(req)
 	if err != nil {
+		log.Println("Error setting deployment cache: ", err)
 		return
 	}
 }

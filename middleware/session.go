@@ -1,22 +1,18 @@
 package middleware
 
 import (
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
-	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/service"
 	"github.com/ilabs/wacht-fe/utils"
-	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -105,6 +101,7 @@ func handleExistingSession(
 	deployment model.Deployment,
 	sessionToken string,
 ) error {
+	log.Println(deployment.KepPair)
 	token, err := utils.VerifyJWT(
 		sessionToken,
 		deployment.KepPair,
@@ -118,16 +115,16 @@ func handleExistingSession(
 			deployment.BackendHost,
 		)
 		if err != nil {
-			return handler.SendUnauthorized(c, err, "Invalid session")
+			return handleNewSession(c, deployment)
 		}
 		return refreshSession(c, token)
 	} else if err != nil {
-		return handler.SendUnauthorized(c, err, "Invalid session")
+		return handleNewSession(c, deployment)
 	}
 
 	sessionID, _, err := extractTokenClaims(token)
 	if err != nil {
-		return handler.SendUnauthorized(c, err, "Invalid session")
+		return handleNewSession(c, deployment)
 	}
 
 	c.Locals("session", sessionID)
@@ -210,27 +207,15 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token) error {
 		return c.Next()
 	}
 
-	tok, err := jwt.NewBuilder().
-		Issuer(fmt.Sprintf("https://%s", deployment.BackendHost)).
-		Expiration(time.Now().Add(sessionDuration)).
-		IssuedAt(time.Now()).
-		NotBefore(time.Now()).
-		Claim("sess", sessionID).
-		Claim("rotating_token", strconv.FormatUint(finalRotatingTokenID, 10)).
-		Build()
+	signed, err := utils.SignJWT(
+		sessionID,
+		deployment.BackendHost,
+		time.Now().Add(sessionDuration),
+		deployment.KepPair,
+		database.Connection,
+	)
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to build JWT")
-	}
-
-	privateKeyBlock, _ := pem.Decode([]byte(deployment.KepPair.PrivateKey))
-	privateKey, err := x509.ParsePKCS8PrivateKey(privateKeyBlock.Bytes)
-	if err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to parse private key")
-	}
-
-	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.ES256(), privateKey))
-	if err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to sign JWT")
 	}
 
 	token = string(signed)
@@ -259,20 +244,4 @@ func extractTokenClaims(token jwt.Token) (uint64, uint64, error) {
 	}
 
 	return uint64(sessionID), uint64(rotatingTokenIDuint64), nil
-}
-
-func RateLimiter() fiber.Handler {
-	return limiter.New(limiter.Config{
-		Max:        7,
-		Expiration: 10 * time.Second,
-		KeyGenerator: func(c *fiber.Ctx) string {
-			return c.IP()
-		},
-		LimitReached: func(c *fiber.Ctx) error {
-			return fiber.NewError(
-				fiber.StatusTooManyRequests,
-				"Too many requests, please try again later.",
-			)
-		},
-	})
 }
