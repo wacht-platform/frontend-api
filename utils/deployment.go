@@ -94,12 +94,16 @@ func setDeploymentCache(deployment model.Deployment) {
 		return
 	}
 
-	_, err = http.NewRequest(
+	req, err := http.NewRequest(
 		"PUT",
 		url,
 		bytes.NewBuffer(payload),
 	)
 
+	req.Header.Set("Authorization", "Bearer "+os.Getenv("CLOUDFLARE_API_KEY"))
+	req.Header.Set("Content-Type", "multipart/form-data")
+
+	_, err = http.DefaultClient.Do(req)
 	if err != nil {
 		return
 	}
