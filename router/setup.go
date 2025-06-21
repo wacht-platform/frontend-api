@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v2/middleware/rewrite"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/middleware"
 )
@@ -26,6 +27,11 @@ func setupRoutes(app *fiber.App) {
 }
 
 func setupMiddleware(app *fiber.App) {
+	app.Use(rewrite.New(rewrite.Config{
+		Rules: map[string]string{
+			"/api/*": "/$1",
+		},
+	}))
 	app.Use(recover.New())
 	app.Use(middleware.SetDeploymentMiddleware)
 	app.Use(func(c *fiber.Ctx) error {
