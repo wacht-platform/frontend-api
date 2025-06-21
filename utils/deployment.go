@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -75,33 +74,8 @@ func GetDeploymentByHost(host string) (*model.Deployment, error) {
 }
 
 func setDeploymentCache(deployment model.Deployment) {
-	url := fmt.Sprintf(
-		"https://api.cloudflare.com/client/v4/accounts/%s/storage/kv/namespaces/%s/values/%s",
-		os.Getenv("CLOUDFLARE_ACCOUNT_ID"),
-		os.Getenv("CLOUDFLARE_NAMESPACE_ID"),
-		deployment.BackendHost,
-	)
-
-	payload, err := json.Marshal(map[string]any{
-		"value":          deployment,
-		"expiration_ttl": 86400,
-	})
-	if err != nil {
-		return
-	}
-
-	req, err := http.NewRequest(
-		"PUT",
-		url,
-		bytes.NewBuffer(payload),
-	)
-
-	req.Header.Set("Authorization", "Bearer "+os.Getenv("CLOUDFLARE_API_KEY"))
-	req.Header.Set("Content-Type", "application/json")
-
-	_, err = http.DefaultClient.Do(req)
+	err := SetToCache(deployment.BackendHost, deployment, 86400)
 	if err != nil {
 		log.Println("Error setting deployment cache: ", err)
-		return
 	}
 }

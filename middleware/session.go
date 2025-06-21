@@ -90,8 +90,6 @@ func handleNewSession(
 
 	setSessionToken(c, token, deployment.IsProduction())
 
-	go utils.SetSessionCache(*session)
-
 	c.Locals("session", session.ID)
 
 	return c.Next()
@@ -127,11 +125,7 @@ func handleExistingSession(
 		return handleNewSession(c, deployment)
 	}
 
-	session, err := utils.GetSession(sessionID)
-	if err != nil {
-		return handleNewSession(c, deployment)
-	}
-	c.Locals("session", session.ID)
+	c.Locals("session", sessionID)
 
 	return c.Next()
 }

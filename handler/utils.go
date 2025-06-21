@@ -1,15 +1,13 @@
 package handler
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/utils"
 	"gorm.io/gorm/clause"
 )
 
@@ -32,35 +30,16 @@ func GetSession(c *fiber.Ctx) *model.Session {
 }
 
 func RemoveSessionFromCache(id uint64) {
-	database.Redis.Del(
-		context.Background(),
-		fmt.Sprintf("session:%d", id),
-	)
+	utils.DeleteFromCache(fmt.Sprintf("session:%d", id))
 }
 
 func getSessionFromCache(id uint64) (*model.Session, error) {
-	var session model.Session
-	ctx, cancel := context.WithTimeout(
-		context.Background(),
-		10*time.Second,
-	)
-	defer cancel()
-
-	v := database.Redis.Get(ctx, fmt.Sprintf("session:%d", id))
-	if v.Err() != nil {
-		return nil, v.Err()
-	}
-
-	if v.Val() == "" {
-		return nil, fmt.Errorf("session not found")
-	}
-
-	err := json.Unmarshal([]byte(v.Val()), &session)
+	session := new(model.Session)
+	err := utils.GetValueFromCache(fmt.Sprintf("session:%d", id), session)
 	if err != nil {
 		return nil, err
 	}
-
-	return &session, nil
+	return session, nil
 }
 
 func getSessionAndSetToCache(sessionId uint64) *model.Session {
@@ -71,20 +50,7 @@ func getSessionAndSetToCache(sessionId uint64) *model.Session {
 		Preload("ActiveSignin.User").
 		First(session)
 
-	json, err := json.Marshal(session)
-	if err != nil {
-		return nil
-	}
-
-	cmd := database.Redis.Set(
-		context.Background(),
-		fmt.Sprintf("session:%d", sessionId),
-		json,
-		time.Hour,
-	)
-	if cmd.Err() != nil {
-		return nil
-	}
+	go utils.SetToCache(fmt.Sprintf("session:%d", sessionId), session, 3600)
 
 	return session
 }
