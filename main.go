@@ -32,5 +32,13 @@ func main() {
 
 	router.Setup(app)
 
-	log.Fatal(app.Listen(":3000"))
+	if config.GetEnv("MODE", "production") == "production" {
+		log.Fatal(app.Listen(":3000"))
+	} else {
+		api := fiber.New()
+		api.Mount("/api", app)
+
+		log.Fatal(api.Listen(":3001"))
+	}
+
 }
