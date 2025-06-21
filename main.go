@@ -38,7 +38,7 @@ func main() {
 		api := fiber.New()
 		api.Mount("/api", app)
 
-		log.Fatal(api.Listen(":3001"))
+		log.Fatal(api.Listen(":3000"))
 	}
 
 }
