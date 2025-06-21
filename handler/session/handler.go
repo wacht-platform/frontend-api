@@ -32,27 +32,9 @@ func NewHandler() *Handler {
 func (h *Handler) GetCurrentSession(
 	c *fiber.Ctx,
 ) error {
-	sessionID := c.Locals("session").(uint64)
+	session := handler.GetSession(c)
 
-	session := new(model.Session)
-
-	err := database.Connection.Joins("ActiveSignin").
-		Preload("ActiveSignin.User").
-		Preload("ActiveSignin.User.UserEmailAddresses").
-		Preload("ActiveSignin.User.UserPhoneNumbers").
-		Preload("ActiveSignin.User.SocialConnections").
-		Preload("Signins").
-		Preload("Signins.User").
-		Preload("Signins.User.UserEmailAddresses").
-		Preload("Signins.User.UserPhoneNumbers").
-		Preload("Signins.User.SocialConnections").
-		Where("sessions.id = ?", sessionID).
-		First(session).
-		Error
-
-	log.Println(session)
-	if err != nil {
-		log.Println(err)
+	if session == nil {
 		return handler.SendNotFound(c, nil, "Session not found")
 	}
 
@@ -285,24 +267,9 @@ func (h *Handler) GetToken(
 		template.TokenLifetime = 30
 	}
 
-	sessionID := c.Locals("session").(uint64)
-	session := new(model.Session)
+	session := handler.GetSession(c)
 
-	err := database.Connection.Joins("ActiveSignin").
-		Joins("ActiveSignin.User").
-		Joins("ActiveSignin.ActiveWorkspaceMembership").
-		Joins("ActiveSignin.ActiveOrganizationMembership").
-		Joins("ActiveSignin.User.PrimaryEmailAddress").
-		Joins("ActiveSignin.User.PrimaryPhoneNumber").
-		Joins("ActiveSignin.ActiveWorkspaceMembership.Workspace").
-		Joins("ActiveSignin.ActiveOrganizationMembership.Organization").
-		Preload("ActiveSignin.ActiveWorkspaceMembership.Roles").
-		Preload("ActiveSignin.ActiveOrganizationMembership.Roles").
-		Where("sessions.id = ?", sessionID).
-		First(session).
-		Error
-
-	if err != nil {
+	if session == nil {
 		return handler.SendInternalServerError(c, nil, "Something went wrong")
 	}
 
