@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"errors"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -91,6 +90,8 @@ func handleNewSession(
 
 	setSessionToken(c, token, deployment.IsProduction())
 
+	go utils.SetSessionCache(*session)
+
 	c.Locals("session", session.ID)
 
 	return c.Next()
@@ -101,7 +102,6 @@ func handleExistingSession(
 	deployment model.Deployment,
 	sessionToken string,
 ) error {
-	log.Println(deployment.KepPair)
 	token, err := utils.VerifyJWT(
 		sessionToken,
 		deployment.KepPair,
@@ -127,7 +127,11 @@ func handleExistingSession(
 		return handleNewSession(c, deployment)
 	}
 
-	c.Locals("session", sessionID)
+	session, err := utils.GetSession(sessionID)
+	if err != nil {
+		return handleNewSession(c, deployment)
+	}
+	c.Locals("session", session.ID)
 
 	return c.Next()
 }
