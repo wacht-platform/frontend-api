@@ -25,9 +25,8 @@ type DeploymentQueryResult struct {
 func GetDeploymentByHost(host string) (*model.Deployment, error) {
 	resp, err := http.Get(os.Getenv("CACHE_WORKER") + "?q=" + host)
 	if err == nil && resp.StatusCode == 200 {
-		defer resp.Body.Close()
 		deployment := new(model.Deployment)
-		if json.NewDecoder(resp.Body).Decode(&deployment) == nil {
+		if err := GetFromCache(resp, deployment); err == nil {
 			return deployment, nil
 		}
 	}

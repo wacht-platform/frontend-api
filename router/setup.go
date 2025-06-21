@@ -40,7 +40,7 @@ func corsSettings(c *fiber.Ctx) cors.Config {
 
 	if strings.HasPrefix(path, "/.well") {
 		return cors.Config{
-			AllowHeaders: "Content-Type,X-Development-Session",
+			AllowHeaders: "X-Development-Session",
 			AllowOrigins: "*",
 			AllowMethods: "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
 		}
@@ -50,14 +50,13 @@ func corsSettings(c *fiber.Ctx) cors.Config {
 
 	if !deployment.IsProduction() {
 		return cors.Config{
-			AllowHeaders: "X-Development-Session,Content-Type",
+			AllowHeaders: "X-Development-Session",
 			AllowOrigins: "*",
 			AllowMethods: "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
 		}
 	}
 
 	return cors.Config{
-		AllowHeaders: "Content-Type,X-Development-Session",
 		AllowOriginsFunc: func(origin string) bool {
 			return deployment.FrontendHost == strings.TrimPrefix(origin, "https://")
 		},

@@ -15,9 +15,8 @@ import (
 func GetSession(sessionID uint64) (*model.Session, error) {
 	resp, err := http.Get(os.Getenv("CACHE_WORKER") + "?q=" + fmt.Sprintf("%d", sessionID))
 	if err == nil && resp.StatusCode == 200 {
-		defer resp.Body.Close()
 		session := new(model.Session)
-		if json.NewDecoder(resp.Body).Decode(&session) == nil {
+		if err := GetFromCache(resp, session); err == nil {
 			return session, nil
 		}
 	}
