@@ -23,26 +23,6 @@ func GetFromCache[T any](resp *http.Response, target *T) error {
 	return nil
 }
 
-func GetValueFromCache[T any](key string, target *T) error {
-	url := fmt.Sprintf(
-		"https://api.cloudflare.com/client/v4/accounts/%s/storage/kv/namespaces/%s/values/%s",
-		os.Getenv("CLOUDFLARE_ACCOUNT_ID"),
-		os.Getenv("CLOUDFLARE_NAMESPACE_ID"),
-		key,
-	)
-
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to get from cache. status: %s", resp.Status)
-	}
-
-	return GetFromCache(resp, target)
-}
-
 func SetToCache(key string, value any, ttl uint64) error {
 	url := fmt.Sprintf(
 		"https://api.cloudflare.com/client/v4/accounts/%s/storage/kv/namespaces/%s/values/%s",

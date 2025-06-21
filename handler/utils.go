@@ -3,6 +3,8 @@ package handler
 import (
 	"fmt"
 	"log"
+	"net/http"
+	"os"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/database"
@@ -34,12 +36,14 @@ func RemoveSessionFromCache(id uint64) {
 }
 
 func getSessionFromCache(id uint64) (*model.Session, error) {
-	session := new(model.Session)
-	err := utils.GetValueFromCache(fmt.Sprintf("session:%d", id), session)
-	if err != nil {
-		return nil, err
+	resp, err := http.Get(os.Getenv("CACHE_WORKER") + "?q=" + fmt.Sprintf("session:%d", id))
+	if err == nil && resp.StatusCode == 200 {
+		session := new(model.Session)
+		if err := utils.GetFromCache(resp, session); err == nil {
+			return session, nil
+		}
 	}
-	return session, nil
+	return nil, fmt.Errorf("session not found in cache")
 }
 
 func getSessionAndSetToCache(sessionId uint64) *model.Session {
