@@ -48,7 +48,7 @@ func getSessionToken(c *fiber.Ctx) string {
 	}
 
 	if !deployment.IsProduction() {
-		return c.Get(devSessionHeader)
+		return c.Query("__dev_session__", "")
 	}
 
 	return ""

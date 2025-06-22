@@ -36,16 +36,6 @@ func setupMiddleware(app *fiber.App) {
 }
 
 func corsSettings(c *fiber.Ctx) cors.Config {
-	path := c.Path()
-
-	if strings.HasPrefix(path, "/.well") {
-		return cors.Config{
-			AllowHeaders: "X-Development-Session",
-			AllowOrigins: "*",
-			AllowMethods: "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
-		}
-	}
-
 	deployment := handler.GetDeployment(c)
 
 	if !deployment.IsProduction() {
