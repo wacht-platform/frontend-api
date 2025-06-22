@@ -33,17 +33,44 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 	queryResult := new(SessionQueryResult)
 	rawSQL := `
 		WITH user_email_addresses_agg AS (
-			SELECT user_id, json_agg(uea) AS user_email_addresses
+			SELECT user_id, json_agg(json_build_object(
+				'id', uea.id::text,
+				'created_at', uea.created_at,
+				'updated_at', uea.updated_at,
+				'email', uea.email,
+				'is_primary', uea.is_primary,
+				'verified', uea.verified,
+				'verified_at', uea.verified_at,
+				'verification_strategy', uea.verification_strategy
+			)) AS user_email_addresses
 			FROM user_email_addresses uea
 			GROUP BY user_id
 		),
 		user_phone_numbers_agg AS (
-			SELECT user_id, json_agg(upn) AS user_phone_numbers
+			SELECT user_id, json_agg(json_build_object(
+				'id', upn.id::text,
+				'created_at', upn.created_at,
+				'updated_at', upn.updated_at,
+				'phone_number', upn.phone_number,
+				'is_primary', upn.is_primary,
+				'verified', upn.verified,
+				'verified_at', upn.verified_at,
+				'verification_strategy', upn.verification_strategy
+			)) AS user_phone_numbers
 			FROM user_phone_numbers upn
 			GROUP BY user_id
 		),
 		social_connections_agg AS (
-			SELECT user_id, json_agg(sc) AS social_connections
+			SELECT user_id, json_agg(json_build_object(
+				'id', sc.id::text,
+				'created_at', sc.created_at,
+				'updated_at', sc.updated_at,
+				'provider', sc.provider,
+				'provider_user_id', sc.provider_user_id,
+				'email', sc.email,
+				'name', sc.name,
+				'avatar_url', sc.avatar_url
+			)) AS social_connections
 			FROM social_connections sc
 			GROUP BY user_id
 		),
@@ -51,7 +78,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			SELECT
 				u.id,
 				json_build_object(
-					'id', u.id,
+					'id', u.id::text,
 					'created_at', u.created_at,
 					'updated_at', u.updated_at,
 					'first_name', u.first_name,
@@ -63,11 +90,11 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 					'last_password_reset_at', u.last_password_reset_at,
 					'schema_version', u.schema_version,
 					'disabled', u.disabled,
-					'primary_email_address_id', u.primary_email_address_id,
-					'primary_phone_number_id', u.primary_phone_number_id,
+					'primary_email_address_id', u.primary_email_address_id::text,
+					'primary_phone_number_id', u.primary_phone_number_id::text,
 					'second_factor_policy', u.second_factor_policy,
-					'active_organization_membership_id', u.active_organization_membership_id,
-					'active_workspace_membership_id', u.active_workspace_membership_id,
+					'active_organization_membership_id', u.active_organization_membership_id::text,
+					'active_workspace_membership_id', u.active_workspace_membership_id::text,
 					'public_metadata', u.public_metadata,
 					'backup_codes_generated', u.backup_codes_generated,
 					'user_email_addresses', uea.user_email_addresses,
@@ -83,13 +110,13 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			SELECT
 				s.id as session_id,
 				json_agg(json_build_object(
-					'id', si.id,
+					'id', si.id::text,
 					'created_at', si.created_at,
 					'updated_at', si.updated_at,
-					'session_id', si.session_id,
-					'user_id', si.user_id,
-					'active_organization_membership_id', si.active_organization_membership_id,
-					'active_workspace_membership_id', si.active_workspace_membership_id,
+					'session_id', si.session_id::text,
+					'user_id', si.user_id::text,
+					'active_organization_membership_id', si.active_organization_membership_id::text,
+					'active_workspace_membership_id', si.active_workspace_membership_id::text,
 					'expires_at', si.expires_at,
 					'last_active_at', si.last_active_at,
 					'ip_address', si.ip_address,
@@ -104,20 +131,20 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 				)) as signins
 			FROM sessions s
 			JOIN signins si ON s.id = si.session_id
-			JOIN users_agg ua ON si.user_id = ua.id
+			LEFT JOIN users_agg ua ON si.user_id = ua.id
 			GROUP BY s.id
 		),
 		active_signin_agg AS (
 			SELECT
 				s.id as session_id,
 				json_build_object(
-					'id', si.id,
+					'id', si.id::text,
 					'created_at', si.created_at,
 					'updated_at', si.updated_at,
-					'session_id', si.session_id,
-					'user_id', si.user_id,
-					'active_organization_membership_id', si.active_organization_membership_id,
-					'active_workspace_membership_id', si.active_workspace_membership_id,
+					'session_id', si.session_id::text,
+					'user_id', si.user_id::text,
+					'active_organization_membership_id', si.active_organization_membership_id::text,
+					'active_workspace_membership_id', si.active_workspace_membership_id::text,
 					'expires_at', si.expires_at,
 					'last_active_at', si.last_active_at,
 					'ip_address', si.ip_address,
@@ -132,15 +159,47 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 				) as active_signin
 			FROM sessions s
 			JOIN signins si ON s.active_signin_id = si.id
-			JOIN users_agg ua ON si.user_id = ua.id
+			LEFT JOIN users_agg ua ON si.user_id = ua.id
 		),
 		signin_attempts_agg AS (
-			SELECT session_id, json_agg(sa) as signin_attempts
+			SELECT session_id, json_agg(json_build_object(
+				'id', sa.id::text,
+				'created_at', sa.created_at,
+				'updated_at', sa.updated_at,
+				'session_id', sa.session_id::text,
+				'method', sa.method,
+				'sso_provider', sa.sso_provider,
+				'expires_at', sa.expires_at,
+				'current_step', sa.current_step,
+				'remaining_steps', sa.remaining_steps,
+				'completed', sa.completed,
+				'errored', sa.errored,
+				'errors', sa.errors,
+				'requires_completion', sa.requires_completion,
+				'missing_fields', sa.missing_fields,
+				'required_fields', sa.required_fields
+			)) as signin_attempts
 			FROM sign_in_attempts sa
 			GROUP BY session_id
 		),
 		signup_attempts_agg AS (
-			SELECT session_id, json_agg(sua) as signup_attempts
+			SELECT session_id, json_agg(json_build_object(
+				'id', sua.id::text,
+				'created_at', sua.created_at,
+				'updated_at', sua.updated_at,
+				'session_id', sua.session_id::text,
+				'first_name', sua.first_name,
+				'last_name', sua.last_name,
+				'email', sua.email,
+				'username', sua.username,
+				'phone_number', sua.phone_number,
+				'required_fields', sua.required_fields,
+				'missing_fields', sua.missing_fields,
+				'current_step', sua.current_step,
+				'remaining_steps', sua.remaining_steps,
+				'sso_provider', sua.sso_provider,
+				'is_oauth_signup', sua.is_oauth_signup
+			)) as signup_attempts
 			FROM signup_attempts sua
 			GROUP BY session_id
 		)
