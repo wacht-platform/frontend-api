@@ -8,33 +8,27 @@ import (
 	"os"
 )
 
-type CacheResponse[T any] struct {
-	Value          T      `json:"value"`
-	Expiration_ttl uint64 `json:"expiration_ttl"`
-}
-
 func GetFromCache[T any](resp *http.Response, target *T) error {
 	defer resp.Body.Close()
-	cacheResp := &CacheResponse[T]{Value: *target}
+	cacheResp := new(T)
 	if err := json.NewDecoder(resp.Body).Decode(&cacheResp); err != nil {
 		return err
 	}
-	*target = cacheResp.Value
+	*target = *cacheResp
 	return nil
 }
 
 func SetToCache(key string, value any, ttl uint64) error {
 	url := fmt.Sprintf(
-		"https://api.cloudflare.com/client/v4/accounts/%s/storage/kv/namespaces/%s/values/%s",
+		"https://api.cloudflare.com/client/v4/accounts/%s/storage/kv/namespaces/%s/values/%s?expiration_ttl=%d",
 		os.Getenv("CLOUDFLARE_ACCOUNT_ID"),
 		os.Getenv("CLOUDFLARE_NAMESPACE_ID"),
 		key,
+		ttl,
 	)
 
-	payload, err := json.Marshal(map[string]any{
-		"value":          value,
-		"expiration_ttl": ttl,
-	})
+	payload, err := json.Marshal(value)
+
 	if err != nil {
 		return err
 	}

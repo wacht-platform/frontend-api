@@ -131,6 +131,6 @@ func (d *Deployment) LoadPrivateKey(db *gorm.DB) error {
 		return err
 	}
 
-	d.KepPair.PrivateKey = *&keypair.PrivateKey
+	d.KepPair.PrivateKey = keypair.PrivateKey
 	return nil
 }

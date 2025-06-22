@@ -130,7 +130,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 
 func setSessionCache(session model.Session) {
 	cacheKey := "session:" + strconv.FormatUint(session.ID, 10)
-	err := SetToCache(cacheKey, session, 3600) // Cache for 1 hour
+	err := SetToCache(cacheKey, session, 3600)
 	if err != nil {
 		log.Println("Error setting session cache: ", err)
 	}
