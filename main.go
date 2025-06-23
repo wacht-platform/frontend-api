@@ -33,5 +33,4 @@ func main() {
 	router.Setup(app)
 
 	log.Fatal(app.Listen(":3000"))
-
 }

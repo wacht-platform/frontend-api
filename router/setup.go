@@ -42,9 +42,9 @@ func corsSettings(c *fiber.Ctx) cors.Config {
 
 	if !deployment.IsProduction() {
 		return cors.Config{
-			AllowHeaders: "X-Development-Session",
-			AllowOrigins: "*",
-			AllowMethods: "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
+			ExposeHeaders: "X-Development-Session",
+			AllowOrigins:  "*",
+			AllowMethods:  "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
 		}
 	}
 
