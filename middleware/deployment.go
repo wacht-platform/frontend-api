@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"net"
-	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/utils"
@@ -13,12 +12,6 @@ func SetDeploymentMiddleware(c *fiber.Ctx) error {
 
 	if net.ParseIP(host) != nil {
 		return c.Status(404).JSON(fiber.Map{"message": "Deployment not found"})
-	}
-
-	path := c.Path()
-
-	if strings.HasPrefix(path, "/.well") {
-		return c.Next()
 	}
 
 	deployment, err := utils.GetDeploymentByHost(host)
