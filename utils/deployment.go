@@ -66,7 +66,7 @@ func GetDeploymentByHost(host string) (*model.Deployment, error) {
 	} else {
 		deployment.SocialConnections = []model.DeploymentSocialConnection{}
 	}
-	deployment.KepPair = queryResult.KepPair
+	deployment.KepPair = &queryResult.KepPair
 
 	go setDeploymentCache(*deployment)
 

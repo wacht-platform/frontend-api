@@ -113,10 +113,10 @@ type Deployment struct {
 	ProjectID                 uint64                       `json:"project_id"         gorm:"not null"`
 	Project                   Project                      `json:"-"`
 	Mode                      DeploymentMode               `json:"mode"               gorm:"not null"`
-	KepPair                   DeploymentKeyPair            `json:"key_pair"`
+	KepPair                   *DeploymentKeyPair           `json:"key_pair"`
 	DomainVerificationRecords *DomainVerificationRecords   `json:"domain_verification_records"`
 	EmailVerificationRecords  *EmailVerificationRecords    `json:"email_verification_records"`
-	DeletedAt                 gorm.DeletedAt               `gorm:"index"`
+	DeletedAt                 gorm.DeletedAt               `gorm:"index" json:"-"`
 }
 
 func (d *Deployment) IsProduction() bool {

@@ -68,7 +68,7 @@ func handleNewSession(
 			session.ID,
 			deployment.BackendHost,
 			time.Now().Add(sessionDuration),
-			deployment.KepPair,
+			*deployment.KepPair,
 			tx,
 		)
 		if err != nil {
@@ -102,14 +102,14 @@ func handleExistingSession(
 ) error {
 	token, err := utils.VerifyJWT(
 		sessionToken,
-		deployment.KepPair,
+		*deployment.KepPair,
 		deployment.BackendHost,
 	)
 
 	if errors.Is(err, jwt.TokenExpiredError()) {
 		token, err = utils.ParseJWT(
 			sessionToken,
-			deployment.KepPair,
+			*deployment.KepPair,
 			deployment.BackendHost,
 		)
 		if err != nil {
@@ -209,7 +209,7 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token) error {
 		sessionID,
 		deployment.BackendHost,
 		time.Now().Add(sessionDuration),
-		deployment.KepPair,
+		*deployment.KepPair,
 		database.Connection,
 	)
 	if err != nil {
