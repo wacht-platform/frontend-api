@@ -15,9 +15,19 @@ func GetDeployment(c *fiber.Ctx) model.Deployment {
 }
 
 func GetSession(c *fiber.Ctx) *model.Session {
-	sessionID := c.Locals("session").(uint64)
+	deployment := c.Locals("deployment")
 
-	session, err := utils.GetSessionByID(sessionID)
+	if deployment == nil {
+		return nil
+	}
+
+	sessionID := c.Locals("session")
+
+	if sessionID == nil {
+		return nil
+	}
+
+	session, err := utils.GetSessionByID(sessionID.(uint64))
 	if err != nil {
 		return nil
 	}
