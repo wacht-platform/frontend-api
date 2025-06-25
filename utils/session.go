@@ -110,12 +110,10 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 					json_build_object(
 						'id', sc.id,
 						'provider', sc.provider,
-						'provider_user_id', sc.provider_user_id,
+						'user_email_address_id', sc.user_email_address_id,
 						'email_address', sc.email_address,
 						'first_name', sc.first_name,
 						'last_name', sc.last_name,
-						'username', sc.username,
-						'avatar_url', sc.avatar_url,
 						'created_at', sc.created_at,
 						'updated_at', sc.updated_at
 					) ORDER BY sc.created_at
@@ -166,7 +164,8 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 						'missing_fields', sua.missing_fields,
 						'current_step', sua.current_step,
 						'remaining_steps', sua.remaining_steps,
-						'completed', sua.completed
+						'sso_provider', sua.sso_provider,
+						'is_oauth_signup', sua.is_oauth_signup
 					) ORDER BY sua.created_at DESC
 				) FROM signup_attempts sua WHERE sua.session_id = s.id),
 				'[]'::json
@@ -179,10 +178,10 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 						'id', or_role.id,
 						'created_at', or_role.created_at,
 						'updated_at', or_role.updated_at,
+						'organization_id', or_role.organization_id,
 						'name', or_role.name,
-						'key', or_role.key,
-						'description', or_role.description,
-						'permissions', or_role.permissions
+						'permissions', or_role.permissions,
+						'deployment_id', or_role.deployment_id
 					) ORDER BY or_role.name
 				) FROM organization_membership_roles omr
 				JOIN organization_roles or_role ON omr.organization_role_id = or_role.id
@@ -197,10 +196,11 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 						'id', ws_role.id,
 						'created_at', ws_role.created_at,
 						'updated_at', ws_role.updated_at,
+						'organization_id', ws_role.organization_id,
 						'name', ws_role.name,
-						'key', ws_role.key,
-						'description', ws_role.description,
-						'permissions', ws_role.permissions
+						'permissions', ws_role.permissions,
+						'deployment_id', ws_role.deployment_id,
+						'workspace_id', ws_role.workspace_id
 					) ORDER BY ws_role.name
 				) FROM workspace_membership_roles wmr
 				JOIN workspace_roles ws_role ON wmr.workspace_role_id = ws_role.id

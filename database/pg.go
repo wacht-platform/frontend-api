@@ -45,7 +45,6 @@ func InitPgConnection() error {
 	}
 
 	pgDB.SetConnMaxIdleTime(time.Hour)
-	pgDB.SetConnMaxLifetime(24 * time.Hour)
 
 	Connection = db
 
