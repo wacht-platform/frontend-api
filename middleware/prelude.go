@@ -83,7 +83,6 @@ func handleDeploymentAndSession(c *fiber.Ctx, host string) error {
 
 	if session != nil {
 		c.Locals("session_data", session)
-		return handleExistingSession(c, *deployment, sessionToken)
 	}
 
 	if sessionToken == "" {
