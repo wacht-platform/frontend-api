@@ -184,9 +184,27 @@ func extractSessionIDFromTokenWithoutVerification(sessionToken string) (uint64, 
 		return 0, fmt.Errorf("sess not found in token")
 	}
 
-	sessionID, err := strconv.ParseUint(fmt.Sprintf("%.0f", sessionIDClaim), 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid sess format: %v", err)
+	var sessionID uint64
+	switch v := sessionIDClaim.(type) {
+	case float64:
+		sessionID = uint64(v)
+	case int64:
+		sessionID = uint64(v)
+	case int:
+		sessionID = uint64(v)
+	case string:
+		var err error
+		sessionID, err = strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid sess format: %v", err)
+		}
+	default:
+		// Fallback to string conversion
+		var err error
+		sessionID, err = strconv.ParseUint(fmt.Sprintf("%v", sessionIDClaim), 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid sess format: %v", err)
+		}
 	}
 
 	return sessionID, nil
@@ -389,14 +407,48 @@ func extractTokenClaims(token jwt.Token) (uint64, uint64, error) {
 		return 0, 0, errors.New("rotating_token not found in token")
 	}
 
-	sessionID, err := strconv.ParseUint(fmt.Sprintf("%v", sessionIDClaim), 10, 64)
-	if err != nil {
-		return 0, 0, errors.New("invalid sess format")
+	var sessionID uint64
+	switch v := sessionIDClaim.(type) {
+	case float64:
+		sessionID = uint64(v)
+	case int64:
+		sessionID = uint64(v)
+	case int:
+		sessionID = uint64(v)
+	case string:
+		var err error
+		sessionID, err = strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return 0, 0, errors.New("invalid sess format")
+		}
+	default:
+		var err error
+		sessionID, err = strconv.ParseUint(fmt.Sprintf("%v", sessionIDClaim), 10, 64)
+		if err != nil {
+			return 0, 0, errors.New("invalid sess format")
+		}
 	}
 
-	rotatingTokenID, err := strconv.ParseUint(fmt.Sprintf("%v", rotatingTokenIDClaim), 10, 64)
-	if err != nil {
-		return 0, 0, errors.New("invalid rotating_token format")
+	var rotatingTokenID uint64
+	switch v := rotatingTokenIDClaim.(type) {
+	case float64:
+		rotatingTokenID = uint64(v)
+	case int64:
+		rotatingTokenID = uint64(v)
+	case int:
+		rotatingTokenID = uint64(v)
+	case string:
+		var err error
+		rotatingTokenID, err = strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return 0, 0, errors.New("invalid rotating_token format")
+		}
+	default:
+		var err error
+		rotatingTokenID, err = strconv.ParseUint(fmt.Sprintf("%v", rotatingTokenIDClaim), 10, 64)
+		if err != nil {
+			return 0, 0, errors.New("invalid rotating_token format")
+		}
 	}
 
 	return sessionID, rotatingTokenID, nil
