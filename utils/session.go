@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
@@ -286,6 +287,74 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 	}
 
 	*session = result.Session
+
+	// Parse JSON data for signins
+	if result.SigninsJSON != "" && result.SigninsJSON != "[]" {
+		var signinsData []map[string]interface{}
+		if err := json.Unmarshal([]byte(result.SigninsJSON), &signinsData); err == nil {
+			for _, signinData := range signinsData {
+				signin := &model.Signin{}
+
+				// Map signin fields
+				if id, ok := signinData["id"].(float64); ok {
+					signin.ID = uint64(id)
+				}
+				if sessionID, ok := signinData["session_id"].(float64); ok {
+					signin.SessionID = uint64(sessionID)
+				}
+				if userID, ok := signinData["user_id"].(float64); ok {
+					signin.UserID = &[]uint64{uint64(userID)}[0]
+				}
+				if expiresAt, ok := signinData["expires_at"].(string); ok {
+					signin.ExpiresAt = expiresAt
+				}
+				if lastActiveAt, ok := signinData["last_active_at"].(string); ok {
+					signin.LastActiveAt = lastActiveAt
+				}
+				if ipAddress, ok := signinData["ip_address"].(string); ok {
+					signin.IpAddress = ipAddress
+				}
+				if browser, ok := signinData["browser"].(string); ok {
+					signin.Browser = browser
+				}
+				if device, ok := signinData["device"].(string); ok {
+					signin.Device = device
+				}
+				if city, ok := signinData["city"].(string); ok {
+					signin.City = city
+				}
+				if region, ok := signinData["region"].(string); ok {
+					signin.Region = region
+				}
+				if country, ok := signinData["country"].(string); ok {
+					signin.Country = country
+				}
+
+				// Map user data
+				if userData, ok := signinData["user"].(map[string]interface{}); ok {
+					user := &model.User{}
+					if id, ok := userData["id"].(float64); ok {
+						user.ID = uint64(id)
+					}
+					if firstName, ok := userData["first_name"].(string); ok {
+						user.FirstName = firstName
+					}
+					if lastName, ok := userData["last_name"].(string); ok {
+						user.LastName = lastName
+					}
+					if username, ok := userData["username"].(string); ok {
+						user.Username = username
+					}
+					if disabled, ok := userData["disabled"].(bool); ok {
+						user.Disabled = disabled
+					}
+					signin.User = user
+				}
+
+				session.Signins = append(session.Signins, *signin)
+			}
+		}
+	}
 
 	go setSessionCache(*session)
 
