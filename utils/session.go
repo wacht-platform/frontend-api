@@ -206,7 +206,56 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 				JOIN workspace_roles ws_role ON wmr.workspace_role_id = ws_role.id
 				WHERE wmr.workspace_membership_id = asi.active_workspace_membership_id),
 				'[]'::json
-			) as workspace_roles
+			) as workspace_roles,
+
+			-- All Signins for Session (JSON aggregated)
+			COALESCE(
+				(SELECT json_agg(
+					json_build_object(
+						'id', si.id,
+						'created_at', si.created_at,
+						'updated_at', si.updated_at,
+						'session_id', si.session_id,
+						'user_id', si.user_id,
+						'active_organization_membership_id', si.active_organization_membership_id,
+						'active_workspace_membership_id', si.active_workspace_membership_id,
+						'expires_at', si.expires_at,
+						'last_active_at', si.last_active_at,
+						'ip_address', si.ip_address,
+						'browser', si.browser,
+						'device', si.device,
+						'city', si.city,
+						'region', si.region,
+						'region_code', si.region_code,
+						'country', si.country,
+						'country_code', si.country_code,
+						'user', json_build_object(
+							'id', u.id,
+							'created_at', u.created_at,
+							'updated_at', u.updated_at,
+							'first_name', u.first_name,
+							'last_name', u.last_name,
+							'username', u.username,
+							'has_profile_picture', u.has_profile_picture,
+							'profile_picture_url', u.profile_picture_url,
+							'availability', u.availability,
+							'last_password_reset_at', u.last_password_reset_at,
+							'schema_version', u.schema_version,
+							'disabled', u.disabled,
+							'primary_email_address_id', u.primary_email_address_id,
+							'primary_phone_number_id', u.primary_phone_number_id,
+							'second_factor_policy', u.second_factor_policy,
+							'active_organization_membership_id', u.active_organization_membership_id,
+							'active_workspace_membership_id', u.active_workspace_membership_id,
+							'public_metadata', u.public_metadata,
+							'backup_codes_generated', u.backup_codes_generated
+						)
+					) ORDER BY si.created_at DESC
+				) FROM signins si
+				LEFT JOIN users u ON si.user_id = u.id
+				WHERE si.session_id = s.id),
+				'[]'::json
+			) as signins
 
 		FROM sessions s
 		LEFT JOIN signins asi ON s.active_signin_id = asi.id
@@ -226,6 +275,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		SignupAttemptsJSON    string `json:"signup_attempts"`
 		OrganizationRoles     string `json:"organization_roles"`
 		WorkspaceRoles        string `json:"workspace_roles"`
+		SigninsJSON           string `json:"signins"`
 	}
 
 	var result QueryResult
