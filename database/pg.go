@@ -8,13 +8,17 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"gorm.io/plugin/dbresolver"
 )
 
 var Connection *gorm.DB
 
 func InitPgConnection() error {
 	dsn := os.Getenv("DATABASE_URL")
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+	db, err := gorm.Open(postgres.New(postgres.Config{
+		DSN:                  dsn,
+		PreferSimpleProtocol: true,
+	}), &gorm.Config{
 		SkipDefaultTransaction:                   true,
 		PrepareStmt:                              false,
 		Logger:                                   logger.Default.LogMode(logger.Error),
@@ -24,6 +28,17 @@ func InitPgConnection() error {
 		return err
 	}
 
+	if os.Getenv("READ_REPLICA") != "" {
+		db.Use(dbresolver.Register(dbresolver.Config{
+			Replicas: []gorm.Dialector{
+				postgres.New(postgres.Config{
+					DSN:                  os.Getenv("READ_REPLICA"),
+					PreferSimpleProtocol: true,
+				}),
+			},
+		}))
+	}
+
 	pgDB, err := db.DB()
 	if err != nil {
 		return err
@@ -31,7 +46,6 @@ func InitPgConnection() error {
 
 	pgDB.SetConnMaxIdleTime(time.Hour)
 	pgDB.SetConnMaxLifetime(24 * time.Hour)
-	pgDB.SetMaxIdleConns(100)
 
 	Connection = db
 
