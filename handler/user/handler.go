@@ -995,7 +995,7 @@ func (h *Handler) SignOutFromSession(c *fiber.Ctx) error {
 		)
 	}
 
-	handler.RemoveSessionFromCache(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess[any](c, nil)
 }
@@ -1213,7 +1213,7 @@ func (h *Handler) DeleteAccount(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, nil, "Failed to complete account deletion")
 	}
 
-	handler.RemoveSessionFromCache(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, "Account deleted successfully")
 }

@@ -30,12 +30,11 @@ func setupRoutes(app *fiber.App) {
 func setupMiddleware(app *fiber.App) {
 	app.Use(logger.New())
 	app.Use(recover.New())
-	app.Use(middleware.SetDeploymentMiddleware)
+	app.Use(middleware.SetCombinedMiddleware)
 	app.Use(func(c *fiber.Ctx) error {
 		cfg := corsSettings(c)
 		return cors.New(cfg)(c)
 	})
-	app.Use(middleware.SetSessionMiddleware)
 }
 
 func corsSettings(c *fiber.Ctx) cors.Config {

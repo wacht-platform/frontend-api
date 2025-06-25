@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
-	"os"
 
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
@@ -22,11 +20,14 @@ type DeploymentQueryResult struct {
 }
 
 func GetDeploymentByHost(host string) (*model.Deployment, error) {
-	resp, err := http.Get(os.Getenv("CACHE_WORKER") + "?q=" + host)
-	if err == nil && resp.StatusCode == 200 {
-		deployment := new(model.Deployment)
-		if err := GetFromCache(resp, deployment); err == nil {
-			return deployment, nil
+	cacheData, err := GetMultipleFromCache(host)
+	if err == nil {
+		if deploymentData, exists := cacheData[host]; exists {
+			deploymentBytes, _ := json.Marshal(deploymentData)
+			deployment := new(model.Deployment)
+			if json.Unmarshal(deploymentBytes, deployment) == nil {
+				return deployment, nil
+			}
 		}
 	}
 

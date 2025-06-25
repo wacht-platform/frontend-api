@@ -1,10 +1,9 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
-	"os"
 	"strconv"
 
 	"github.com/ilabs/wacht-fe/database"
@@ -15,11 +14,15 @@ import (
 
 func GetSessionByID(sessionID uint64) (*model.Session, error) {
 	cacheKey := "session:" + strconv.FormatUint(sessionID, 10)
-	resp, err := http.Get(os.Getenv("CACHE_WORKER") + "?q=" + cacheKey)
-	if err == nil && resp.StatusCode == 200 {
-		session := new(model.Session)
-		if err := GetFromCache(resp, session); err == nil {
-			return session, nil
+
+	cacheData, err := GetMultipleFromCache(cacheKey)
+	if err == nil {
+		if sessionData, exists := cacheData[cacheKey]; exists {
+			sessionBytes, _ := json.Marshal(sessionData)
+			session := new(model.Session)
+			if json.Unmarshal(sessionBytes, session) == nil {
+				return session, nil
+			}
 		}
 	}
 

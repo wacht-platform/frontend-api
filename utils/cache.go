@@ -18,6 +18,25 @@ func GetFromCache[T any](resp *http.Response, target *T) error {
 	return nil
 }
 
+func GetMultipleFromCache(keys string) (map[string]interface{}, error) {
+	resp, err := http.Get(os.Getenv("CACHE_WORKER") + "?q=" + keys)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("cache worker returned status: %d", resp.StatusCode)
+	}
+
+	var cacheResp map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&cacheResp); err != nil {
+		return nil, err
+	}
+
+	return cacheResp, nil
+}
+
 func SetToCache(key string, value any, ttl uint64) error {
 	url := fmt.Sprintf(
 		"https://api.cloudflare.com/client/v4/accounts/%s/storage/kv/namespaces/%s/values/%s?expiration_ttl=%d",

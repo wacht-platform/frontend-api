@@ -827,7 +827,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		)
 	}
 
-	handler.RemoveSessionFromCache(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	response := fiber.Map{
 		"session": session,
@@ -1179,7 +1179,7 @@ func (h *Handler) VerifyMagicLink(c *fiber.Ctx) error {
 			return handler.SendInternalServerError(c, err, "Error completing signin")
 		}
 
-		handler.RemoveSessionFromCache(session.ID)
+		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 		// Use custom redirect URI if provided, otherwise default to signin page
 		var redirectURL string
@@ -1353,7 +1353,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 						return err
 					}
 
-					handler.RemoveSessionFromCache(session.ID)
+					handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 					return tx.Save(attempt).Error
 				}); err != nil {
@@ -1454,7 +1454,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 						return err
 					}
 
-					handler.RemoveSessionFromCache(session.ID)
+					handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 					return tx.Save(attempt).Error
 				}); err != nil {
@@ -2143,7 +2143,7 @@ func (h *Handler) handleSigninProfileCompletion(c *fiber.Ctx, attempt *model.Sig
 			return handler.SendInternalServerError(c, err, "Error completing signin")
 		}
 
-		handler.RemoveSessionFromCache(session.ID)
+		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 		return handler.SendSuccess(c, session)
 	}
 

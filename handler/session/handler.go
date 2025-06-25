@@ -73,7 +73,7 @@ func (h *Handler) SwitchActiveSignIn(
 
 	session.ActiveSigninID = &signInId
 
-	handler.RemoveSessionFromCache(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	database.Connection.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]interface{}{
 		"active_signin_id": session.ActiveSigninID,
@@ -130,7 +130,8 @@ func (h *Handler) SignOut(
 			)
 		}
 
-		handler.RemoveSessionFromCache(
+		handler.RemoveSessionFromCacheAndLocals(
+			c,
 			session.ID,
 		)
 		return handler.SendSuccess(
@@ -147,7 +148,7 @@ func (h *Handler) SignOut(
 			return handler.SendInternalServerError(c, nil, "Failed to sign out")
 		}
 
-		handler.RemoveSessionFromCache(session.ID)
+		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 		return handler.SendSuccess(c, session)
 	}
 }
@@ -165,7 +166,7 @@ func (h *Handler) SwitchOrganization(
 	if orgID == "" {
 		database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Update("active_organization_membership_id", nil)
 		database.Connection.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).Update("active_organization_membership_id", nil)
-		handler.RemoveSessionFromCache(session.ID)
+		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 		return handler.SendSuccess(c, session)
 	}
 
@@ -186,7 +187,7 @@ func (h *Handler) SwitchOrganization(
 
 	database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Update("active_organization_membership_id", membership.ID)
 	database.Connection.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).Update("active_organization_membership_id", membership.ID)
-	handler.RemoveSessionFromCache(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, session)
 }
@@ -210,7 +211,7 @@ func (h *Handler) SwitchWorkspace(
 			"active_workspace_membership_id":    nil,
 			"active_organization_membership_id": nil,
 		})
-		handler.RemoveSessionFromCache(session.ID)
+		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 		return handler.SendSuccess(c, session)
 	}
 
@@ -239,7 +240,7 @@ func (h *Handler) SwitchWorkspace(
 		"active_workspace_membership_id":    membership.ID,
 		"active_organization_membership_id": membership.OrganizationMembershipID,
 	})
-	handler.RemoveSessionFromCache(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, session)
 }
