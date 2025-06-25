@@ -18,6 +18,7 @@ import (
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/utils"
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwt"
 	"gorm.io/gorm"
@@ -32,9 +33,9 @@ func NewHandler() *Handler {
 func (h *Handler) GetCurrentSession(
 	c *fiber.Ctx,
 ) error {
-	session := handler.GetSession(c)
-
-	if session == nil {
+	sessionId := c.Locals("session").(uint64)
+	session, err := utils.GetSessionByID(sessionId)
+	if err != nil {
 		return handler.SendNotFound(c, nil, "Session not found")
 	}
 
@@ -268,10 +269,10 @@ func (h *Handler) GetToken(
 		template.TokenLifetime = 30
 	}
 
-	session := handler.GetSession(c)
-
-	if session == nil {
-		return handler.SendInternalServerError(c, nil, "Something went wrong")
+	sessionId := c.Locals("session").(uint64)
+	session, err := utils.GetSessionByID(sessionId)
+	if err != nil {
+		return handler.SendNotFound(c, nil, "Session not found")
 	}
 
 	if session.ActiveSignin == nil {
