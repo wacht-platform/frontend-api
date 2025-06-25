@@ -14,6 +14,7 @@ import (
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
 	"gorm.io/gorm"
+	"gorm.io/plugin/dbresolver"
 )
 
 type Handler struct {
@@ -649,7 +650,7 @@ func (h *Handler) GetOrganizationMembers(
 		ORDER BY organization_memberships.created_at ASC
 	`
 
-	if err := database.Connection.Raw(rawSQL, orgID).Scan(&queryResults).Error; err != nil {
+	if err := database.Connection.Clauses(dbresolver.Read).Raw(rawSQL, orgID).Scan(&queryResults).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to get organization members")
 	}
 

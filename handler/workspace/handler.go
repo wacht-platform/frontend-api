@@ -13,6 +13,7 @@ import (
 	"github.com/ilabs/wacht-fe/model"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
+	"gorm.io/plugin/dbresolver"
 )
 
 func getuint64Param(c *fiber.Ctx, paramName string) (uint64, error) {
@@ -239,7 +240,7 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 		ORDER BY workspace_memberships.created_at ASC
 	`
 
-	if err := database.Connection.Raw(rawSQL, workspaceID).Scan(&queryResults).Error; err != nil {
+	if err := database.Connection.Clauses(dbresolver.Read).Raw(rawSQL, workspaceID).Scan(&queryResults).Error; err != nil {
 		log.Printf("Error fetching workspace members for workspace %d: %v", workspaceID, err)
 		return handler.SendInternalServerError(c, err, "Failed to get workspace members")
 	}

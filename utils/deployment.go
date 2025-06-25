@@ -7,6 +7,7 @@ import (
 
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
+	"gorm.io/plugin/dbresolver"
 )
 
 type DeploymentQueryResult struct {
@@ -50,7 +51,7 @@ func GetDeploymentByHost(host string) (*model.Deployment, error) {
 		LEFT JOIN social_connections_agg sca ON d.id = sca.deployment_id
 		WHERE d.backend_host = ? AND d.deleted_at IS NULL
 	`
-	err = database.Connection.Raw(rawSQL, host).Scan(queryResult).Error
+	err = database.Connection.Clauses(dbresolver.Read).Raw(rawSQL, host).Scan(queryResult).Error
 
 	if err != nil || queryResult.ID == 0 {
 		return nil, fmt.Errorf("deployment not found")

@@ -14,6 +14,7 @@ import (
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
+	"gorm.io/plugin/dbresolver"
 )
 
 type Handler struct {
@@ -1046,7 +1047,7 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 		ORDER BY organization_memberships.created_at DESC
 	`
 
-	if err := database.Connection.Raw(rawSQL, session.ActiveSignin.UserID).Scan(&queryResults).Error; err != nil {
+	if err := database.Connection.Clauses(dbresolver.Read).Raw(rawSQL, session.ActiveSignin.UserID).Scan(&queryResults).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to get user organization memberships")
 	}
 
@@ -1137,7 +1138,7 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 
 	rawSQL += " ORDER BY workspace_memberships.created_at DESC"
 
-	if err := database.Connection.Raw(rawSQL, args...).Scan(&queryResults).Error; err != nil {
+	if err := database.Connection.Clauses(dbresolver.Read).Raw(rawSQL, args...).Scan(&queryResults).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to get user workspace memberships")
 	}
 
@@ -1295,8 +1296,6 @@ func (h *Handler) RemovePassword(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, "Password removed successfully")
 }
 
-
-
 func (h *Handler) DeleteAccount(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
@@ -1367,5 +1366,3 @@ func (h *Handler) DisconnectSocialConnection(c *fiber.Ctx) error {
 
 	return handler.SendSuccess(c, "Social connection disconnected successfully")
 }
-
-

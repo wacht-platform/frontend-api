@@ -7,6 +7,7 @@ import (
 
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
+	"gorm.io/plugin/dbresolver"
 )
 
 func GetSessionByID(sessionID uint64) (*model.Session, error) {
@@ -279,7 +280,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 	}
 
 	var result QueryResult
-	err := database.Connection.Raw(mainQuery, sessionID).Scan(&result).Error
+	err := database.Connection.Clauses(dbresolver.Read).Raw(mainQuery, sessionID).Scan(&result).Error
 	if err != nil {
 		return nil, fmt.Errorf("session not found: %w", err)
 	}
