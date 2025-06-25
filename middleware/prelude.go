@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -61,29 +59,14 @@ func handleDeploymentAndSession(c *fiber.Ctx, host string) error {
 	sessionToken := getSessionToken(c, host)
 
 	var deployment *model.Deployment
-	var session *model.Session
 	var err error
 
-	if sessionToken != "" {
-		deployment, session, err = getDeploymentAndSessionFromCache(host, sessionToken)
-		if err != nil {
-			deployment, err = getDeploymentFromCacheOrDB(host)
-			if err != nil {
-				return c.Status(404).JSON(fiber.Map{"message": "Deployment not found"})
-			}
-		}
-	} else {
-		deployment, err = getDeploymentFromCacheOrDB(host)
-		if err != nil {
-			return c.Status(404).JSON(fiber.Map{"message": "Deployment not found"})
-		}
+	deployment, err = getDeploymentFromCacheOrDB(host)
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"message": "Deployment not found"})
 	}
 
 	c.Locals("deployment", *deployment)
-
-	if session != nil {
-		c.Locals("session_data", session)
-	}
 
 	if sessionToken == "" {
 		return handleNewSession(c, *deployment)
@@ -106,108 +89,7 @@ func getSessionToken(c *fiber.Ctx, host string) string {
 }
 
 func getDeploymentFromCacheOrDB(host string) (*model.Deployment, error) {
-	cacheData, err := utils.GetMultipleFromCache(host)
-	if err == nil {
-		if deploymentData, exists := cacheData[host]; exists {
-			deploymentBytes, _ := json.Marshal(deploymentData)
-			deployment := new(model.Deployment)
-			if json.Unmarshal(deploymentBytes, deployment) == nil {
-				return deployment, nil
-			}
-		}
-	}
-
 	return utils.GetDeploymentByHost(host)
-}
-
-func getDeploymentAndSessionFromCache(host, sessionToken string) (*model.Deployment, *model.Session, error) {
-	sessionID, err := extractSessionIDFromTokenWithoutVerification(sessionToken)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	sessionKey := fmt.Sprintf("session:%d", sessionID)
-	keys := fmt.Sprintf("%s,%s", host, sessionKey)
-
-	cacheData, err := utils.GetMultipleFromCache(keys)
-	if err != nil {
-		return nil, nil, fmt.Errorf("cache miss: %v", err)
-	}
-
-	var deployment *model.Deployment
-	var session *model.Session
-
-	if deploymentData, exists := cacheData[host]; exists {
-		deploymentBytes, _ := json.Marshal(deploymentData)
-		deployment = new(model.Deployment)
-		json.Unmarshal(deploymentBytes, deployment)
-	}
-
-	if sessionData, exists := cacheData[sessionKey]; exists {
-		sessionBytes, _ := json.Marshal(sessionData)
-		session = new(model.Session)
-		json.Unmarshal(sessionBytes, session)
-	}
-
-	if deployment == nil || session == nil {
-		return nil, nil, fmt.Errorf("incomplete cache data")
-	}
-
-	return deployment, session, nil
-}
-
-func extractSessionIDFromTokenWithoutVerification(sessionToken string) (uint64, error) {
-	parts := strings.Split(sessionToken, ".")
-	if len(parts) != 3 {
-		return 0, fmt.Errorf("invalid JWT format")
-	}
-
-	payload := parts[1]
-
-	padding := 4 - len(payload)%4
-	if padding != 4 {
-		payload += strings.Repeat("=", padding)
-	}
-
-	decoded, err := base64.URLEncoding.DecodeString(payload)
-	if err != nil {
-		return 0, fmt.Errorf("failed to decode JWT payload: %v", err)
-	}
-
-	var claims map[string]interface{}
-	if err := json.Unmarshal(decoded, &claims); err != nil {
-		return 0, fmt.Errorf("failed to unmarshal JWT claims: %v", err)
-	}
-
-	sessionIDClaim, exists := claims["sess"]
-	if !exists {
-		return 0, fmt.Errorf("sess not found in token")
-	}
-
-	var sessionID uint64
-	switch v := sessionIDClaim.(type) {
-	case float64:
-		sessionID = uint64(v)
-	case int64:
-		sessionID = uint64(v)
-	case int:
-		sessionID = uint64(v)
-	case string:
-		var err error
-		sessionID, err = strconv.ParseUint(v, 10, 64)
-		if err != nil {
-			return 0, fmt.Errorf("invalid sess format: %v", err)
-		}
-	default:
-		// Fallback to string conversion
-		var err error
-		sessionID, err = strconv.ParseUint(fmt.Sprintf("%v", sessionIDClaim), 10, 64)
-		if err != nil {
-			return 0, fmt.Errorf("invalid sess format: %v", err)
-		}
-	}
-
-	return sessionID, nil
 }
 
 func handleNewSession(c *fiber.Ctx, deployment model.Deployment) error {
@@ -244,8 +126,6 @@ func handleNewSession(c *fiber.Ctx, deployment model.Deployment) error {
 	c.Locals("session_data", session)
 	c.Locals("session", session.ID)
 
-	go setSessionCache(*session)
-
 	return c.Next()
 }
 
@@ -267,17 +147,7 @@ func handleExistingSession(c *fiber.Ctx, deployment model.Deployment, sessionTok
 		return handleNewSession(c, deployment)
 	}
 
-	if cachedSession := c.Locals("session_data"); cachedSession == nil {
-		c.Locals("session", sessionID)
-	} else {
-		session := cachedSession.(*model.Session)
-		if session.ID != sessionID {
-			c.Locals("session_data", nil)
-			c.Locals("session", sessionID)
-		} else {
-			c.Locals("session", sessionID)
-		}
-	}
+	c.Locals("session", sessionID)
 
 	return c.Next()
 }
@@ -295,11 +165,6 @@ func setSessionToken(c *fiber.Ctx, token string, isProduction bool, deployment m
 	} else {
 		c.Set(devSessionHeader, token)
 	}
-}
-
-func setSessionCache(session model.Session) {
-	cacheKey := "session:" + strconv.FormatUint(session.ID, 10)
-	utils.SetToCache(cacheKey, session, 3600)
 }
 
 func refreshSession(c *fiber.Ctx, expJwt jwt.Token, deployment model.Deployment) error {
@@ -355,13 +220,6 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token, deployment model.Deployment)
 	}
 
 	if finalRotatingTokenID == 0 {
-		if cachedSession := c.Locals("session_data"); cachedSession != nil {
-			session := cachedSession.(*model.Session)
-			if session.ID == sessionID {
-				c.Locals("session", sessionID)
-				return c.Next()
-			}
-		}
 		c.Locals("session", sessionID)
 		return c.Next()
 	}
@@ -382,13 +240,6 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token, deployment model.Deployment)
 
 	setSessionToken(c, token, deployment.IsProduction(), deployment)
 
-	if cachedSession := c.Locals("session_data"); cachedSession != nil {
-		session := cachedSession.(*model.Session)
-		if session.ID == sessionID {
-			c.Locals("session", sessionID)
-			return c.Next()
-		}
-	}
 	c.Locals("session", sessionID)
 
 	return c.Next()

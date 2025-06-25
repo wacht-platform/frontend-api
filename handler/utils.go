@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/gofiber/fiber/v2"
@@ -41,19 +40,6 @@ func GetSession(c *fiber.Ctx) *model.Session {
 }
 
 func GetSessionFromCacheOrDB(sessionID uint64) (*model.Session, error) {
-	cacheKey := fmt.Sprintf("session:%d", sessionID)
-
-	cacheData, err := utils.GetMultipleFromCache(cacheKey)
-	if err == nil {
-		if sessionData, exists := cacheData[cacheKey]; exists {
-			sessionBytes, _ := json.Marshal(sessionData)
-			session := new(model.Session)
-			if json.Unmarshal(sessionBytes, session) == nil {
-				return session, nil
-			}
-		}
-	}
-
 	return utils.GetSessionByID(sessionID)
 }
 
