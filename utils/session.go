@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strconv"
 
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
@@ -280,91 +279,135 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		SigninsJSON           string `json:"signins"`
 	}
 
-	var result QueryResult
-	err := database.Connection.Clauses(dbresolver.Read).Raw(mainQuery, sessionID).Scan(&result).Error
+	var rawResult map[string]interface{}
+	err := database.Connection.Clauses(dbresolver.Read).Raw(mainQuery, sessionID).Scan(&rawResult).Error
 	if err != nil {
 		return nil, fmt.Errorf("session not found: %w", err)
 	}
 
-	*session = result.Session
+	if id, ok := rawResult["id"].(int64); ok {
+		session.ID = uint64(id)
+	}
+	if activeSigninID, ok := rawResult["active_signin_id"].(int64); ok {
+		session.ActiveSigninID = &[]uint64{uint64(activeSigninID)}[0]
+	}
 
-	// Parse JSON data for signins
-	if result.SigninsJSON != "" && result.SigninsJSON != "[]" {
-		var signinsData []map[string]interface{}
-		if err := json.Unmarshal([]byte(result.SigninsJSON), &signinsData); err == nil {
-			for _, signinData := range signinsData {
-				signin := &model.Signin{}
+	if activeSigninIDVal, ok := rawResult["ActiveSignin__id"].(int64); ok {
+		session.ActiveSignin = &model.Signin{}
+		session.ActiveSignin.ID = uint64(activeSigninIDVal)
 
-				// Map signin fields
-				if id, ok := signinData["id"].(float64); ok {
-					signin.ID = uint64(id)
-				}
-				if sessionID, ok := signinData["session_id"].(float64); ok {
-					signin.SessionID = uint64(sessionID)
-				}
-				if userID, ok := signinData["user_id"].(float64); ok {
-					signin.UserID = &[]uint64{uint64(userID)}[0]
-				}
-				if expiresAt, ok := signinData["expires_at"].(string); ok {
-					signin.ExpiresAt = expiresAt
-				}
-				if lastActiveAt, ok := signinData["last_active_at"].(string); ok {
-					signin.LastActiveAt = lastActiveAt
-				}
-				if ipAddress, ok := signinData["ip_address"].(string); ok {
-					signin.IpAddress = ipAddress
-				}
-				if browser, ok := signinData["browser"].(string); ok {
-					signin.Browser = browser
-				}
-				if device, ok := signinData["device"].(string); ok {
-					signin.Device = device
-				}
-				if city, ok := signinData["city"].(string); ok {
-					signin.City = city
-				}
-				if region, ok := signinData["region"].(string); ok {
-					signin.Region = region
-				}
-				if country, ok := signinData["country"].(string); ok {
-					signin.Country = country
-				}
+		if sessionID, ok := rawResult["ActiveSignin__session_id"].(int64); ok {
+			session.ActiveSignin.SessionID = uint64(sessionID)
+		}
+		if userID, ok := rawResult["ActiveSignin__user_id"].(int64); ok {
+			session.ActiveSignin.UserID = &[]uint64{uint64(userID)}[0]
+		}
 
-				// Map user data
-				if userData, ok := signinData["user"].(map[string]interface{}); ok {
-					user := &model.User{}
-					if id, ok := userData["id"].(float64); ok {
-						user.ID = uint64(id)
-					}
-					if firstName, ok := userData["first_name"].(string); ok {
-						user.FirstName = firstName
-					}
-					if lastName, ok := userData["last_name"].(string); ok {
-						user.LastName = lastName
-					}
-					if username, ok := userData["username"].(string); ok {
-						user.Username = username
-					}
-					if disabled, ok := userData["disabled"].(bool); ok {
-						user.Disabled = disabled
-					}
-					signin.User = user
-				}
+		if userIDVal, ok := rawResult["ActiveSignin__User__id"].(int64); ok {
+			session.ActiveSignin.User = &model.User{}
+			session.ActiveSignin.User.ID = uint64(userIDVal)
 
-				session.Signins = append(session.Signins, *signin)
+			if firstName, ok := rawResult["ActiveSignin__User__first_name"].(string); ok {
+				session.ActiveSignin.User.FirstName = firstName
+			}
+			if lastName, ok := rawResult["ActiveSignin__User__last_name"].(string); ok {
+				session.ActiveSignin.User.LastName = lastName
+			}
+			if username, ok := rawResult["ActiveSignin__User__username"].(string); ok {
+				session.ActiveSignin.User.Username = username
+			}
+			if disabled, ok := rawResult["ActiveSignin__User__disabled"].(bool); ok {
+				session.ActiveSignin.User.Disabled = disabled
+			}
+			if hasProfilePicture, ok := rawResult["ActiveSignin__User__has_profile_picture"].(bool); ok {
+				session.ActiveSignin.User.HasProfilePicture = hasProfilePicture
+			}
+			if profilePictureURL, ok := rawResult["ActiveSignin__User__profile_picture_url"].(string); ok {
+				session.ActiveSignin.User.ProfilePictureURL = profilePictureURL
+			}
+			if availability, ok := rawResult["ActiveSignin__User__availability"].(string); ok {
+				session.ActiveSignin.User.Availability = model.UserAvailability(availability)
 			}
 		}
 	}
 
-	go setSessionCache(*session)
+	if signinsData, ok := rawResult["signins"]; ok {
+		if signinsJSON, ok := signinsData.(string); ok && signinsJSON != "" && signinsJSON != "[]" {
+			var signinsData []map[string]interface{}
+			if err := json.Unmarshal([]byte(signinsJSON), &signinsData); err == nil {
+				for _, signinData := range signinsData {
+					signin := &model.Signin{}
+
+					if id, ok := signinData["id"].(float64); ok {
+						signin.ID = uint64(id)
+					}
+					if sessionID, ok := signinData["session_id"].(float64); ok {
+						signin.SessionID = uint64(sessionID)
+					}
+					if userID, ok := signinData["user_id"].(float64); ok {
+						signin.UserID = &[]uint64{uint64(userID)}[0]
+					}
+					if expiresAt, ok := signinData["expires_at"].(string); ok {
+						signin.ExpiresAt = expiresAt
+					}
+					if lastActiveAt, ok := signinData["last_active_at"].(string); ok {
+						signin.LastActiveAt = lastActiveAt
+					}
+					if ipAddress, ok := signinData["ip_address"].(string); ok {
+						signin.IpAddress = ipAddress
+					}
+					if browser, ok := signinData["browser"].(string); ok {
+						signin.Browser = browser
+					}
+					if device, ok := signinData["device"].(string); ok {
+						signin.Device = device
+					}
+					if city, ok := signinData["city"].(string); ok {
+						signin.City = city
+					}
+					if region, ok := signinData["region"].(string); ok {
+						signin.Region = region
+					}
+					if country, ok := signinData["country"].(string); ok {
+						signin.Country = country
+					}
+
+					if userData, ok := signinData["user"].(map[string]interface{}); ok {
+						user := &model.User{}
+						if id, ok := userData["id"].(float64); ok {
+							user.ID = uint64(id)
+						}
+						if firstName, ok := userData["first_name"].(string); ok {
+							user.FirstName = firstName
+						}
+						if lastName, ok := userData["last_name"].(string); ok {
+							user.LastName = lastName
+						}
+						if username, ok := userData["username"].(string); ok {
+							user.Username = username
+						}
+						if disabled, ok := userData["disabled"].(bool); ok {
+							user.Disabled = disabled
+						}
+						if hasProfilePicture, ok := userData["has_profile_picture"].(bool); ok {
+							user.HasProfilePicture = hasProfilePicture
+						}
+						if profilePictureURL, ok := userData["profile_picture_url"].(string); ok {
+							user.ProfilePictureURL = profilePictureURL
+						}
+						if availability, ok := userData["availability"].(string); ok {
+							user.Availability = model.UserAvailability(availability)
+						}
+						signin.User = user
+					}
+
+					session.Signins = append(session.Signins, *signin)
+				}
+			} else {
+				log.Printf("Failed to unmarshal signins JSON: %v", err)
+			}
+		}
+	}
 
 	return session, nil
-}
-
-func setSessionCache(session model.Session) {
-	cacheKey := "session:" + strconv.FormatUint(session.ID, 10)
-	err := SetToCache(cacheKey, session, 3600)
-	if err != nil {
-		log.Println("Error setting session cache: ", err)
-	}
 }
