@@ -33,11 +33,7 @@ func NewHandler() *Handler {
 func (h *Handler) GetCurrentSession(
 	c *fiber.Ctx,
 ) error {
-	sessionId := c.Locals("session").(uint64)
-	session, err := utils.GetSessionByID(sessionId)
-	if err != nil {
-		return handler.SendNotFound(c, nil, "Session not found")
-	}
+	session := handler.GetSession(c)
 
 	return handler.SendSuccess(c, session)
 }
@@ -249,7 +245,7 @@ func (h *Handler) SwitchWorkspace(
 			active_organization_membership_id = ?
 		WHERE id = ?;
 	`, membership.ID, membership.OrganizationMembershipID, session.ActiveSignin.UserID,
-	   membership.ID, membership.OrganizationMembershipID, session.ActiveSignin.ID)
+		membership.ID, membership.OrganizationMembershipID, session.ActiveSignin.ID)
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, session)
