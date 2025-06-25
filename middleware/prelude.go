@@ -29,7 +29,7 @@ const (
 
 type CacheResponse map[string]interface{}
 
-func SetCombinedMiddleware(c *fiber.Ctx) error {
+func SetRequestPrelude(c *fiber.Ctx) error {
 	host := c.Hostname()
 	path := c.Path()
 
@@ -81,7 +81,6 @@ func handleDeploymentAndSession(c *fiber.Ctx, host string) error {
 	c.Locals("deployment", *deployment)
 
 	if session != nil {
-		// Store cached session data in locals and validate JWT normally
 		c.Locals("session_data", session)
 		return handleExistingSession(c, *deployment, sessionToken)
 	}
@@ -250,14 +249,11 @@ func handleExistingSession(c *fiber.Ctx, deployment model.Deployment, sessionTok
 		return handleNewSession(c, deployment)
 	}
 
-	// Check if we have cached session data, if not set only session ID
 	if cachedSession := c.Locals("session_data"); cachedSession == nil {
 		c.Locals("session", sessionID)
 	} else {
-		// Ensure session ID matches cached data
 		session := cachedSession.(*model.Session)
 		if session.ID != sessionID {
-			// Session ID mismatch, clear cache and set new ID
 			c.Locals("session_data", nil)
 			c.Locals("session", sessionID)
 		} else {
@@ -368,7 +364,6 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token, deployment model.Deployment)
 
 	setSessionToken(c, token, deployment.IsProduction(), deployment)
 
-	// Check if we have cached session data
 	if cachedSession := c.Locals("session_data"); cachedSession != nil {
 		session := cachedSession.(*model.Session)
 		if session.ID == sessionID {

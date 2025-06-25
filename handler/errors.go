@@ -31,6 +31,7 @@ const (
 	ErrCodeInvalidCode                  = "INVALID_CODE"
 	ErrCodeRequiredField                = "REQUIRED_FIELD"
 	ErrCodeBadRequestBody               = "BAD_REQUEST_BODY"
+	ErrCodeUnauthorized                 = "UNAUTHORIZED"
 	ErrCodeProviderNotConfigured        = "PROVIDER_NOT_CONFIGURED"
 	ErrCodeSignupRestricted             = "SIGNUP_RESTRICTED"
 	ErrCodeSignupWaitlistOnly           = "SIGNUP_WAITLIST_ONLY"
@@ -90,6 +91,10 @@ var (
 	ErrBadRequestBody = Error{
 		Code:    ErrCodeBadRequestBody,
 		Message: "Unable to process request body. Please check the format.",
+	}
+	ErrUnauthorized = Error{
+		Code:    ErrCodeUnauthorized,
+		Message: "Unauthorized.",
 	}
 	ErrInternal = Error{
 		Code:    ErrorCodeInternal,
