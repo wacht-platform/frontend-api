@@ -249,7 +249,19 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 							'active_organization_membership_id', u.active_organization_membership_id,
 							'active_workspace_membership_id', u.active_workspace_membership_id,
 							'public_metadata', u.public_metadata,
-							'backup_codes_generated', u.backup_codes_generated
+							'backup_codes_generated', u.backup_codes_generated,
+							'primary_email_address', CASE
+								WHEN u.primary_email_address_id IS NOT NULL
+								THEN (SELECT json_build_object(
+									'id', pe.id,
+									'email_address', pe.email_address,
+									'is_primary', pe.is_primary,
+									'verified', pe.verified,
+									'verified_at', pe.verified_at,
+									'verification_strategy', pe.verification_strategy
+								) FROM user_email_addresses pe WHERE pe.id = u.primary_email_address_id)
+								ELSE NULL
+							END
 						)
 					) ORDER BY si.created_at DESC
 				) FROM signins si
@@ -302,6 +314,42 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		if userID, ok := rawResult["ActiveSignin__user_id"].(int64); ok {
 			session.ActiveSignin.UserID = &[]uint64{uint64(userID)}[0]
 		}
+		if activeOrgMembershipID, ok := rawResult["ActiveSignin__active_organization_membership_id"].(int64); ok {
+			session.ActiveSignin.ActiveOrganizationMembershipID = &[]uint64{uint64(activeOrgMembershipID)}[0]
+		}
+		if activeWsMembershipID, ok := rawResult["ActiveSignin__active_workspace_membership_id"].(int64); ok {
+			session.ActiveSignin.ActiveWorkspaceMembershipID = &[]uint64{uint64(activeWsMembershipID)}[0]
+		}
+		if expiresAt, ok := rawResult["ActiveSignin__expires_at"].(string); ok {
+			session.ActiveSignin.ExpiresAt = expiresAt
+		}
+		if lastActiveAt, ok := rawResult["ActiveSignin__last_active_at"].(string); ok {
+			session.ActiveSignin.LastActiveAt = lastActiveAt
+		}
+		if ipAddress, ok := rawResult["ActiveSignin__ip_address"].(string); ok {
+			session.ActiveSignin.IpAddress = ipAddress
+		}
+		if browser, ok := rawResult["ActiveSignin__browser"].(string); ok {
+			session.ActiveSignin.Browser = browser
+		}
+		if device, ok := rawResult["ActiveSignin__device"].(string); ok {
+			session.ActiveSignin.Device = device
+		}
+		if city, ok := rawResult["ActiveSignin__city"].(string); ok {
+			session.ActiveSignin.City = city
+		}
+		if region, ok := rawResult["ActiveSignin__region"].(string); ok {
+			session.ActiveSignin.Region = region
+		}
+		if regionCode, ok := rawResult["ActiveSignin__region_code"].(string); ok {
+			session.ActiveSignin.RegionCode = regionCode
+		}
+		if country, ok := rawResult["ActiveSignin__country"].(string); ok {
+			session.ActiveSignin.Country = country
+		}
+		if countryCode, ok := rawResult["ActiveSignin__country_code"].(string); ok {
+			session.ActiveSignin.CountryCode = countryCode
+		}
 
 		if userIDVal, ok := rawResult["ActiveSignin__User__id"].(int64); ok {
 			session.ActiveSignin.User = &model.User{}
@@ -329,8 +377,38 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 				session.ActiveSignin.User.Availability = model.UserAvailability(availability)
 			}
 		}
+
+		// Build ActiveOrganizationMembership from raw result
+		if activeOrgMembershipIDVal, ok := rawResult["ActiveSignin__ActiveOrganizationMembership__id"].(int64); ok {
+			session.ActiveSignin.ActiveOrganizationMembership = &model.OrganizationMembership{}
+			session.ActiveSignin.ActiveOrganizationMembership.ID = uint64(activeOrgMembershipIDVal)
+
+			if orgID, ok := rawResult["ActiveSignin__ActiveOrganizationMembership__organization_id"].(int64); ok {
+				session.ActiveSignin.ActiveOrganizationMembership.OrganizationID = uint64(orgID)
+			}
+			if userID, ok := rawResult["ActiveSignin__ActiveOrganizationMembership__user_id"].(int64); ok {
+				session.ActiveSignin.ActiveOrganizationMembership.UserID = uint64(userID)
+			}
+		}
+
+		// Build ActiveWorkspaceMembership from raw result
+		if activeWsMembershipIDVal, ok := rawResult["ActiveSignin__ActiveWorkspaceMembership__id"].(int64); ok {
+			session.ActiveSignin.ActiveWorkspaceMembership = &model.WorkspaceMembership{}
+			session.ActiveSignin.ActiveWorkspaceMembership.ID = uint64(activeWsMembershipIDVal)
+
+			if wsID, ok := rawResult["ActiveSignin__ActiveWorkspaceMembership__workspace_id"].(int64); ok {
+				session.ActiveSignin.ActiveWorkspaceMembership.WorkspaceID = uint64(wsID)
+			}
+			if userID, ok := rawResult["ActiveSignin__ActiveWorkspaceMembership__user_id"].(int64); ok {
+				session.ActiveSignin.ActiveWorkspaceMembership.UserID = uint64(userID)
+			}
+			if orgMembershipID, ok := rawResult["ActiveSignin__ActiveWorkspaceMembership__organization_membership_id"].(int64); ok {
+				session.ActiveSignin.ActiveWorkspaceMembership.OrganizationMembershipID = uint64(orgMembershipID)
+			}
+		}
 	}
 
+	// Parse signins JSON and populate session.Signins
 	if signinsData, ok := rawResult["signins"]; ok {
 		if signinsJSON, ok := signinsData.(string); ok && signinsJSON != "" && signinsJSON != "[]" {
 			var signinsData []map[string]interface{}
@@ -398,6 +476,31 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 						if availability, ok := userData["availability"].(string); ok {
 							user.Availability = model.UserAvailability(availability)
 						}
+						if primaryEmailAddressID, ok := userData["primary_email_address_id"].(float64); ok {
+							user.PrimaryEmailAddressID = &[]uint64{uint64(primaryEmailAddressID)}[0]
+						}
+
+						// Parse primary email address
+						if primaryEmailData, ok := userData["primary_email_address"].(map[string]interface{}); ok {
+							primaryEmail := &model.UserEmailAddress{}
+							if id, ok := primaryEmailData["id"].(float64); ok {
+								primaryEmail.ID = uint64(id)
+							}
+							if emailAddress, ok := primaryEmailData["email_address"].(string); ok {
+								primaryEmail.EmailAddress = emailAddress
+							}
+							if isPrimary, ok := primaryEmailData["is_primary"].(bool); ok {
+								primaryEmail.IsPrimary = isPrimary
+							}
+							if verified, ok := primaryEmailData["verified"].(bool); ok {
+								primaryEmail.Verified = verified
+							}
+							if verificationStrategy, ok := primaryEmailData["verification_strategy"].(string); ok {
+								primaryEmail.VerificationStrategy = model.VerificationStrategy(verificationStrategy)
+							}
+							user.PrimaryEmailAddress = primaryEmail
+						}
+
 						signin.User = user
 					}
 
