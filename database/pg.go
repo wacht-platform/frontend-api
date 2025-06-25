@@ -16,7 +16,6 @@ func InitPgConnection() error {
 	dsn := os.Getenv("DATABASE_URL")
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		SkipDefaultTransaction:                   true,
-		PrepareStmt:                              true,
 		Logger:                                   logger.Default.LogMode(logger.Error),
 		DisableForeignKeyConstraintWhenMigrating: false,
 	})
