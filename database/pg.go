@@ -21,7 +21,7 @@ func InitPgConnection() error {
 	}), &gorm.Config{
 		SkipDefaultTransaction:                   true,
 		PrepareStmt:                              false,
-		Logger:                                   logger.Default.LogMode(logger.Error),
+		Logger:                                   logger.Default.LogMode(logger.Info),
 		DisableForeignKeyConstraintWhenMigrating: false,
 	})
 	if err != nil {
