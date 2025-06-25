@@ -1,5 +1,7 @@
 package organization
 
+import "github.com/ilabs/wacht-fe/model"
+
 type CreateOrgRequest struct {
 	Name        string `form:"name" validate:"required"`
 	Description string `form:"description"`
@@ -48,4 +50,9 @@ type UpdateBillingAddressRequest struct {
 	State      string `form:"state" validate:"required"`
 	Country    string `form:"country" validate:"required"`
 	PostalCode string `form:"postal_code" validate:"required"`
+}
+
+type OrganizationMemberQueryResult struct {
+	model.OrganizationMembership
+	RolesJSON string `gorm:"column:roles_json"`
 }

@@ -1,5 +1,7 @@
 package workspace
 
+import "github.com/ilabs/wacht-fe/model"
+
 type CreateWorkspaceRequest struct {
 	Name           string `form:"name"            validate:"required"`
 	Description    string `form:"description"`
@@ -14,4 +16,9 @@ type UpdateWorkspaceRequest struct {
 type InviteWorkspaceMemberRequest struct {
 	Email string `form:"email" validate:"required,email"`
 	Role  string `form:"role"  validate:"required,oneof=member admin owner"`
+}
+
+type WorkspaceMemberQueryResult struct {
+	model.WorkspaceMembership
+	RolesJSON string `gorm:"column:roles_json"`
 }

@@ -1,6 +1,7 @@
 package organization
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -601,22 +602,67 @@ func (h *Handler) GetOrganizationMembers(
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
-	var currentMembership model.OrganizationMembership
-	if err := database.Connection.
-		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		Preload("Roles").
-		First(&currentMembership).
-		Error; err != nil {
+	// Check current user's membership with raw SQL for better performance
+	var currentMembershipExists int
+	checkSQL := `
+		SELECT 1 FROM organization_memberships
+		WHERE organization_memberships.organization_id = ?
+			AND organization_memberships.user_id = ?
+			AND organization_memberships.deleted_at IS NULL
+		LIMIT 1
+	`
+	if err := database.Connection.Raw(checkSQL, orgID, session.ActiveSignin.UserID).Scan(&currentMembershipExists).Error; err != nil || currentMembershipExists == 0 {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	var members []model.OrganizationMembership
-	if err := database.Connection.Where("organization_id = ?", orgID).
-		Preload("Roles").
-		Joins("User").
-		Joins("User.PrimaryEmailAddress").
-		Find(&members).Error; err != nil {
+	var queryResults []OrganizationMemberQueryResult
+	rawSQL := `
+		WITH organization_membership_roles_aggregated AS (
+			SELECT
+				organization_membership_roles.organization_membership_id,
+				json_agg(
+					json_build_object(
+						'id', organization_roles.id,
+						'organization_id', organization_roles.organization_id,
+						'name', organization_roles.name,
+						'permissions', organization_roles.permissions,
+						'deployment_id', organization_roles.deployment_id,
+						'created_at', organization_roles.created_at,
+						'updated_at', organization_roles.updated_at
+					)
+				) as roles_json
+			FROM organization_membership_roles
+			JOIN organization_roles ON organization_membership_roles.organization_role_id = organization_roles.id
+			GROUP BY organization_membership_roles.organization_membership_id
+		)
+		SELECT
+			organization_memberships.id,
+			organization_memberships.created_at,
+			organization_memberships.updated_at,
+			organization_memberships.organization_id,
+			organization_memberships.user_id,
+			COALESCE(organization_membership_roles_aggregated.roles_json, '[]'::json) as roles_json
+		FROM organization_memberships
+		LEFT JOIN organization_membership_roles_aggregated ON organization_memberships.id = organization_membership_roles_aggregated.organization_membership_id
+		WHERE organization_memberships.organization_id = ?
+			AND organization_memberships.deleted_at IS NULL
+		ORDER BY organization_memberships.created_at ASC
+	`
+
+	if err := database.Connection.Raw(rawSQL, orgID).Scan(&queryResults).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to get organization members")
+	}
+
+	members := make([]model.OrganizationMembership, len(queryResults))
+	for i, result := range queryResults {
+		members[i] = result.OrganizationMembership
+
+		var roles []*model.OrganizationRole
+		if result.RolesJSON != "" && result.RolesJSON != "[]" {
+			if err := json.Unmarshal([]byte(result.RolesJSON), &roles); err == nil {
+				members[i].Roles = roles
+			}
+		}
 	}
 
 	return handler.SendSuccess(c, members)

@@ -2,6 +2,7 @@ package user
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"strconv"
 	"time"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
-	"gorm.io/gorm/clause"
 )
 
 type Handler struct {
@@ -1006,14 +1006,71 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
 	}
 
-	memberships := []model.OrganizationMembership{}
-	if err := database.Connection.Where(
-		"user_id = ?",
-		session.ActiveSignin.UserID,
-	).Preload(
-		clause.Associations,
-	).Find(&memberships).Error; err != nil {
+	var queryResults []OrganizationMembershipQueryResult
+	rawSQL := `
+		WITH organization_membership_roles_aggregated AS (
+			SELECT
+				organization_membership_roles.organization_membership_id,
+				json_agg(
+					json_build_object(
+						'id', organization_roles.id,
+						'organization_id', organization_roles.organization_id,
+						'name', organization_roles.name,
+						'permissions', organization_roles.permissions,
+						'deployment_id', organization_roles.deployment_id,
+						'created_at', organization_roles.created_at,
+						'updated_at', organization_roles.updated_at
+					)
+				) as roles_json
+			FROM organization_membership_roles
+			JOIN organization_roles ON organization_membership_roles.organization_role_id = organization_roles.id
+			GROUP BY organization_membership_roles.organization_membership_id
+		)
+		SELECT
+			organization_memberships.id,
+			organization_memberships.created_at,
+			organization_memberships.updated_at,
+			organization_memberships.organization_id,
+			organization_memberships.user_id,
+			organizations.name as organization_name,
+			organizations.image_url as organization_image_url,
+			organizations.description as organization_description,
+			organizations.member_count as organization_member_count,
+			COALESCE(organization_membership_roles_aggregated.roles_json, '[]'::json) as roles_json
+		FROM organization_memberships
+		JOIN organizations ON organization_memberships.organization_id = organizations.id
+		LEFT JOIN organization_membership_roles_aggregated ON organization_memberships.id = organization_membership_roles_aggregated.organization_membership_id
+		WHERE organization_memberships.user_id = ?
+			AND organization_memberships.deleted_at IS NULL
+			AND organizations.deleted_at IS NULL
+		ORDER BY organization_memberships.created_at DESC
+	`
+
+	if err := database.Connection.Raw(rawSQL, session.ActiveSignin.UserID).Scan(&queryResults).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to get user organization memberships")
+	}
+
+	memberships := make([]model.OrganizationMembership, len(queryResults))
+	for i, result := range queryResults {
+		memberships[i] = result.OrganizationMembership
+		memberships[i].Organization = model.Organization{
+			Model: model.Model{
+				ID:        result.OrganizationID,
+				CreatedAt: result.CreatedAt,
+				UpdatedAt: result.UpdatedAt,
+			},
+			Name:        result.OrganizationName,
+			ImageUrl:    result.OrganizationImageUrl,
+			Description: result.OrganizationDescription,
+			MemberCount: result.OrganizationMemberCount,
+		}
+
+		var roles []*model.OrganizationRole
+		if result.RolesJSON != "" && result.RolesJSON != "[]" {
+			if err := json.Unmarshal([]byte(result.RolesJSON), &roles); err == nil {
+				memberships[i].Roles = roles
+			}
+		}
 	}
 
 	return handler.SendSuccess(c, memberships)
@@ -1025,24 +1082,93 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
 	}
 
-	memberships := []model.WorkspaceMembership{}
-	query := database.Connection.Where(
-		"user_id = ?",
-		session.ActiveSignin.UserID,
-	).Preload(
-		clause.Associations,
-	)
+	var queryResults []WorkspaceMembershipQueryResult
+	rawSQL := `
+		WITH workspace_membership_roles_aggregated AS (
+			SELECT
+				workspace_membership_roles.workspace_membership_id,
+				json_agg(
+					json_build_object(
+						'id', workspace_roles.id,
+						'name', workspace_roles.name,
+						'permissions', workspace_roles.permissions,
+						'organization_id', workspace_roles.organization_id,
+						'deployment_id', workspace_roles.deployment_id,
+						'workspace_id', workspace_roles.workspace_id,
+						'created_at', workspace_roles.created_at,
+						'updated_at', workspace_roles.updated_at
+					)
+				) as roles_json
+			FROM workspace_membership_roles
+			JOIN workspace_roles ON workspace_membership_roles.workspace_role_id = workspace_roles.id
+			GROUP BY workspace_membership_roles.workspace_membership_id
+		)
+		SELECT
+			workspace_memberships.id,
+			workspace_memberships.created_at,
+			workspace_memberships.updated_at,
+			workspace_memberships.workspace_id,
+			workspace_memberships.organization_id,
+			workspace_memberships.organization_membership_id,
+			workspace_memberships.user_id,
+			workspaces.name as workspace_name,
+			workspaces.image_url as workspace_image_url,
+			workspaces.description as workspace_description,
+			workspaces.member_count as workspace_member_count,
+			organizations.name as organization_name,
+			organizations.image_url as organization_image_url,
+			COALESCE(workspace_membership_roles_aggregated.roles_json, '[]'::json) as roles_json
+		FROM workspace_memberships
+		JOIN workspaces ON workspace_memberships.workspace_id = workspaces.id
+		JOIN organizations ON workspace_memberships.organization_id = organizations.id
+		LEFT JOIN workspace_membership_roles_aggregated ON workspace_memberships.id = workspace_membership_roles_aggregated.workspace_membership_id
+		WHERE workspace_memberships.user_id = ?
+			AND workspace_memberships.deleted_at IS NULL
+			AND workspaces.deleted_at IS NULL
+			AND organizations.deleted_at IS NULL
+	`
 
+	args := []interface{}{session.ActiveSignin.UserID}
 	orgID := c.Query("org_id")
 	if orgID != "" {
-		query = query.Where(
-			"organization_id = ?",
-			orgID,
-		)
+		rawSQL += " AND workspace_memberships.organization_id = ?"
+		args = append(args, orgID)
 	}
 
-	if err := query.Find(&memberships).Error; err != nil {
+	rawSQL += " ORDER BY workspace_memberships.created_at DESC"
+
+	if err := database.Connection.Raw(rawSQL, args...).Scan(&queryResults).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to get user workspace memberships")
+	}
+
+	memberships := make([]model.WorkspaceMembership, len(queryResults))
+	for i, result := range queryResults {
+		memberships[i] = result.WorkspaceMembership
+		memberships[i].Workspace = model.Workspace{
+			Model: model.Model{
+				ID:        result.WorkspaceID,
+				CreatedAt: result.CreatedAt,
+				UpdatedAt: result.UpdatedAt,
+			},
+			Name:        result.WorkspaceName,
+			ImageUrl:    result.WorkspaceImageUrl,
+			Description: result.WorkspaceDescription,
+			MemberCount: result.WorkspaceMemberCount,
+		}
+		memberships[i].Organization = model.Organization{
+			Model: model.Model{
+				ID: result.OrganizationID,
+			},
+			Name:     result.OrganizationName,
+			ImageUrl: result.OrganizationImageUrl,
+		}
+
+		var roles []*model.WorkspaceRole
+		if result.RolesJSON != "" && result.RolesJSON != "[]" {
+			if err := json.Unmarshal([]byte(result.RolesJSON), &roles); err == nil {
+				memberships[i].Roles = roles
+			}
+		}
 	}
 
 	return handler.SendSuccess(c, memberships)

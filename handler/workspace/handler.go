@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
@@ -188,21 +189,71 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
-	var actingUserMembership model.WorkspaceMembership
-	if err := database.Connection.
-		Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignin.UserID).
-		First(&actingUserMembership).Error; err != nil {
+	// Check current user's membership with raw SQL for better performance
+	var actingUserMembershipExists int
+	checkSQL := `
+		SELECT 1 FROM workspace_memberships
+		WHERE workspace_memberships.workspace_id = ?
+			AND workspace_memberships.user_id = ?
+			AND workspace_memberships.deleted_at IS NULL
+		LIMIT 1
+	`
+	if err := database.Connection.Raw(checkSQL, workspaceID, session.ActiveSignin.UserID).Scan(&actingUserMembershipExists).Error; err != nil || actingUserMembershipExists == 0 {
 		return handler.SendForbidden(c, nil, "Insufficient permissions to view members (not a member of the workspace).")
 	}
 
-	var members []model.WorkspaceMembership
-	if err := database.Connection.
-		Where("workspace_id = ?", workspaceID).
-		Preload("User").
-		Preload("Role").
-		Find(&members).Error; err != nil {
+	var queryResults []WorkspaceMemberQueryResult
+	rawSQL := `
+		WITH workspace_membership_roles_aggregated AS (
+			SELECT
+				workspace_membership_roles.workspace_membership_id,
+				json_agg(
+					json_build_object(
+						'id', workspace_roles.id,
+						'name', workspace_roles.name,
+						'permissions', workspace_roles.permissions,
+						'organization_id', workspace_roles.organization_id,
+						'deployment_id', workspace_roles.deployment_id,
+						'workspace_id', workspace_roles.workspace_id,
+						'created_at', workspace_roles.created_at,
+						'updated_at', workspace_roles.updated_at
+					)
+				) as roles_json
+			FROM workspace_membership_roles
+			JOIN workspace_roles ON workspace_membership_roles.workspace_role_id = workspace_roles.id
+			GROUP BY workspace_membership_roles.workspace_membership_id
+		)
+		SELECT
+			workspace_memberships.id,
+			workspace_memberships.created_at,
+			workspace_memberships.updated_at,
+			workspace_memberships.workspace_id,
+			workspace_memberships.organization_id,
+			workspace_memberships.organization_membership_id,
+			workspace_memberships.user_id,
+			COALESCE(workspace_membership_roles_aggregated.roles_json, '[]'::json) as roles_json
+		FROM workspace_memberships
+		LEFT JOIN workspace_membership_roles_aggregated ON workspace_memberships.id = workspace_membership_roles_aggregated.workspace_membership_id
+		WHERE workspace_memberships.workspace_id = ?
+			AND workspace_memberships.deleted_at IS NULL
+		ORDER BY workspace_memberships.created_at ASC
+	`
+
+	if err := database.Connection.Raw(rawSQL, workspaceID).Scan(&queryResults).Error; err != nil {
 		log.Printf("Error fetching workspace members for workspace %d: %v", workspaceID, err)
 		return handler.SendInternalServerError(c, err, "Failed to get workspace members")
+	}
+
+	members := make([]model.WorkspaceMembership, len(queryResults))
+	for i, result := range queryResults {
+		members[i] = result.WorkspaceMembership
+
+		var roles []*model.WorkspaceRole
+		if result.RolesJSON != "" && result.RolesJSON != "[]" {
+			if err := json.Unmarshal([]byte(result.RolesJSON), &roles); err == nil {
+				members[i].Roles = roles
+			}
+		}
 	}
 
 	return handler.SendSuccess(c, members)
