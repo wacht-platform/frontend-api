@@ -217,7 +217,7 @@ func handleNewSession(c *fiber.Ctx, deployment model.Deployment) error {
 
 	err := database.Connection.Transaction(func(tx *gorm.DB) error {
 		var err error
-		token, err = utils.SignJWT(
+		token, err = utils.SignNewJWT(
 			session.ID,
 			deployment.BackendHost,
 			time.Now().Add(sessionDuration),
@@ -328,8 +328,7 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token, deployment model.Deployment)
 		}
 
 		if rotatingToken.HasNextToken() {
-			finalRotatingTokenID = 0
-			return nil
+			finalRotatingTokenID = *rotatingToken.NextTokenID
 		}
 
 		newRotatingToken := model.NewRotatingToken(
@@ -356,7 +355,6 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token, deployment model.Deployment)
 	}
 
 	if finalRotatingTokenID == 0 {
-		// Check if we have cached session data
 		if cachedSession := c.Locals("session_data"); cachedSession != nil {
 			session := cachedSession.(*model.Session)
 			if session.ID == sessionID {
@@ -370,6 +368,7 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token, deployment model.Deployment)
 
 	signed, err := utils.SignJWT(
 		sessionID,
+		finalRotatingTokenID,
 		deployment.BackendHost,
 		time.Now().Add(sessionDuration),
 		*deployment.KepPair,

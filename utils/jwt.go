@@ -14,7 +14,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func SignJWT(
+func SignNewJWT(
 	sessionID uint64,
 	iss string,
 	exp time.Time,
@@ -31,13 +31,32 @@ func SignJWT(
 		return "", err
 	}
 
+	return SignJWT(
+		sessionID,
+		uint64(rotatingToken.ID),
+		iss,
+		exp,
+		keypair,
+		tx,
+	)
+}
+
+func SignJWT(
+	sessionID uint64,
+	rotatingTokenID uint64,
+	iss string,
+	exp time.Time,
+	keypair model.DeploymentKeyPair,
+	tx *gorm.DB,
+) (string, error) {
+
 	tok, err := jwt.NewBuilder().
 		Issuer(fmt.Sprintf("https://%s", iss)).
 		Expiration(exp).
 		IssuedAt(time.Now()).
 		NotBefore(time.Now()).
-		Claim("sess", sessionID).
-		Claim("rotating_token", strconv.FormatUint(uint64(rotatingToken.ID), 10)).
+		Claim("sess", strconv.FormatUint(uint64(sessionID), 10)).
+		Claim("rotating_token", strconv.FormatUint(uint64(rotatingTokenID), 10)).
 		Build()
 	if err != nil {
 		return "", err
