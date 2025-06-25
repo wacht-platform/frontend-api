@@ -2,7 +2,6 @@ package database
 
 import (
 	"os"
-	"time"
 
 	"github.com/ilabs/wacht-fe/model"
 	"gorm.io/driver/postgres"
@@ -38,13 +37,6 @@ func InitPgConnection() error {
 			},
 		}))
 	}
-
-	pgDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-
-	pgDB.SetConnMaxIdleTime(time.Hour)
 
 	Connection = db
 
