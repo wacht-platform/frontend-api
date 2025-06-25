@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -289,6 +290,7 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token, deployment model.Deployment)
 
 	sessionID, rotatingTokenID, err := extractTokenClaims(expJwt)
 	if err != nil {
+		log.Println("Error extracting token claims:", err)
 		return handler.SendUnauthorized(c, err, "Invalid session")
 	}
 
