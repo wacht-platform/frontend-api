@@ -23,6 +23,8 @@ import (
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/service"
 	"github.com/ilabs/wacht-fe/utils"
+	"github.com/pquerna/otp"
+	"github.com/pquerna/otp/totp"
 	"github.com/ua-parser/uap-go/uaparser"
 	"golang.org/x/oauth2"
 	"gorm.io/datatypes"
@@ -1473,8 +1475,7 @@ func (s *AuthService) extractCountryCodeFromPhone(phoneNumber string) string {
 					"680", "681", "682", "683", "684", "685", "686", "687", "688",
 					"689", "690", "691", "692", "850", "852", "853", "855", "856",
 					"880", "886", "960", "961", "962", "963", "964", "965", "966",
-					"967", "968", "970", "971", "972", "973", "974", "975", "976",
-					"977", "992", "993", "994", "995", "996", "998",
+					"967", "992", "993", "994", "995", "996", "998",
 				}
 				for _, code := range commonThreeDigit {
 					if threeDigitCode == code {
@@ -1486,4 +1487,71 @@ func (s *AuthService) extractCountryCodeFromPhone(phoneNumber string) string {
 	}
 
 	return "1"
+}
+
+func (s *AuthService) FindUserByID(userID uint64) (*model.User, error) {
+	var user model.User
+	if res := s.db.Preload("UserAuthenticator").First(&user, userID); res.RowsAffected == 0 {
+		return nil, handler.ErrUserNotFound
+	} else if res.Error != nil {
+		return nil, res.Error
+	}
+	return &user, nil
+}
+
+func (s *AuthService) VerifyTOTP(user *model.User, code string) (bool, error) {
+	if user.UserAuthenticator == nil {
+		return false, errors.New("no authenticator configured")
+	}
+
+	valid, err := totp.ValidateCustom(
+		code,
+		user.UserAuthenticator.TotpSecret,
+		time.Now(),
+		totp.ValidateOpts{
+			Period: 30,
+			Digits: otp.DigitsSix,
+		},
+	)
+	if err != nil {
+		return false, err
+	}
+
+	return valid, nil
+}
+
+func (s *AuthService) VerifyBackupCode(user *model.User, code string) (bool, error) {
+	if !user.BackupCodesGenerated || len(user.BackupCodes) == 0 {
+		return false, errors.New("no backup codes configured")
+	}
+
+	// Check if the provided code matches any of the backup codes
+	for i, backupCode := range user.BackupCodes {
+		if backupCode == code {
+			// Remove the used backup code
+			user.BackupCodes = append(user.BackupCodes[:i], user.BackupCodes[i+1:]...)
+			if err := s.db.Save(user).Error; err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (s *AuthService) GetAvailableSecondFactorMethods(user *model.User) []string {
+	var methods []string
+	
+	// Check if user has authenticator app configured
+	if user.UserAuthenticator != nil {
+		methods = append(methods, "totp")
+	}
+	
+	// Check if user has backup codes
+	if user.BackupCodesGenerated && len(user.BackupCodes) > 0 {
+		methods = append(methods, "backup_code")
+	}
+	
+	return methods
 }

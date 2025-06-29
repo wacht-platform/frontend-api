@@ -75,3 +75,13 @@ type IPLocation struct {
 	Timezone      string  `json:"timezone"`
 	ISP           string  `json:"isp"`
 }
+
+type SecondFactorVerificationRequest struct {
+	VerificationCode string `form:"verification_code" validate:"required"`
+	Method           string `form:"method" validate:"required,oneof=totp backup_code"`
+}
+
+type SecondFactorSetupRequest struct {
+	AuthenticatorID string   `form:"authenticator_id" validate:"required"`
+	Codes           []string `form:"codes" validate:"required,min=2,max=2"`
+}

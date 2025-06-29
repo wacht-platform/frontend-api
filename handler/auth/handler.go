@@ -1026,6 +1026,16 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 					"Error sending magic link",
 				)
 			}
+		case model.SignInAttemptStepVerifySecondFactor:
+			{
+				// For second factor verification, redirect to the dedicated endpoint
+				// This allows for more complex verification logic with different methods
+				return handler.SendBadRequest(
+					c,
+					nil,
+					"Second factor verification requires dedicated endpoint. Use /auth/verify-second-factor",
+				)
+			}
 		default:
 			return handler.SendBadRequest(c, nil, "Invalid step")
 		}
@@ -1467,6 +1477,16 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 
 				h.service.DeleteOTPFromRedis(
 					fmt.Sprintf("signin:%d", attempt.ID),
+				)
+			}
+		case model.SignInAttemptStepVerifySecondFactor:
+			{
+				// For second factor verification, redirect to the dedicated endpoint
+				// This allows for more complex verification logic with different methods
+				return handler.SendBadRequest(
+					c,
+					nil,
+					"Second factor verification requires dedicated endpoint. Use /auth/verify-second-factor",
 				)
 			}
 		}
@@ -2159,5 +2179,181 @@ func (h *Handler) handleSigninProfileCompletion(c *fiber.Ctx, attempt *model.Sig
 	return handler.SendSuccess(c, fiber.Map{
 		"signin_attempt": *attempt,
 		"session":        *session,
+	})
+}
+
+func (h *Handler) VerifySecondFactor(c *fiber.Ctx) error {
+	attemptIdentifier := c.QueryInt("attempt_identifier")
+	session := handler.GetSession(c)
+
+	if attemptIdentifier == 0 {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"attempt_identifier is required",
+			handler.ErrInvalidSignInAttempt,
+		)
+	}
+
+	b, validation := handler.Validate[SecondFactorVerificationRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
+	}
+
+	attempt, err := h.service.GetSignInAttempt(uint64(attemptIdentifier))
+	if err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Error fetching sign in attempt",
+		)
+	}
+
+	if attempt.Completed {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Sign in attempt already completed",
+		)
+	}
+
+	if attempt.CurrentStep != model.SignInAttemptStepVerifySecondFactor {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Invalid verification step",
+		)
+	}
+
+	// Get user for second factor verification
+	user, err := h.service.FindUserByID(*attempt.UserID)
+	if err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Error fetching user",
+		)
+	}
+
+	var verificationSuccessful bool
+
+	switch b.Method {
+	case "totp":
+		verificationSuccessful, err = h.service.VerifyTOTP(user, b.VerificationCode)
+	case "backup_code":
+		verificationSuccessful, err = h.service.VerifyBackupCode(user, b.VerificationCode)
+	default:
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Invalid verification method",
+		)
+	}
+
+	if err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Error during verification",
+		)
+	}
+
+	if !verificationSuccessful {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Invalid verification code",
+		)
+	}
+
+	// Complete the sign-in process
+	attempt.Completed = true
+	attempt.RemainingSteps = nil
+	signin := model.NewSignIn(session.ID, user.ID)
+	signin.User = user
+
+	session.Signins = append(session.Signins, *signin)
+	session.ActiveSigninID = &signin.ID
+
+	if err := database.Connection.Transaction(func(tx *gorm.DB) error {
+		d := handler.GetDeployment(c)
+		if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
+			return err
+		}
+
+		if err := tx.Create(signin).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]interface{}{
+			"active_signin_id": session.ActiveSigninID,
+		}).Error; err != nil {
+			return err
+		}
+
+		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+
+		return tx.Save(attempt).Error
+	}); err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Something went wrong",
+		)
+	}
+
+	return handler.SendSuccess(c, session)
+}
+
+func (h *Handler) GetSecondFactorMethods(c *fiber.Ctx) error {
+	attemptIdentifier := c.QueryInt("attempt_identifier")
+	
+	if attemptIdentifier == 0 {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"attempt_identifier is required",
+			handler.ErrInvalidSignInAttempt,
+		)
+	}
+
+	attempt, err := h.service.GetSignInAttempt(uint64(attemptIdentifier))
+	if err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Error fetching sign in attempt",
+		)
+	}
+
+	if attempt.CurrentStep != model.SignInAttemptStepVerifySecondFactor {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Invalid verification step",
+		)
+	}
+
+	user, err := h.service.FindUserByID(*attempt.UserID)
+	if err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Error fetching user",
+		)
+	}
+
+	methods := h.service.GetAvailableSecondFactorMethods(user)
+	
+	if len(methods) == 0 {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"No second factor methods available",
+		)
+	}
+
+	return handler.SendSuccess(c, map[string]interface{}{
+		"available_methods": methods,
 	})
 }
