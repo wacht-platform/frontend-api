@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"slices"
+
 	"github.com/godruoyi/go-snowflake"
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/database"
@@ -737,9 +739,11 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			if signIn != nil {
 				session.Signins = append(session.Signins, *signIn)
 				session.ActiveSigninID = &signIn.ID
+				attempt.Completed = true
+			} else {
+				attempt.Completed = false
 			}
 
-			attempt.Completed = true
 			if err := tx.Save(&attempt).Error; err != nil {
 				return err
 			}
@@ -789,20 +793,33 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			return err
 		}
 
-		signIn := model.NewSignIn(session.ID, u.ID)
-
 		if err := tx.Create(&connection).Error; err != nil {
 			return err
 		}
 
-		if err := tx.Create(&signIn).Error; err != nil {
-			return err
+		if u.SecondFactorPolicy == model.SecondFactorPolicyEnforced {
+			attempt.UserID = &u.ID
+			attempt.IdentifierID = &email.ID
+			attempt.FirstMethodAuthenticated = true
+			attempt.SecondMethodAuthenticationRequired = true
+			attempt.CurrentStep = model.SignInAttemptStepVerifySecondFactor
+			attempt.RemainingSteps = datatypes.NewJSONSlice([]model.SignInAttemptStep{
+				model.SignInAttemptStepVerifySecondFactor,
+			})
+			attempt.Available2FAMethods = datatypes.NewJSONSlice([]string{})
+			attempt.Completed = false
+		} else {
+			signIn := model.NewSignIn(session.ID, u.ID)
+
+			if err := tx.Create(&signIn).Error; err != nil {
+				return err
+			}
+
+			session.Signins = append(session.Signins, *signIn)
+			session.ActiveSigninID = &signIn.ID
+			attempt.Completed = true
 		}
 
-		session.Signins = append(session.Signins, *signIn)
-		session.ActiveSigninID = &signIn.ID
-
-		attempt.Completed = true
 		if err := tx.Save(&attempt).Error; err != nil {
 			return err
 		}
@@ -1024,6 +1041,134 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 					c,
 					err,
 					"Error sending magic link",
+				)
+			}
+		case model.SignInAttemptStepVerifySecondFactor:
+			if attempt.UserID == nil {
+				return handler.SendBadRequest(
+					c,
+					nil,
+					"User ID not found in sign-in attempt",
+				)
+			}
+
+			switch strategy {
+			case "phone_otp":
+				if err := h.service.Store2FAMethodInCache(fmt.Sprintf("2fa_method:%d", attempt.ID), "phone_otp"); err != nil {
+					return handler.SendInternalServerError(
+						c,
+						err,
+						"Error storing 2FA method",
+					)
+				}
+
+				var user model.User
+				if err := database.Connection.Preload("PrimaryPhoneNumber").Where("id = ?", *attempt.UserID).First(&user).Error; err != nil {
+					return handler.SendInternalServerError(
+						c,
+						err,
+						"Error fetching user",
+					)
+				}
+
+				if user.PrimaryPhoneNumber == nil || !user.PrimaryPhoneNumber.Verified {
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"No verified phone number available for 2FA",
+					)
+				}
+
+				lastDigits := c.Query("last_digits")
+				phoneNumber := user.PrimaryPhoneNumber.PhoneNumber
+
+				if lastDigits == "" {
+					maskedPhone := h.service.MaskPhoneNumber(phoneNumber)
+					return handler.SendSuccess(c, fiber.Map{
+						"masked_phone":                maskedPhone,
+						"method":                      "phone_otp",
+						"requires_phone_verification": true,
+					})
+				}
+
+				if len(lastDigits) != 4 {
+					return handler.SendBadRequest(c, nil, "Last digits must be 4 characters")
+				}
+
+				if len(phoneNumber) < 4 {
+					return handler.SendBadRequest(c, nil, "Invalid phone number")
+				}
+
+				actualLastDigits := phoneNumber[len(phoneNumber)-4:]
+				if actualLastDigits != lastDigits {
+					return handler.SendBadRequest(c, nil, "Phone number verification failed")
+				}
+
+				code, err := utils.GenerateOTP()
+				if err != nil {
+					return handler.SendInternalServerError(
+						c,
+						err,
+						"Error generating OTP",
+						handler.ErrInternal,
+					)
+				}
+
+				if err := h.service.StoreOTPInCache(fmt.Sprintf("2fa_phone:%d", attempt.ID), code); err != nil {
+					return handler.SendInternalServerError(
+						c,
+						err,
+						"Error storing OTP",
+						handler.ErrInternal,
+					)
+				}
+
+				if err := h.service.SendSmsOTPVerificationAsync(user.PrimaryPhoneNumber.PhoneNumber, deployment); err != nil {
+					return handler.SendInternalServerError(
+						c,
+						err,
+						"Error sending 2FA SMS",
+					)
+				}
+
+				maskedPhone := h.service.MaskPhoneNumber(phoneNumber)
+				return handler.SendSuccess(c, fiber.Map{
+					"masked_phone": maskedPhone,
+					"method":       "phone_otp",
+					"otp_sent":     true,
+				})
+
+			case "authenticator":
+				if err := h.service.Store2FAMethodInCache(fmt.Sprintf("2fa_method:%d", attempt.ID), "authenticator"); err != nil {
+					return handler.SendInternalServerError(
+						c,
+						err,
+						"Error storing 2FA method",
+					)
+				}
+
+				return handler.SendSuccess(c, fiber.Map{
+					"method": "authenticator",
+				})
+
+			case "backup_code":
+				if err := h.service.Store2FAMethodInCache(fmt.Sprintf("2fa_method:%d", attempt.ID), "backup_code"); err != nil {
+					return handler.SendInternalServerError(
+						c,
+						err,
+						"Error storing 2FA method",
+					)
+				}
+
+				return handler.SendSuccess(c, fiber.Map{
+					"method": "backup_code",
+				})
+
+			default:
+				return handler.SendBadRequest(
+					c,
+					nil,
+					"Invalid 2FA strategy",
 				)
 			}
 		default:
@@ -1467,6 +1612,164 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 
 				h.service.DeleteOTPFromRedis(
 					fmt.Sprintf("signin:%d", attempt.ID),
+				)
+			}
+		case model.SignInAttemptStepVerifySecondFactor:
+			if attempt.UserID == nil {
+				return handler.SendBadRequest(
+					c,
+					nil,
+					"User ID not found in sign-in attempt",
+				)
+			}
+
+			var user model.User
+			if err := database.Connection.Preload("UserAuthenticator").Where("id = ?", *attempt.UserID).First(&user).Error; err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error fetching user",
+				)
+			}
+
+			method, err := h.service.Get2FAMethodFromCache(fmt.Sprintf("2fa_method:%d", attempt.ID))
+			if err != nil {
+				method = c.Query("method", "authenticator")
+			}
+			verified := false
+
+			switch method {
+			case "authenticator":
+				if user.UserAuthenticator == nil || user.UserAuthenticator.TotpSecret == "" {
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"Authenticator not set up",
+					)
+				}
+				verified = totp.Validate(b.VerificationCode, user.UserAuthenticator.TotpSecret)
+				if !verified {
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"Invalid authentication code",
+					)
+				}
+
+			case "phone_otp":
+				storedOTP, err := h.service.GetOTPFromRedis(fmt.Sprintf("2fa_phone:%d", attempt.ID))
+				if err != nil {
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"Invalid or expired OTP",
+					)
+				}
+
+				if storedOTP != b.VerificationCode {
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"Invalid OTP",
+					)
+				}
+				verified = true
+				h.service.DeleteOTPFromRedis(fmt.Sprintf("2fa_phone:%d", attempt.ID))
+				h.service.Delete2FAMethodFromCache(fmt.Sprintf("2fa_method:%d", attempt.ID))
+
+			case "backup_code":
+				if !user.BackupCodesGenerated || len(user.BackupCodes) == 0 {
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"No backup codes available",
+					)
+				}
+
+				for i, code := range user.BackupCodes {
+					match, err := utils.ComparePassword(code, b.VerificationCode)
+					if err == nil && match {
+						verified = true
+						user.BackupCodes = slices.Delete(user.BackupCodes, i, i+1)
+						if err := database.Connection.Model(&user).Update("backup_codes", user.BackupCodes).Error; err != nil {
+							return handler.SendInternalServerError(
+								c,
+								err,
+								"Error updating backup codes",
+							)
+						}
+						break
+					}
+				}
+
+				if !verified {
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"Invalid backup code",
+					)
+				}
+
+			default:
+				return handler.SendBadRequest(
+					c,
+					nil,
+					"Invalid 2FA method",
+				)
+			}
+
+			if !verified {
+				return handler.SendBadRequest(
+					c,
+					nil,
+					"Invalid verification code",
+				)
+			}
+
+			attempt.SecondMethodAuthenticated = true
+
+			if len(attempt.RemainingSteps) == 1 {
+				attempt.Completed = true
+				attempt.RemainingSteps = nil
+				signin = model.NewSignIn(session.ID, user.ID)
+				signin.User = &user
+
+				session.Signins = append(session.Signins, *signin)
+				session.ActiveSigninID = &signin.ID
+			} else {
+				attempt.RemainingSteps = attempt.RemainingSteps[1:]
+				attempt.CurrentStep = attempt.RemainingSteps[0]
+			}
+
+			// Save the attempt and create signin if completed
+			if err := database.Connection.Transaction(func(tx *gorm.DB) error {
+				if attempt.Completed {
+					d := handler.GetDeployment(c)
+					if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
+						return err
+					}
+
+					if err := tx.Create(signin).Error; err != nil {
+						return err
+					}
+
+					if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]interface{}{
+						"active_signin_id": session.ActiveSigninID,
+					}).Error; err != nil {
+						return err
+					}
+
+					handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+
+					h.service.Delete2FAMethodFromCache(fmt.Sprintf("2fa_method:%d", attempt.ID))
+				}
+
+				return tx.Save(attempt).Error
+			}); err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Error completing 2FA verification",
 				)
 			}
 		}

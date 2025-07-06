@@ -142,7 +142,11 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 						'errors', sia.errors,
 						'requires_completion', sia.requires_completion,
 						'missing_fields', sia.missing_fields,
-						'required_fields', sia.required_fields
+						'required_fields', sia.required_fields,
+						'first_method_authenticated', sia.first_method_authenticated,
+						'second_method_authenticated', sia.second_method_authenticated,
+						'second_method_authentication_required', sia.second_method_authentication_required,
+						'available_2fa_methods', sia.available_2fa_methods
 					) ORDER BY sia.created_at DESC
 				) FROM sign_in_attempts sia WHERE sia.session_id = s.id),
 				'[]'::json

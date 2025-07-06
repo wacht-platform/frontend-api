@@ -58,8 +58,6 @@ func (s *UserService) getOTPFromCache(key string) (string, error) {
 	).Result()
 }
 
-
-
 func (s *UserService) sendEmailOTPVerificationAsync(
 	deploymentID uint64,
 	email string,
@@ -467,7 +465,7 @@ func (s *UserService) ValidatePasswordRemoval(user *model.User, deployment *mode
 
 	if authSettings.AuthFactorsEnabled.PhoneOTP {
 		for _, phone := range user.UserPhoneNumbers {
-			if phone.Verified && phone.CanUseForSecondFactor {
+			if phone.Verified {
 				hasAlternativeMethod = true
 				break
 			}

@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"slices"
+
 	"github.com/godruoyi/go-snowflake"
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/config"
@@ -186,6 +188,14 @@ func (s *AuthService) DeterminePhoneAuthenticationStep(
 	return steps, completed
 }
 
+func (s *AuthService) MaskPhoneNumber(phoneNumber string) string {
+	if len(phoneNumber) < 4 {
+		return phoneNumber
+	}
+	masked := strings.Repeat("*", len(phoneNumber)-4) + phoneNumber[len(phoneNumber)-4:]
+	return masked
+}
+
 func (s *AuthService) DetermineMagicLinkAuthenticationStep(
 	verified, authenticated, secondFactorEnforced bool,
 	authSettings model.DeploymentAuthSettings,
@@ -231,6 +241,15 @@ func (s *AuthService) CreateSignInAttempt(
 	attempt.Completed = completed
 	attempt.UserID = userID
 	attempt.SessionID = sessionID
+	attempt.FirstMethodAuthenticated = userID != nil
+
+	if slices.Contains(steps, model.SignInAttemptStepVerifySecondFactor) {
+		attempt.SecondMethodAuthenticationRequired = true
+		if userID != nil {
+			attempt.Available2FAMethods = datatypes.NewJSONSlice(s.GetAvailable2FAMethods(*userID))
+		}
+	}
+
 	return attempt
 }
 
@@ -364,6 +383,19 @@ func (s *AuthService) HandleExistingUser(
 		if err := tx.Create(&connection).Error; err != nil {
 			return nil, err
 		}
+	}
+
+	if email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced {
+		attempt.UserID = &email.User.ID
+		attempt.IdentifierID = &email.ID
+		attempt.FirstMethodAuthenticated = true
+		attempt.SecondMethodAuthenticationRequired = true
+		attempt.CurrentStep = model.SignInAttemptStepVerifySecondFactor
+		attempt.RemainingSteps = datatypes.NewJSONSlice([]model.SignInAttemptStep{
+			model.SignInAttemptStepVerifySecondFactor,
+		})
+		attempt.Available2FAMethods = datatypes.NewJSONSlice(s.GetAvailable2FAMethods(email.User.ID))
+		return nil, nil
 	}
 
 	signIn := model.NewSignIn(
@@ -859,6 +891,29 @@ func (s *AuthService) DeleteOTPFromRedis(key string) error {
 	return database.Redis.Del(
 		context.Background(),
 		fmt.Sprintf("otp:%s", key),
+	).Err()
+}
+
+func (s *AuthService) Store2FAMethodInCache(key string, method string) error {
+	return database.Redis.Set(
+		context.Background(),
+		fmt.Sprintf("2fa:%s", key),
+		method,
+		otpExpirationTime,
+	).Err()
+}
+
+func (s *AuthService) Get2FAMethodFromCache(key string) (string, error) {
+	return database.Redis.Get(
+		context.Background(),
+		fmt.Sprintf("2fa:%s", key),
+	).Result()
+}
+
+func (s *AuthService) Delete2FAMethodFromCache(key string) error {
+	return database.Redis.Del(
+		context.Background(),
+		fmt.Sprintf("2fa:%s", key),
 	).Err()
 }
 
@@ -1486,4 +1541,33 @@ func (s *AuthService) extractCountryCodeFromPhone(phoneNumber string) string {
 	}
 
 	return "1"
+}
+
+func (s *AuthService) GetAvailable2FAMethods(userID uint64) []string {
+	var methods []string
+
+	var phoneCount int64
+	s.db.Model(&model.UserPhoneNumber{}).
+		Where("user_id = ? AND verified = true", userID).
+		Count(&phoneCount)
+	if phoneCount > 0 {
+		methods = append(methods, "phone_otp")
+	}
+
+	var authenticatorCount int64
+	s.db.Model(&model.UserAuthenticator{}).
+		Where("user_id = ? AND verified = true", userID).
+		Count(&authenticatorCount)
+	if authenticatorCount > 0 {
+		methods = append(methods, "authenticator")
+	}
+
+	var user model.User
+	if err := s.db.Select("backup_codes").Where("id = ?", userID).First(&user).Error; err == nil {
+		if len(user.BackupCodes) > 0 {
+			methods = append(methods, "backup_code")
+		}
+	}
+
+	return methods
 }
