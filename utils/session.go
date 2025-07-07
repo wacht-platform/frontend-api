@@ -384,7 +384,6 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			}
 		}
 
-		// Build ActiveOrganizationMembership from raw result
 		if activeOrgMembershipIDVal, ok := rawResult["ActiveSignin__ActiveOrganizationMembership__id"].(int64); ok {
 			session.ActiveSignin.ActiveOrganizationMembership = &model.OrganizationMembership{}
 			session.ActiveSignin.ActiveOrganizationMembership.ID = uint64(activeOrgMembershipIDVal)
@@ -397,7 +396,6 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			}
 		}
 
-		// Build ActiveWorkspaceMembership from raw result
 		if activeWsMembershipIDVal, ok := rawResult["ActiveSignin__ActiveWorkspaceMembership__id"].(int64); ok {
 			session.ActiveSignin.ActiveWorkspaceMembership = &model.WorkspaceMembership{}
 			session.ActiveSignin.ActiveWorkspaceMembership.ID = uint64(activeWsMembershipIDVal)
@@ -414,7 +412,6 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		}
 	}
 
-	// Parse signins JSON and populate session.Signins
 	if signinsData, ok := rawResult["signins"]; ok {
 		if signinsJSON, ok := signinsData.(string); ok && signinsJSON != "" && signinsJSON != "[]" {
 			var signinsData []map[string]interface{}
@@ -486,7 +483,6 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 							user.PrimaryEmailAddressID = &[]uint64{uint64(primaryEmailAddressID)}[0]
 						}
 
-						// Parse primary email address
 						if primaryEmailData, ok := userData["primary_email_address"].(map[string]interface{}); ok {
 							primaryEmail := &model.UserEmailAddress{}
 							if id, ok := primaryEmailData["id"].(float64); ok {
@@ -520,6 +516,6 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 
 	// Cache the session before returning
 	SetCachedSession(sessionID, session)
-	
+
 	return session, nil
 }
