@@ -65,6 +65,22 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		au.public_metadata as "ActiveSignin__User__public_metadata",
 		au.backup_codes_generated as "ActiveSignin__User__backup_codes_generated",
 
+		-- Primary Email Address for Active User
+		CASE
+			WHEN au.primary_email_address_id IS NOT NULL
+			THEN (SELECT json_build_object(
+				'id', pe.id,
+				'email_address', pe.email_address,
+				'is_primary', pe.is_primary,
+				'verified', pe.verified,
+				'verified_at', pe.verified_at,
+				'verification_strategy', pe.verification_strategy,
+				'created_at', pe.created_at,
+				'updated_at', pe.updated_at
+			) FROM user_email_addresses pe WHERE pe.id = au.primary_email_address_id)
+			ELSE NULL
+		END as "ActiveSignin__User__primary_email_address",
+
 		-- Organization Membership
 		aom.id as "ActiveSignin__ActiveOrganizationMembership__id",
 		aom.organization_id as "ActiveSignin__ActiveOrganizationMembership__organization_id",
@@ -381,6 +397,32 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			}
 			if availability, ok := rawResult["ActiveSignin__User__availability"].(string); ok {
 				session.ActiveSignin.User.Availability = model.UserAvailability(availability)
+			}
+			if primaryEmailAddressID, ok := rawResult["ActiveSignin__User__primary_email_address_id"].(int64); ok {
+				session.ActiveSignin.User.PrimaryEmailAddressID = &[]uint64{uint64(primaryEmailAddressID)}[0]
+			}
+
+			if primaryEmailData, ok := rawResult["ActiveSignin__User__primary_email_address"].(string); ok && primaryEmailData != "" {
+				var primaryEmailMap map[string]interface{}
+				if err := json.Unmarshal([]byte(primaryEmailData), &primaryEmailMap); err == nil {
+					primaryEmail := &model.UserEmailAddress{}
+					if id, ok := primaryEmailMap["id"].(float64); ok {
+						primaryEmail.ID = uint64(id)
+					}
+					if emailAddress, ok := primaryEmailMap["email_address"].(string); ok {
+						primaryEmail.EmailAddress = emailAddress
+					}
+					if isPrimary, ok := primaryEmailMap["is_primary"].(bool); ok {
+						primaryEmail.IsPrimary = isPrimary
+					}
+					if verified, ok := primaryEmailMap["verified"].(bool); ok {
+						primaryEmail.Verified = verified
+					}
+					if verificationStrategy, ok := primaryEmailMap["verification_strategy"].(string); ok {
+						primaryEmail.VerificationStrategy = model.VerificationStrategy(verificationStrategy)
+					}
+					session.ActiveSignin.User.PrimaryEmailAddress = primaryEmail
+				}
 			}
 		}
 
