@@ -1,7 +1,7 @@
 package model
 
 type OrgMembershipRoleAssoc struct {
-	OrganizationMembershipID uint64 `gorm:"primaryKey"`
+	OrganizationMembershipID uint64 `gorm:"primaryKey;index"`
 	OrganizationRoleID       uint64 `gorm:"primaryKey"`
 	OrganizationID           uint64 `gorm:"not null;index"`
 }

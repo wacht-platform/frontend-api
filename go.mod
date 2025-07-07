@@ -9,6 +9,7 @@ require (
 	github.com/goccy/go-json v0.10.5
 	github.com/godruoyi/go-snowflake v0.0.2
 	github.com/gofiber/fiber/v2 v2.52.5
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/joho/godotenv v1.5.1
 	github.com/lestrrat-go/jwx/v3 v3.0.0-alpha1

@@ -30,6 +30,8 @@ func main() {
 		TrustedProxies:          []string{config.GetEnv("LOAD_BALANCER_IP", "127.0.0.1")},
 	})
 
+	database.AutoMigratePg()
+
 	router.Setup(app)
 
 	log.Fatal(app.Listen(":3000"))

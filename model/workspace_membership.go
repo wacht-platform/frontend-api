@@ -1,7 +1,7 @@
 package model
 
 type WorkspaceMembershipRoleAssoc struct {
-	WorkspaceMembershipID uint64 `gorm:"primaryKey"`
+	WorkspaceMembershipID uint64 `gorm:"primaryKey;index"`
 	WorkspaceRoleID       uint64 `gorm:"primaryKey"`
 	WorkspaceID           uint64 `gorm:"not null;index"`
 	OrganizationID        uint64 `gorm:"not null;index"`
@@ -13,7 +13,7 @@ func (WorkspaceMembershipRoleAssoc) TableName() string {
 
 type WorkspaceMembership struct {
 	Model
-	WorkspaceID              uint64                         `json:"-"    gorm:"not null"`
+	WorkspaceID              uint64                         `json:"-"    gorm:"not null;index"`
 	Workspace                Workspace                      `json:"workspace"       gorm:"foreignKey:WorkspaceID"`
 	OrganizationID           uint64                         `json:"organization_id,string" gorm:"not null;index"`
 	Organization             Organization                   `json:"organization" gorm:"foreignKey:OrganizationID"`

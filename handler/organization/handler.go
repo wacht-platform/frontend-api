@@ -618,10 +618,14 @@ func (h *Handler) GetOrganizationMembers(
 
 	var queryResults []OrganizationMemberQueryResult
 	rawSQL := `
-		WITH organization_membership_roles_aggregated AS (
-			SELECT
-				organization_membership_roles.organization_membership_id,
-				json_agg(
+		SELECT
+			organization_memberships.id,
+			organization_memberships.created_at,
+			organization_memberships.updated_at,
+			organization_memberships.organization_id,
+			organization_memberships.user_id,
+			COALESCE(
+				(SELECT json_agg(
 					json_build_object(
 						'id', organization_roles.id,
 						'organization_id', organization_roles.organization_id,
@@ -630,21 +634,14 @@ func (h *Handler) GetOrganizationMembers(
 						'deployment_id', organization_roles.deployment_id,
 						'created_at', organization_roles.created_at,
 						'updated_at', organization_roles.updated_at
-					)
-				) as roles_json
-			FROM organization_membership_roles
-			JOIN organization_roles ON organization_membership_roles.organization_role_id = organization_roles.id
-			GROUP BY organization_membership_roles.organization_membership_id
-		)
-		SELECT
-			organization_memberships.id,
-			organization_memberships.created_at,
-			organization_memberships.updated_at,
-			organization_memberships.organization_id,
-			organization_memberships.user_id,
-			COALESCE(organization_membership_roles_aggregated.roles_json, '[]'::json) as roles_json
+					) ORDER BY organization_roles.name
+				)
+				FROM organization_membership_roles
+				JOIN organization_roles ON organization_membership_roles.organization_role_id = organization_roles.id
+				WHERE organization_membership_roles.organization_membership_id = organization_memberships.id
+				), '[]'::json
+			) as roles_json
 		FROM organization_memberships
-		LEFT JOIN organization_membership_roles_aggregated ON organization_memberships.id = organization_membership_roles_aggregated.organization_membership_id
 		WHERE organization_memberships.organization_id = ?
 			AND organization_memberships.deleted_at IS NULL
 		ORDER BY organization_memberships.created_at ASC

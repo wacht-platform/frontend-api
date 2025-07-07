@@ -205,10 +205,16 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 
 	var queryResults []WorkspaceMemberQueryResult
 	rawSQL := `
-		WITH workspace_membership_roles_aggregated AS (
-			SELECT
-				workspace_membership_roles.workspace_membership_id,
-				json_agg(
+		SELECT
+			workspace_memberships.id,
+			workspace_memberships.created_at,
+			workspace_memberships.updated_at,
+			workspace_memberships.workspace_id,
+			workspace_memberships.organization_id,
+			workspace_memberships.organization_membership_id,
+			workspace_memberships.user_id,
+			COALESCE(
+				(SELECT json_agg(
 					json_build_object(
 						'id', workspace_roles.id,
 						'name', workspace_roles.name,
@@ -218,23 +224,14 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 						'workspace_id', workspace_roles.workspace_id,
 						'created_at', workspace_roles.created_at,
 						'updated_at', workspace_roles.updated_at
-					)
-				) as roles_json
-			FROM workspace_membership_roles
-			JOIN workspace_roles ON workspace_membership_roles.workspace_role_id = workspace_roles.id
-			GROUP BY workspace_membership_roles.workspace_membership_id
-		)
-		SELECT
-			workspace_memberships.id,
-			workspace_memberships.created_at,
-			workspace_memberships.updated_at,
-			workspace_memberships.workspace_id,
-			workspace_memberships.organization_id,
-			workspace_memberships.organization_membership_id,
-			workspace_memberships.user_id,
-			COALESCE(workspace_membership_roles_aggregated.roles_json, '[]'::json) as roles_json
+					) ORDER BY workspace_roles.name
+				)
+				FROM workspace_membership_roles
+				JOIN workspace_roles ON workspace_membership_roles.workspace_role_id = workspace_roles.id
+				WHERE workspace_membership_roles.workspace_membership_id = workspace_memberships.id
+				), '[]'::json
+			) as roles_json
 		FROM workspace_memberships
-		LEFT JOIN workspace_membership_roles_aggregated ON workspace_memberships.id = workspace_membership_roles_aggregated.workspace_membership_id
 		WHERE workspace_memberships.workspace_id = ?
 			AND workspace_memberships.deleted_at IS NULL
 		ORDER BY workspace_memberships.created_at ASC

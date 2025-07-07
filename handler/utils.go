@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"fmt"
-
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/utils"
@@ -43,12 +41,8 @@ func GetSessionFromCacheOrDB(sessionID uint64) (*model.Session, error) {
 	return utils.GetSessionByID(sessionID)
 }
 
-func RemoveSessionFromCache(id uint64) {
-	utils.DeleteFromCache(fmt.Sprintf("session:%d", id))
-}
-
 func RemoveSessionFromCacheAndLocals(c *fiber.Ctx, id uint64) {
-	utils.DeleteFromCache(fmt.Sprintf("session:%d", id))
+	utils.RemoveCachedSession(id)
 
 	c.Locals("session_data", nil)
 }

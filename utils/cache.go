@@ -1,110 +1,54 @@
 package utils
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"os"
+	"time"
+
+	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/ilabs/wacht-fe/model"
 )
 
-func GetFromCache[T any](resp *http.Response, target *T) error {
-	defer resp.Body.Close()
-	cacheResp := new(T)
-	if err := json.NewDecoder(resp.Body).Decode(&cacheResp); err != nil {
-		return err
-	}
-	*target = *cacheResp
-	return nil
+var (
+	// DeploymentCache stores deployment data with 5 second TTL and 2000 max keys
+	DeploymentCache *expirable.LRU[string, *model.Deployment]
+	
+	// SessionCache stores session data with 5 second TTL and 2000 max keys
+	SessionCache *expirable.LRU[uint64, *model.Session]
+)
+
+func init() {
+	// Initialize deployment cache
+	DeploymentCache = expirable.NewLRU[string, *model.Deployment](2000, nil, time.Second*5)
+	
+	// Initialize session cache
+	SessionCache = expirable.NewLRU[uint64, *model.Session](2000, nil, time.Second*5)
 }
 
-func GetMultipleFromCache(keys string) (map[string]interface{}, error) {
-	resp, err := http.Get(os.Getenv("CACHE_WORKER") + "?q=" + keys)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("cache worker returned status: %d", resp.StatusCode)
-	}
-
-	var cacheResp map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&cacheResp); err != nil {
-		return nil, err
-	}
-
-	return cacheResp, nil
+// GetCachedDeployment attempts to retrieve a deployment from cache
+func GetCachedDeployment(key string) (*model.Deployment, bool) {
+	return DeploymentCache.Get(key)
 }
 
-func SetToCache(key string, value any, ttl uint64) error {
-	url := fmt.Sprintf(
-		"https://api.cloudflare.com/client/v4/accounts/%s/storage/kv/namespaces/%s/values/%s?expiration_ttl=%d",
-		os.Getenv("CLOUDFLARE_ACCOUNT_ID"),
-		os.Getenv("CLOUDFLARE_NAMESPACE_ID"),
-		key,
-		ttl,
-	)
-
-	payload, err := json.Marshal(value)
-
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest(
-		"PUT",
-		url,
-		bytes.NewBuffer(payload),
-	)
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+os.Getenv("CLOUDFLARE_API_KEY"))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to set to cache. status: %s", resp.Status)
-	}
-
-	return nil
+// SetCachedDeployment stores a deployment in cache
+func SetCachedDeployment(key string, deployment *model.Deployment) {
+	DeploymentCache.Add(key, deployment)
 }
 
-func DeleteFromCache(key string) error {
-	url := fmt.Sprintf(
-		"https://api.cloudflare.com/client/v4/accounts/%s/storage/kv/namespaces/%s/values/%s",
-		os.Getenv("CLOUDFLARE_ACCOUNT_ID"),
-		os.Getenv("CLOUDFLARE_NAMESPACE_ID"),
-		key,
-	)
+// GetCachedSession attempts to retrieve a session from cache
+func GetCachedSession(sessionID uint64) (*model.Session, bool) {
+	return SessionCache.Get(sessionID)
+}
 
-	req, err := http.NewRequest(
-		"DELETE",
-		url,
-		nil,
-	)
-	if err != nil {
-		return err
-	}
+// SetCachedSession stores a session in cache
+func SetCachedSession(sessionID uint64, session *model.Session) {
+	SessionCache.Add(sessionID, session)
+}
 
-	req.Header.Set("Authorization", "Bearer "+os.Getenv("CLOUDFLARE_API_KEY"))
+// RemoveCachedSession removes a session from cache
+func RemoveCachedSession(sessionID uint64) {
+	SessionCache.Remove(sessionID)
+}
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to delete from cache. status: %s", resp.Status)
-	}
-
-	return nil
+// RemoveCachedDeployment removes a deployment from cache
+func RemoveCachedDeployment(key string) {
+	DeploymentCache.Remove(key)
 }

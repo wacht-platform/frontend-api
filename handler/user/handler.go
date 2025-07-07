@@ -1009,24 +1009,6 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 
 	var queryResults []OrganizationMembershipQueryResult
 	rawSQL := `
-		WITH organization_membership_roles_aggregated AS (
-			SELECT
-				organization_membership_roles.organization_membership_id,
-				json_agg(
-					json_build_object(
-						'id', organization_roles.id,
-						'organization_id', organization_roles.organization_id,
-						'name', organization_roles.name,
-						'permissions', organization_roles.permissions,
-						'deployment_id', organization_roles.deployment_id,
-						'created_at', organization_roles.created_at,
-						'updated_at', organization_roles.updated_at
-					)
-				) as roles_json
-			FROM organization_membership_roles
-			JOIN organization_roles ON organization_membership_roles.organization_role_id = organization_roles.id
-			GROUP BY organization_membership_roles.organization_membership_id
-		)
 		SELECT
 			organization_memberships.id,
 			organization_memberships.created_at,
@@ -1037,10 +1019,25 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 			organizations.image_url as organization_image_url,
 			organizations.description as organization_description,
 			organizations.member_count as organization_member_count,
-			COALESCE(organization_membership_roles_aggregated.roles_json, '[]'::json) as roles_json
+			COALESCE(
+				(SELECT json_agg(
+					json_build_object(
+						'id', organization_roles.id,
+						'organization_id', organization_roles.organization_id,
+						'name', organization_roles.name,
+						'permissions', organization_roles.permissions,
+						'deployment_id', organization_roles.deployment_id,
+						'created_at', organization_roles.created_at,
+						'updated_at', organization_roles.updated_at
+					) ORDER BY organization_roles.name
+				)
+				FROM organization_membership_roles
+				JOIN organization_roles ON organization_membership_roles.organization_role_id = organization_roles.id
+				WHERE organization_membership_roles.organization_membership_id = organization_memberships.id
+				), '[]'::json
+			) as roles_json
 		FROM organization_memberships
 		JOIN organizations ON organization_memberships.organization_id = organizations.id
-		LEFT JOIN organization_membership_roles_aggregated ON organization_memberships.id = organization_membership_roles_aggregated.organization_membership_id
 		WHERE organization_memberships.user_id = ?
 			AND organization_memberships.deleted_at IS NULL
 			AND organizations.deleted_at IS NULL
@@ -1085,25 +1082,6 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 
 	var queryResults []WorkspaceMembershipQueryResult
 	rawSQL := `
-		WITH workspace_membership_roles_aggregated AS (
-			SELECT
-				workspace_membership_roles.workspace_membership_id,
-				json_agg(
-					json_build_object(
-						'id', workspace_roles.id,
-						'name', workspace_roles.name,
-						'permissions', workspace_roles.permissions,
-						'organization_id', workspace_roles.organization_id,
-						'deployment_id', workspace_roles.deployment_id,
-						'workspace_id', workspace_roles.workspace_id,
-						'created_at', workspace_roles.created_at,
-						'updated_at', workspace_roles.updated_at
-					)
-				) as roles_json
-			FROM workspace_membership_roles
-			JOIN workspace_roles ON workspace_membership_roles.workspace_role_id = workspace_roles.id
-			GROUP BY workspace_membership_roles.workspace_membership_id
-		)
 		SELECT
 			workspace_memberships.id,
 			workspace_memberships.created_at,
@@ -1118,11 +1096,27 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 			workspaces.member_count as workspace_member_count,
 			organizations.name as organization_name,
 			organizations.image_url as organization_image_url,
-			COALESCE(workspace_membership_roles_aggregated.roles_json, '[]'::json) as roles_json
+			COALESCE(
+				(SELECT json_agg(
+					json_build_object(
+						'id', workspace_roles.id,
+						'name', workspace_roles.name,
+						'permissions', workspace_roles.permissions,
+						'organization_id', workspace_roles.organization_id,
+						'deployment_id', workspace_roles.deployment_id,
+						'workspace_id', workspace_roles.workspace_id,
+						'created_at', workspace_roles.created_at,
+						'updated_at', workspace_roles.updated_at
+					) ORDER BY workspace_roles.name
+				)
+				FROM workspace_membership_roles
+				JOIN workspace_roles ON workspace_membership_roles.workspace_role_id = workspace_roles.id
+				WHERE workspace_membership_roles.workspace_membership_id = workspace_memberships.id
+				), '[]'::json
+			) as roles_json
 		FROM workspace_memberships
 		JOIN workspaces ON workspace_memberships.workspace_id = workspaces.id
 		JOIN organizations ON workspace_memberships.organization_id = organizations.id
-		LEFT JOIN workspace_membership_roles_aggregated ON workspace_memberships.id = workspace_membership_roles_aggregated.workspace_membership_id
 		WHERE workspace_memberships.user_id = ?
 			AND workspace_memberships.deleted_at IS NULL
 			AND workspaces.deleted_at IS NULL

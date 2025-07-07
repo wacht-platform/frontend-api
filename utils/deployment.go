@@ -3,7 +3,6 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
@@ -21,15 +20,8 @@ type DeploymentQueryResult struct {
 }
 
 func GetDeploymentByHost(host string) (*model.Deployment, error) {
-	cacheData, err := GetMultipleFromCache(host)
-	if err == nil {
-		if deploymentData, exists := cacheData[host]; exists {
-			deploymentBytes, _ := json.Marshal(deploymentData)
-			deployment := new(model.Deployment)
-			if json.Unmarshal(deploymentBytes, deployment) == nil {
-				return deployment, nil
-			}
-		}
+	if cachedDeployment, found := GetCachedDeployment(host); found {
+		return cachedDeployment, nil
 	}
 
 	queryResult := new(DeploymentQueryResult)
@@ -51,7 +43,7 @@ func GetDeploymentByHost(host string) (*model.Deployment, error) {
 		LEFT JOIN social_connections_agg sca ON d.id = sca.deployment_id
 		WHERE d.backend_host = ? AND d.deleted_at IS NULL
 	`
-	err = database.Connection.Clauses(dbresolver.Read).Raw(rawSQL, host).Scan(queryResult).Error
+	err := database.Connection.Clauses(dbresolver.Read).Raw(rawSQL, host).Scan(queryResult).Error
 
 	if err != nil || queryResult.ID == 0 {
 		return nil, fmt.Errorf("deployment not found")
@@ -70,14 +62,8 @@ func GetDeploymentByHost(host string) (*model.Deployment, error) {
 	}
 	deployment.KepPair = &queryResult.KepPair
 
-	go setDeploymentCache(*deployment)
+	// Cache the deployment before returning
+	SetCachedDeployment(host, deployment)
 
 	return deployment, nil
-}
-
-func setDeploymentCache(deployment model.Deployment) {
-	err := SetToCache(deployment.BackendHost, deployment, 86400)
-	if err != nil {
-		log.Println("Error setting deployment cache: ", err)
-	}
 }
