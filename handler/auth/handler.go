@@ -176,7 +176,7 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 	}
 
 	session.SigninAttempts = append(session.SigninAttempts, *attempt)
-	handler.RemoveSessionFromCache(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 	return handler.SendSuccess(c, session)
 }
 
@@ -299,7 +299,7 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 	}
 
 	session.SigninAttempts = append(session.SigninAttempts, *attempt)
-	handler.RemoveSessionFromCache(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 	return handler.SendSuccess(c, session)
 }
 
@@ -362,7 +362,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 	}
 
 	session.SigninAttempts = append(session.SigninAttempts, *attempt)
-	handler.RemoveSessionFromCache(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 	return handler.SendSuccess(c, session)
 }
 
@@ -439,7 +439,7 @@ func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.D
 	}
 
 	session.SigninAttempts = append(session.SigninAttempts, *attempt)
-	handler.RemoveSessionFromCache(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 	return handler.SendSuccess(c, session)
 }
 
@@ -572,7 +572,7 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 			}
 		}
 
-		handler.RemoveSessionFromCache(session.ID)
+		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 		return nil
 	})
@@ -661,7 +661,25 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 	}
 
 	state := c.Query("state")
+	if state == "" {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"State parameter is missing",
+			handler.ErrInvalidState,
+		)
+	}
+	
 	stateParts := strings.Split(state, ":")
+	if len(stateParts) == 0 || stateParts[0] == "" {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Invalid state format",
+			handler.ErrInvalidState,
+		)
+	}
+	
 	attemptID := stateParts[0]
 	var customRedirectURI string
 	if len(stateParts) > 1 {
@@ -669,11 +687,21 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 	}
 
 	var attempt model.SignInAttempt
-	if err := database.Connection.Where("id = ?", attemptID).First(&attempt).Error; err != nil {
-		return handler.SendInternalServerError(
+	if err := database.Connection.Where("id = ? AND session_id = ?", attemptID, session.ID).First(&attempt).Error; err != nil {
+		return handler.SendBadRequest(
 			c,
-			err,
-			"Failed to find sign in attempt",
+			nil,
+			"Invalid or expired authentication attempt",
+			handler.ErrInvalidState,
+		)
+	}
+	
+	// Check if attempt is expired (more than 10 minutes old)
+	if time.Since(attempt.CreatedAt) > 10*time.Minute {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Authentication attempt has expired",
 			handler.ErrInvalidState,
 		)
 	}
@@ -1417,7 +1445,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 		case model.SignInAttemptStepVerifyEmail,
 			model.SignInAttemptStepVerifyEmailOTP:
 			{
-				if attempt.IdentifierID != nil {
+				if attempt.IdentifierID == nil {
 					return handler.SendBadRequest(
 						c,
 						nil,
@@ -1516,7 +1544,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 		case model.SignInAttemptStepVerifyPhone,
 			model.SignInAttemptStepVerifyPhoneOTP:
 			{
-				if attempt.IdentifierID != nil {
+				if attempt.IdentifierID == nil {
 					return handler.SendBadRequest(
 						c,
 						nil,
@@ -1975,7 +2003,7 @@ func (h *Handler) CompleteOAuthSignup(c *fiber.Ctx) error {
 			return handler.SendInternalServerError(c, err, "Error completing signup")
 		}
 
-		handler.RemoveSessionFromCache(session.ID)
+		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 		return handler.SendSuccess(c, session)
 	}
 
@@ -2091,7 +2119,7 @@ func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
 			return handler.SendInternalServerError(c, err, "Error completing signin")
 		}
 
-		handler.RemoveSessionFromCache(session.ID)
+		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 		return handler.SendSuccess(c, session)
 	}
 
@@ -2327,7 +2355,7 @@ func (h *Handler) handleOAuthSignupCompletion(c *fiber.Ctx, attempt *model.Signu
 			return handler.SendInternalServerError(c, err, "Error completing signup")
 		}
 
-		handler.RemoveSessionFromCache(session.ID)
+		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 		return handler.SendSuccess(c, session)
 	}
 

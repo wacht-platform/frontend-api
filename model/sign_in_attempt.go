@@ -65,24 +65,24 @@ func (e *Error) GormDBDataType() string {
 
 type SignInAttempt struct {
 	Model
-	UserID                              *uint64                                `json:"-"`
-	IdentifierID                        *uint64                                `json:"-"`
-	SessionID                           uint64                                 `json:"session_id"      gorm:"not null"`
-	Method                              SignInMethod                           `json:"method"          gorm:"not null"`
-	SSOProvider                         SocialConnectionProvider               `json:"sso_provider"`
-	ExpiresAt                           time.Time                              `json:"expires_at"      gorm:"not null"`
-	CurrentStep                         SignInAttemptStep                      `json:"current_step"    gorm:"not null"`
-	RemainingSteps                      datatypes.JSONSlice[SignInAttemptStep] `json:"remaining_steps" gorm:"not null"`
-	Completed                           bool                                   `json:"completed"       gorm:"not null"`
-	Errored                             bool                                   `json:"errored"         gorm:"not null"`
-	Errors                              datatypes.JSONSlice[Error]             `json:"errors"`
-	RequiresCompletion                  bool                                   `json:"requires_completion"`
-	MissingFields                       datatypes.JSONSlice[string]            `json:"missing_fields"`
-	RequiredFields                      datatypes.JSONSlice[string]            `json:"required_fields"`
-	FirstMethodAuthenticated            bool                                   `json:"first_method_authenticated"     gorm:"not null;default:false"`
-	SecondMethodAuthenticated           bool                                   `json:"second_method_authenticated"    gorm:"not null;default:false"`
-	SecondMethodAuthenticationRequired  bool                                   `json:"second_method_authentication_required" gorm:"not null;default:false"`
-	Available2FAMethods                 datatypes.JSONSlice[string]            `json:"available_2fa_methods"`
+	UserID                             *uint64                                `json:"-"`
+	IdentifierID                       *uint64                                `json:"-"`
+	SessionID                          uint64                                 `json:"session_id"      gorm:"not null"`
+	Method                             SignInMethod                           `json:"method"          gorm:"not null"`
+	SSOProvider                        SocialConnectionProvider               `json:"sso_provider"`
+	ExpiresAt                          time.Time                              `json:"expires_at"      gorm:"not null"`
+	CurrentStep                        SignInAttemptStep                      `json:"current_step"    gorm:"not null"`
+	RemainingSteps                     datatypes.JSONSlice[SignInAttemptStep] `json:"remaining_steps" gorm:"not null"`
+	Completed                          bool                                   `json:"completed"       gorm:"not null"`
+	Errored                            bool                                   `json:"errored"         gorm:"not null"`
+	Errors                             datatypes.JSONSlice[Error]             `json:"errors"`
+	RequiresCompletion                 bool                                   `json:"requires_completion"`
+	MissingFields                      datatypes.JSONSlice[string]            `json:"missing_fields"`
+	RequiredFields                     datatypes.JSONSlice[string]            `json:"required_fields"`
+	FirstMethodAuthenticated           bool                                   `json:"first_method_authenticated"     gorm:"not null;default:false"`
+	SecondMethodAuthenticated          bool                                   `json:"second_method_authenticated"    gorm:"not null;default:false"`
+	SecondMethodAuthenticationRequired bool                                   `json:"second_method_authentication_required" gorm:"not null;default:false"`
+	Available2FAMethods                datatypes.JSONSlice[string]            `json:"available_2fa_methods" gorm:"available_2fa_methods"`
 }
 
 func NewSignInAttempt(method SignInMethod) *SignInAttempt {
