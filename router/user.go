@@ -12,7 +12,7 @@ func setupUserRoutes(
 	router := app.Group("/me")
 
 	router.Get("/", userHandler.GetUser)
-	router.Patch("/", userHandler.UpdateUser)
+	router.Post("/", userHandler.UpdateUser)
 	router.Get("/organization-memberships", userHandler.GetUserOrganizationMemberships)
 	router.Get("/workspace-memberships", userHandler.GetUserWorkspaceMemberships)
 	router.Get("/email-addresses", userHandler.GetUserEmailAddresses)

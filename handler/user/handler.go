@@ -177,7 +177,7 @@ func (h *Handler) DeleteUserEmailAddress(c *fiber.Ctx) error {
 		)
 	}
 
-	query := database.Connection.Where("id = ? AND user_id = ?", emailID, session.ActiveSignin.UserID).
+	query := database.Connection.Where("id = ? AND user_id = ? AND is_primary = ?", emailID, session.ActiveSignin.UserID, false).
 		Delete(&model.UserEmailAddress{})
 	if query.Error != nil {
 		return handler.SendInternalServerError(
@@ -185,6 +185,15 @@ func (h *Handler) DeleteUserEmailAddress(c *fiber.Ctx) error {
 			nil,
 			"Something went wrong",
 			handler.ErrInternal,
+		)
+	}
+
+	// Check if any rows were affected (deleted)
+	if query.RowsAffected == 0 {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Cannot delete primary email address or email not found.",
 		)
 	}
 
@@ -915,7 +924,7 @@ func (h *Handler) GetUserSignins(c *fiber.Ctx) error {
 	}
 
 	var signins []model.Signin
-	if err := database.Connection.Where("user_id = ? AND expires_at > ?", session.ActiveSignin.UserID, time.Now()).Find(&signins).Error; err != nil {
+	if err := database.Connection.Where("user_id = ? AND (expires_at > ? OR expires_at IS NULL)", session.ActiveSignin.UserID, time.Now()).Find(&signins).Error; err != nil {
 		return handler.SendInternalServerError(
 			c,
 			nil,
