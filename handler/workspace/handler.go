@@ -85,6 +85,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 		ImageUrl:        imgurl,
 		PublicMetadata:  datatypes.JSONMap{},
 		PrivateMetadata: datatypes.JSONMap{},
+		DeploymentID:    deployment.ID,
 	}
 
 	txErr := database.Connection.Transaction(func(tx *gorm.DB) error {
