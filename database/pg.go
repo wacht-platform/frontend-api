@@ -15,8 +15,7 @@ var Connection *gorm.DB
 func InitPgConnection() error {
 	dsn := os.Getenv("DATABASE_URL")
 	db, err := gorm.Open(postgres.New(postgres.Config{
-		DSN:                  dsn,
-		PreferSimpleProtocol: true,
+		DSN: dsn,
 	}), &gorm.Config{
 		SkipDefaultTransaction:                   true,
 		PrepareStmt:                              false,
@@ -31,8 +30,7 @@ func InitPgConnection() error {
 		db.Use(dbresolver.Register(dbresolver.Config{
 			Replicas: []gorm.Dialector{
 				postgres.New(postgres.Config{
-					DSN:                  os.Getenv("READ_REPLICA"),
-					PreferSimpleProtocol: true,
+					DSN: os.Getenv("READ_REPLICA"),
 				}),
 			},
 		}))
