@@ -161,15 +161,20 @@ func (h *Handler) SwitchOrganization(
 	}
 
 	if orgID == "" {
-		// Use a transaction for atomicity
 		tx := database.Connection.Begin()
 		if err := tx.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).
-			Update("active_organization_membership_id", nil).Error; err != nil {
+			Updates(map[string]any{
+				"active_organization_membership_id": nil,
+				"active_workspace_membership_id":    nil,
+			}).Error; err != nil {
 			tx.Rollback()
 			return fiber.NewError(fiber.StatusInternalServerError, "Failed to update user")
 		}
 		if err := tx.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).
-			Update("active_organization_membership_id", nil).Error; err != nil {
+			Updates(map[string]any{
+				"active_organization_membership_id": nil,
+				"active_workspace_membership_id":    nil,
+			}).Error; err != nil {
 			tx.Rollback()
 			return fiber.NewError(fiber.StatusInternalServerError, "Failed to update signin")
 		}
@@ -193,14 +198,11 @@ func (h *Handler) SwitchOrganization(
 		return fiber.NewError(fiber.StatusBadRequest, "You are not a member of this organization")
 	}
 
-	// Use a transaction for atomicity
-	// When switching organizations, we need to clear any workspace membership
-	// since workspaces belong to specific organizations
 	tx := database.Connection.Begin()
 	if err := tx.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).
 		Updates(map[string]interface{}{
 			"active_organization_membership_id": membership.ID,
-			"active_workspace_membership_id": nil,
+			"active_workspace_membership_id":    nil,
 		}).Error; err != nil {
 		tx.Rollback()
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to update user")
@@ -208,7 +210,7 @@ func (h *Handler) SwitchOrganization(
 	if err := tx.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).
 		Updates(map[string]interface{}{
 			"active_organization_membership_id": membership.ID,
-			"active_workspace_membership_id": nil,
+			"active_workspace_membership_id":    nil,
 		}).Error; err != nil {
 		tx.Rollback()
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to update signin")
@@ -234,7 +236,7 @@ func (h *Handler) SwitchWorkspace(
 		tx := database.Connection.Begin()
 		if err := tx.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).
 			Updates(map[string]interface{}{
-				"active_workspace_membership_id": nil,
+				"active_workspace_membership_id":    nil,
 				"active_organization_membership_id": nil,
 			}).Error; err != nil {
 			tx.Rollback()
@@ -242,7 +244,7 @@ func (h *Handler) SwitchWorkspace(
 		}
 		if err := tx.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).
 			Updates(map[string]interface{}{
-				"active_workspace_membership_id": nil,
+				"active_workspace_membership_id":    nil,
 				"active_organization_membership_id": nil,
 			}).Error; err != nil {
 			tx.Rollback()
@@ -274,7 +276,7 @@ func (h *Handler) SwitchWorkspace(
 	tx := database.Connection.Begin()
 	if err := tx.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).
 		Updates(map[string]interface{}{
-			"active_workspace_membership_id": membership.ID,
+			"active_workspace_membership_id":    membership.ID,
 			"active_organization_membership_id": membership.OrganizationMembershipID,
 		}).Error; err != nil {
 		tx.Rollback()
@@ -282,7 +284,7 @@ func (h *Handler) SwitchWorkspace(
 	}
 	if err := tx.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).
 		Updates(map[string]interface{}{
-			"active_workspace_membership_id": membership.ID,
+			"active_workspace_membership_id":    membership.ID,
 			"active_organization_membership_id": membership.OrganizationMembershipID,
 		}).Error; err != nil {
 		tx.Rollback()
