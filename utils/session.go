@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
@@ -11,6 +12,168 @@ import (
 )
 
 func ptr[T any](v T) *T { return &v }
+
+// Helper functions to safely parse IDs from various types
+func parseUint64FromInterface(v interface{}) (uint64, error) {
+	switch val := v.(type) {
+	case string:
+		return strconv.ParseUint(val, 10, 64)
+	case float64:
+		return uint64(val), nil
+	case int64:
+		return uint64(val), nil
+	case nil:
+		return 0, fmt.Errorf("value is nil")
+	default:
+		return 0, fmt.Errorf("unexpected type %T", v)
+	}
+}
+
+// Helper to safely get string from map
+func getStringFromMap(m map[string]any, key string) string {
+	if v, ok := m[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+// Helper to safely get bool from map
+func getBoolFromMap(m map[string]any, key string) bool {
+	if v, ok := m[key]; ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return false
+}
+
+// Helper to safely get and parse uint64 from map
+func getUint64FromMap(m map[string]any, key string) (uint64, error) {
+	if v, ok := m[key]; ok {
+		return parseUint64FromInterface(v)
+	}
+	return 0, fmt.Errorf("key %s not found", key)
+}
+
+// Helper to safely get and parse optional uint64 from map
+func getOptionalUint64FromMap(m map[string]any, key string) *uint64 {
+	if v, err := getUint64FromMap(m, key); err == nil {
+		return &v
+	}
+	return nil
+}
+
+// Parse user data from map
+func parseUserFromMap(userData map[string]any) *model.User {
+	if userData == nil {
+		return nil
+	}
+	
+	user := &model.User{}
+	
+	// Parse ID
+	if id, err := getUint64FromMap(userData, "id"); err == nil {
+		user.ID = id
+	}
+	
+	// Parse string fields
+	user.FirstName = getStringFromMap(userData, "first_name")
+	user.LastName = getStringFromMap(userData, "last_name")
+	user.Username = getStringFromMap(userData, "username")
+	user.ProfilePictureURL = getStringFromMap(userData, "profile_picture_url")
+	
+	// Parse bool fields
+	user.Disabled = getBoolFromMap(userData, "disabled")
+	user.HasProfilePicture = getBoolFromMap(userData, "has_profile_picture")
+	
+	// Parse availability
+	if availability := getStringFromMap(userData, "availability"); availability != "" {
+		user.Availability = model.UserAvailability(availability)
+	}
+	
+	// Parse primary email address ID
+	user.PrimaryEmailAddressID = getOptionalUint64FromMap(userData, "primary_email_address_id")
+	
+	// Parse primary email address object
+	if primaryEmailData, ok := userData["primary_email_address"].(map[string]any); ok {
+		user.PrimaryEmailAddress = parsePrimaryEmailFromMap(primaryEmailData)
+	}
+	
+	return user
+}
+
+// Parse primary email from map
+func parsePrimaryEmailFromMap(emailData map[string]any) *model.UserEmailAddress {
+	if emailData == nil {
+		return nil
+	}
+	
+	email := &model.UserEmailAddress{}
+	
+	// Parse ID
+	if id, err := getUint64FromMap(emailData, "id"); err == nil {
+		email.ID = id
+	}
+	
+	// Parse string fields
+	email.EmailAddress = getStringFromMap(emailData, "email_address")
+	
+	// Parse bool fields
+	email.IsPrimary = getBoolFromMap(emailData, "is_primary")
+	email.Verified = getBoolFromMap(emailData, "verified")
+	
+	// Parse verification strategy
+	if strategy := getStringFromMap(emailData, "verification_strategy"); strategy != "" {
+		email.VerificationStrategy = model.VerificationStrategy(strategy)
+	}
+	
+	return email
+}
+
+// Parse signin from map
+func parseSigninFromMap(signinData map[string]any) (*model.Signin, error) {
+	if signinData == nil {
+		return nil, fmt.Errorf("signin data is nil")
+	}
+	
+	signin := &model.Signin{}
+	
+	// Parse ID (comes as string from SQL)
+	if id, err := getUint64FromMap(signinData, "id"); err != nil {
+		return nil, fmt.Errorf("failed to parse signin ID: %w", err)
+	} else {
+		signin.ID = id
+	}
+	
+	// Parse session ID
+	if sessionID, err := getUint64FromMap(signinData, "session_id"); err == nil {
+		signin.SessionID = sessionID
+	}
+	
+	// Parse optional IDs
+	signin.UserID = getOptionalUint64FromMap(signinData, "user_id")
+	signin.ActiveOrganizationMembershipID = getOptionalUint64FromMap(signinData, "active_organization_membership_id")
+	signin.ActiveWorkspaceMembershipID = getOptionalUint64FromMap(signinData, "active_workspace_membership_id")
+	
+	// Parse string fields
+	signin.ExpiresAt = getStringFromMap(signinData, "expires_at")
+	signin.LastActiveAt = getStringFromMap(signinData, "last_active_at")
+	signin.IpAddress = getStringFromMap(signinData, "ip_address")
+	signin.Browser = getStringFromMap(signinData, "browser")
+	signin.Device = getStringFromMap(signinData, "device")
+	signin.City = getStringFromMap(signinData, "city")
+	signin.Region = getStringFromMap(signinData, "region")
+	signin.Country = getStringFromMap(signinData, "country")
+	
+	// Parse user object if exists
+	if userData, ok := signinData["user"].(map[string]any); ok {
+		signin.User = parseUserFromMap(userData)
+	}
+	
+	return signin, nil
+}
 
 func GetSessionByID(sessionID uint64) (*model.Session, error) {
 	// Check cache first
@@ -239,7 +402,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		COALESCE(
 			(SELECT json_agg(
 				json_build_object(
-					'id', si.id,
+					'id', si.id::text,
 					'created_at', si.created_at,
 					'updated_at', si.updated_at,
 					'session_id', si.session_id,
@@ -321,239 +484,118 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		return nil, fmt.Errorf("session not found: %w", err)
 	}
 
-	if id, ok := rawResult["id"].(int64); ok {
-		session.ID = uint64(id)
+	// Parse session ID
+	if id, err := parseUint64FromInterface(rawResult["id"]); err == nil {
+		session.ID = id
+	} else {
+		log.Printf("Warning: failed to parse session ID: %v", err)
 	}
-	if activeSigninID, ok := rawResult["active_signin_id"].(int64); ok {
-		session.ActiveSigninID = ptr(uint64(activeSigninID))
+	
+	// Parse active signin ID
+	if activeSigninID, err := parseUint64FromInterface(rawResult["active_signin_id"]); err == nil {
+		session.ActiveSigninID = ptr(activeSigninID)
 	}
 
-	if activeSigninIDVal, ok := rawResult["ActiveSignin__id"].(int64); ok {
+	// Parse active signin if exists
+	if activeSigninID, err := parseUint64FromInterface(rawResult["ActiveSignin__id"]); err == nil {
 		session.ActiveSignin = &model.Signin{}
-		session.ActiveSignin.ID = uint64(activeSigninIDVal)
+		session.ActiveSignin.ID = activeSigninID
+		
+		// Parse signin fields
+		if sessionID, err := parseUint64FromInterface(rawResult["ActiveSignin__session_id"]); err == nil {
+			session.ActiveSignin.SessionID = sessionID
+		}
+		
+		session.ActiveSignin.UserID = getOptionalUint64FromMap(rawResult, "ActiveSignin__user_id")
+		session.ActiveSignin.ActiveOrganizationMembershipID = getOptionalUint64FromMap(rawResult, "ActiveSignin__active_organization_membership_id")
+		session.ActiveSignin.ActiveWorkspaceMembershipID = getOptionalUint64FromMap(rawResult, "ActiveSignin__active_workspace_membership_id")
+		
+		// Parse string fields
+		session.ActiveSignin.ExpiresAt = getStringFromMap(rawResult, "ActiveSignin__expires_at")
+		session.ActiveSignin.LastActiveAt = getStringFromMap(rawResult, "ActiveSignin__last_active_at")
+		session.ActiveSignin.IpAddress = getStringFromMap(rawResult, "ActiveSignin__ip_address")
+		session.ActiveSignin.Browser = getStringFromMap(rawResult, "ActiveSignin__browser")
+		session.ActiveSignin.Device = getStringFromMap(rawResult, "ActiveSignin__device")
+		session.ActiveSignin.City = getStringFromMap(rawResult, "ActiveSignin__city")
+		session.ActiveSignin.Region = getStringFromMap(rawResult, "ActiveSignin__region")
+		session.ActiveSignin.RegionCode = getStringFromMap(rawResult, "ActiveSignin__region_code")
+		session.ActiveSignin.Country = getStringFromMap(rawResult, "ActiveSignin__country")
+		session.ActiveSignin.CountryCode = getStringFromMap(rawResult, "ActiveSignin__country_code")
 
-		if sessionID, ok := rawResult["ActiveSignin__session_id"].(int64); ok {
-			session.ActiveSignin.SessionID = uint64(sessionID)
-		}
-		if userID, ok := rawResult["ActiveSignin__user_id"].(int64); ok {
-			session.ActiveSignin.UserID = ptr(uint64(userID))
-		}
-		if activeOrgMembershipID, ok := rawResult["ActiveSignin__active_organization_membership_id"].(int64); ok {
-			session.ActiveSignin.ActiveOrganizationMembershipID = ptr(uint64(activeOrgMembershipID))
-		}
-		if activeWsMembershipID, ok := rawResult["ActiveSignin__active_workspace_membership_id"].(int64); ok {
-			session.ActiveSignin.ActiveWorkspaceMembershipID = ptr(uint64(activeWsMembershipID))
-		}
-		if expiresAt, ok := rawResult["ActiveSignin__expires_at"].(string); ok {
-			session.ActiveSignin.ExpiresAt = expiresAt
-		}
-		if lastActiveAt, ok := rawResult["ActiveSignin__last_active_at"].(string); ok {
-			session.ActiveSignin.LastActiveAt = lastActiveAt
-		}
-		if ipAddress, ok := rawResult["ActiveSignin__ip_address"].(string); ok {
-			session.ActiveSignin.IpAddress = ipAddress
-		}
-		if browser, ok := rawResult["ActiveSignin__browser"].(string); ok {
-			session.ActiveSignin.Browser = browser
-		}
-		if device, ok := rawResult["ActiveSignin__device"].(string); ok {
-			session.ActiveSignin.Device = device
-		}
-		if city, ok := rawResult["ActiveSignin__city"].(string); ok {
-			session.ActiveSignin.City = city
-		}
-		if region, ok := rawResult["ActiveSignin__region"].(string); ok {
-			session.ActiveSignin.Region = region
-		}
-		if regionCode, ok := rawResult["ActiveSignin__region_code"].(string); ok {
-			session.ActiveSignin.RegionCode = regionCode
-		}
-		if country, ok := rawResult["ActiveSignin__country"].(string); ok {
-			session.ActiveSignin.Country = country
-		}
-		if countryCode, ok := rawResult["ActiveSignin__country_code"].(string); ok {
-			session.ActiveSignin.CountryCode = countryCode
-		}
-
-		if userIDVal, ok := rawResult["ActiveSignin__User__id"].(int64); ok {
-			session.ActiveSignin.User = &model.User{}
-			session.ActiveSignin.User.ID = uint64(userIDVal)
-
-			if firstName, ok := rawResult["ActiveSignin__User__first_name"].(string); ok {
-				session.ActiveSignin.User.FirstName = firstName
+		// Parse user if exists
+		if userID, err := parseUint64FromInterface(rawResult["ActiveSignin__User__id"]); err == nil {
+			session.ActiveSignin.User = &model.User{
+				FirstName: getStringFromMap(rawResult, "ActiveSignin__User__first_name"),
+				LastName: getStringFromMap(rawResult, "ActiveSignin__User__last_name"),
+				Username: getStringFromMap(rawResult, "ActiveSignin__User__username"),
+				Disabled: getBoolFromMap(rawResult, "ActiveSignin__User__disabled"),
+				HasProfilePicture: getBoolFromMap(rawResult, "ActiveSignin__User__has_profile_picture"),
+				ProfilePictureURL: getStringFromMap(rawResult, "ActiveSignin__User__profile_picture_url"),
 			}
-			if lastName, ok := rawResult["ActiveSignin__User__last_name"].(string); ok {
-				session.ActiveSignin.User.LastName = lastName
-			}
-			if username, ok := rawResult["ActiveSignin__User__username"].(string); ok {
-				session.ActiveSignin.User.Username = username
-			}
-			if disabled, ok := rawResult["ActiveSignin__User__disabled"].(bool); ok {
-				session.ActiveSignin.User.Disabled = disabled
-			}
-			if hasProfilePicture, ok := rawResult["ActiveSignin__User__has_profile_picture"].(bool); ok {
-				session.ActiveSignin.User.HasProfilePicture = hasProfilePicture
-			}
-			if profilePictureURL, ok := rawResult["ActiveSignin__User__profile_picture_url"].(string); ok {
-				session.ActiveSignin.User.ProfilePictureURL = profilePictureURL
-			}
-			if availability, ok := rawResult["ActiveSignin__User__availability"].(string); ok {
+			session.ActiveSignin.User.ID = userID
+			
+			// Parse availability
+			if availability := getStringFromMap(rawResult, "ActiveSignin__User__availability"); availability != "" {
 				session.ActiveSignin.User.Availability = model.UserAvailability(availability)
 			}
-			if primaryEmailAddressID, ok := rawResult["ActiveSignin__User__primary_email_address_id"].(int64); ok {
-				session.ActiveSignin.User.PrimaryEmailAddressID = ptr(uint64(primaryEmailAddressID))
-			}
-
-			if primaryEmailData, ok := rawResult["ActiveSignin__User__primary_email_address"].(string); ok && primaryEmailData != "" {
+			
+			// Parse primary email address ID
+			session.ActiveSignin.User.PrimaryEmailAddressID = getOptionalUint64FromMap(rawResult, "ActiveSignin__User__primary_email_address_id")
+			
+			// Parse primary email JSON
+			if primaryEmailJSON := getStringFromMap(rawResult, "ActiveSignin__User__primary_email_address"); primaryEmailJSON != "" {
 				var primaryEmailMap map[string]any
-				if err := json.Unmarshal([]byte(primaryEmailData), &primaryEmailMap); err == nil {
-					primaryEmail := &model.UserEmailAddress{}
-					if id, ok := primaryEmailMap["id"].(int64); ok {
-						primaryEmail.ID = uint64(id)
-					}
-					if emailAddress, ok := primaryEmailMap["email_address"].(string); ok {
-						primaryEmail.EmailAddress = emailAddress
-					}
-					if isPrimary, ok := primaryEmailMap["is_primary"].(bool); ok {
-						primaryEmail.IsPrimary = isPrimary
-					}
-					if verified, ok := primaryEmailMap["verified"].(bool); ok {
-						primaryEmail.Verified = verified
-					}
-					if verificationStrategy, ok := primaryEmailMap["verification_strategy"].(string); ok {
-						primaryEmail.VerificationStrategy = model.VerificationStrategy(verificationStrategy)
-					}
-					session.ActiveSignin.User.PrimaryEmailAddress = primaryEmail
+				if err := json.Unmarshal([]byte(primaryEmailJSON), &primaryEmailMap); err == nil {
+					session.ActiveSignin.User.PrimaryEmailAddress = parsePrimaryEmailFromMap(primaryEmailMap)
+				} else {
+					log.Printf("Warning: failed to parse primary email JSON: %v", err)
 				}
 			}
 		}
 
-		if activeOrgMembershipIDVal, ok := rawResult["ActiveSignin__ActiveOrganizationMembership__id"].(int64); ok {
+		// Parse active organization membership
+		if orgMembershipID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveOrganizationMembership__id"]); err == nil {
 			session.ActiveSignin.ActiveOrganizationMembership = &model.OrganizationMembership{}
-			session.ActiveSignin.ActiveOrganizationMembership.ID = uint64(activeOrgMembershipIDVal)
-
-			if orgID, ok := rawResult["ActiveSignin__ActiveOrganizationMembership__organization_id"].(int64); ok {
-				session.ActiveSignin.ActiveOrganizationMembership.OrganizationID = uint64(orgID)
+			session.ActiveSignin.ActiveOrganizationMembership.ID = orgMembershipID
+			
+			if orgID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveOrganizationMembership__organization_id"]); err == nil {
+				session.ActiveSignin.ActiveOrganizationMembership.OrganizationID = orgID
 			}
-			if userID, ok := rawResult["ActiveSignin__ActiveOrganizationMembership__user_id"].(int64); ok {
-				session.ActiveSignin.ActiveOrganizationMembership.UserID = uint64(userID)
+			if userID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveOrganizationMembership__user_id"]); err == nil {
+				session.ActiveSignin.ActiveOrganizationMembership.UserID = userID
 			}
 		}
 
-		if activeWsMembershipIDVal, ok := rawResult["ActiveSignin__ActiveWorkspaceMembership__id"].(int64); ok {
+		// Parse active workspace membership
+		if wsMembershipID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveWorkspaceMembership__id"]); err == nil {
 			session.ActiveSignin.ActiveWorkspaceMembership = &model.WorkspaceMembership{}
-			session.ActiveSignin.ActiveWorkspaceMembership.ID = uint64(activeWsMembershipIDVal)
-
-			if wsID, ok := rawResult["ActiveSignin__ActiveWorkspaceMembership__workspace_id"].(int64); ok {
-				session.ActiveSignin.ActiveWorkspaceMembership.WorkspaceID = uint64(wsID)
+			session.ActiveSignin.ActiveWorkspaceMembership.ID = wsMembershipID
+			
+			if wsID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveWorkspaceMembership__workspace_id"]); err == nil {
+				session.ActiveSignin.ActiveWorkspaceMembership.WorkspaceID = wsID
 			}
-			if userID, ok := rawResult["ActiveSignin__ActiveWorkspaceMembership__user_id"].(int64); ok {
-				session.ActiveSignin.ActiveWorkspaceMembership.UserID = uint64(userID)
+			if userID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveWorkspaceMembership__user_id"]); err == nil {
+				session.ActiveSignin.ActiveWorkspaceMembership.UserID = userID
 			}
-			if orgMembershipID, ok := rawResult["ActiveSignin__ActiveWorkspaceMembership__organization_membership_id"].(int64); ok {
-				session.ActiveSignin.ActiveWorkspaceMembership.OrganizationMembershipID = uint64(orgMembershipID)
+			if orgMembershipID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveWorkspaceMembership__organization_membership_id"]); err == nil {
+				session.ActiveSignin.ActiveWorkspaceMembership.OrganizationMembershipID = orgMembershipID
 			}
 		}
 	}
 
-	if signinsData, ok := rawResult["signins"]; ok {
-		if signinsJSON, ok := signinsData.(string); ok && signinsJSON != "" && signinsJSON != "[]" {
-			var signinsData []map[string]any
-			if err := json.Unmarshal([]byte(signinsJSON), &signinsData); err == nil {
-				for _, signinData := range signinsData {
-					signin := &model.Signin{}
-
-					if id, ok := signinData["id"].(int64); ok {
-						signin.ID = uint64(id)
-					}
-					if sessionID, ok := signinData["session_id"].(int64); ok {
-						signin.SessionID = uint64(sessionID)
-					}
-					if userID, ok := signinData["user_id"].(int64); ok {
-						signin.UserID = ptr(uint64(userID))
-					}
-					if expiresAt, ok := signinData["expires_at"].(string); ok {
-						signin.ExpiresAt = expiresAt
-					}
-					if lastActiveAt, ok := signinData["last_active_at"].(string); ok {
-						signin.LastActiveAt = lastActiveAt
-					}
-					if ipAddress, ok := signinData["ip_address"].(string); ok {
-						signin.IpAddress = ipAddress
-					}
-					if browser, ok := signinData["browser"].(string); ok {
-						signin.Browser = browser
-					}
-					if device, ok := signinData["device"].(string); ok {
-						signin.Device = device
-					}
-					if city, ok := signinData["city"].(string); ok {
-						signin.City = city
-					}
-					if region, ok := signinData["region"].(string); ok {
-						signin.Region = region
-					}
-					if country, ok := signinData["country"].(string); ok {
-						signin.Country = country
-					}
-
-					if userData, ok := signinData["user"].(map[string]any); ok {
-						user := &model.User{}
-						if id, ok := userData["id"].(int64); ok {
-							user.ID = uint64(id)
-						}
-						if firstName, ok := userData["first_name"].(string); ok {
-							user.FirstName = firstName
-						}
-						if lastName, ok := userData["last_name"].(string); ok {
-							user.LastName = lastName
-						}
-						if username, ok := userData["username"].(string); ok {
-							user.Username = username
-						}
-						if disabled, ok := userData["disabled"].(bool); ok {
-							user.Disabled = disabled
-						}
-						if hasProfilePicture, ok := userData["has_profile_picture"].(bool); ok {
-							user.HasProfilePicture = hasProfilePicture
-						}
-						if profilePictureURL, ok := userData["profile_picture_url"].(string); ok {
-							user.ProfilePictureURL = profilePictureURL
-						}
-						if availability, ok := userData["availability"].(string); ok {
-							user.Availability = model.UserAvailability(availability)
-						}
-						if primaryEmailAddressID, ok := userData["primary_email_address_id"].(int64); ok {
-							user.PrimaryEmailAddressID = ptr(uint64(primaryEmailAddressID))
-						}
-
-						if primaryEmailData, ok := userData["primary_email_address"].(map[string]any); ok {
-							primaryEmail := &model.UserEmailAddress{}
-							if id, ok := primaryEmailData["id"].(int64); ok {
-								primaryEmail.ID = uint64(id)
-							}
-							if emailAddress, ok := primaryEmailData["email_address"].(string); ok {
-								primaryEmail.EmailAddress = emailAddress
-							}
-							if isPrimary, ok := primaryEmailData["is_primary"].(bool); ok {
-								primaryEmail.IsPrimary = isPrimary
-							}
-							if verified, ok := primaryEmailData["verified"].(bool); ok {
-								primaryEmail.Verified = verified
-							}
-							if verificationStrategy, ok := primaryEmailData["verification_strategy"].(string); ok {
-								primaryEmail.VerificationStrategy = model.VerificationStrategy(verificationStrategy)
-							}
-							user.PrimaryEmailAddress = primaryEmail
-						}
-
-						signin.User = user
-					}
-
+	// Parse signins array
+	if signinsJSON := getStringFromMap(rawResult, "signins"); signinsJSON != "" && signinsJSON != "[]" {
+		var signinsArray []map[string]any
+		if err := json.Unmarshal([]byte(signinsJSON), &signinsArray); err != nil {
+			log.Printf("Error: failed to unmarshal signins JSON: %v", err)
+		} else {
+			session.Signins = make([]model.Signin, 0, len(signinsArray))
+			for _, signinMap := range signinsArray {
+				if signin, err := parseSigninFromMap(signinMap); err != nil {
+					log.Printf("Warning: failed to parse signin: %v", err)
+				} else {
 					session.Signins = append(session.Signins, *signin)
 				}
-			} else {
-				log.Printf("Failed to unmarshal signins JSON: %v", err)
 			}
 		}
 	}

@@ -161,10 +161,19 @@ func (h *Handler) SwitchOrganization(
 	}
 
 	if orgID == "" {
-		database.Connection.Exec(`
-			UPDATE users SET active_organization_membership_id = NULL WHERE id = ?;
-			UPDATE signins SET active_organization_membership_id = NULL WHERE id = ?;
-		`, session.ActiveSignin.UserID, session.ActiveSignin.ID)
+		// Use a transaction for atomicity
+		tx := database.Connection.Begin()
+		if err := tx.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).
+			Update("active_organization_membership_id", nil).Error; err != nil {
+			tx.Rollback()
+			return fiber.NewError(fiber.StatusInternalServerError, "Failed to update user")
+		}
+		if err := tx.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).
+			Update("active_organization_membership_id", nil).Error; err != nil {
+			tx.Rollback()
+			return fiber.NewError(fiber.StatusInternalServerError, "Failed to update signin")
+		}
+		tx.Commit()
 		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 		return handler.SendSuccess(c, session)
 	}
@@ -184,10 +193,19 @@ func (h *Handler) SwitchOrganization(
 		return fiber.NewError(fiber.StatusBadRequest, "You are not a member of this organization")
 	}
 
-	database.Connection.Exec(`
-		UPDATE users SET active_organization_membership_id = ? WHERE id = ?;
-		UPDATE signins SET active_organization_membership_id = ? WHERE id = ?;
-	`, membership.ID, session.ActiveSignin.UserID, membership.ID, session.ActiveSignin.ID)
+	// Use a transaction for atomicity
+	tx := database.Connection.Begin()
+	if err := tx.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).
+		Update("active_organization_membership_id", membership.ID).Error; err != nil {
+		tx.Rollback()
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to update user")
+	}
+	if err := tx.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).
+		Update("active_organization_membership_id", membership.ID).Error; err != nil {
+		tx.Rollback()
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to update signin")
+	}
+	tx.Commit()
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, session)
@@ -204,16 +222,25 @@ func (h *Handler) SwitchWorkspace(
 	}
 
 	if workspaceID == "" {
-		database.Connection.Exec(`
-			UPDATE users SET
-				active_workspace_membership_id = NULL,
-				active_organization_membership_id = NULL
-			WHERE id = ?;
-			UPDATE signins SET
-				active_workspace_membership_id = NULL,
-				active_organization_membership_id = NULL
-			WHERE id = ?;
-		`, session.ActiveSignin.UserID, session.ActiveSignin.ID)
+		// Use a transaction for atomicity
+		tx := database.Connection.Begin()
+		if err := tx.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).
+			Updates(map[string]interface{}{
+				"active_workspace_membership_id": nil,
+				"active_organization_membership_id": nil,
+			}).Error; err != nil {
+			tx.Rollback()
+			return fiber.NewError(fiber.StatusInternalServerError, "Failed to update user")
+		}
+		if err := tx.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).
+			Updates(map[string]interface{}{
+				"active_workspace_membership_id": nil,
+				"active_organization_membership_id": nil,
+			}).Error; err != nil {
+			tx.Rollback()
+			return fiber.NewError(fiber.StatusInternalServerError, "Failed to update signin")
+		}
+		tx.Commit()
 		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 		return handler.SendSuccess(c, session)
 	}
@@ -235,17 +262,25 @@ func (h *Handler) SwitchWorkspace(
 		return fiber.NewError(fiber.StatusBadRequest, "You are not a member of this workspace")
 	}
 
-	database.Connection.Exec(`
-		UPDATE users SET
-			active_workspace_membership_id = ?,
-			active_organization_membership_id = ?
-		WHERE id = ?;
-		UPDATE signins SET
-			active_workspace_membership_id = ?,
-			active_organization_membership_id = ?
-		WHERE id = ?;
-	`, membership.ID, membership.OrganizationMembershipID, session.ActiveSignin.UserID,
-		membership.ID, membership.OrganizationMembershipID, session.ActiveSignin.ID)
+	// Use a transaction for atomicity
+	tx := database.Connection.Begin()
+	if err := tx.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).
+		Updates(map[string]interface{}{
+			"active_workspace_membership_id": membership.ID,
+			"active_organization_membership_id": membership.OrganizationMembershipID,
+		}).Error; err != nil {
+		tx.Rollback()
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to update user")
+	}
+	if err := tx.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).
+		Updates(map[string]interface{}{
+			"active_workspace_membership_id": membership.ID,
+			"active_organization_membership_id": membership.OrganizationMembershipID,
+		}).Error; err != nil {
+		tx.Rollback()
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to update signin")
+	}
+	tx.Commit()
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, session)
