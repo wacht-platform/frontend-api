@@ -10,17 +10,17 @@ import (
 var (
 	// DeploymentCache stores deployment data with 5 second TTL and 2000 max keys
 	DeploymentCache *expirable.LRU[string, *model.Deployment]
-	
+
 	// SessionCache stores session data with 5 second TTL and 2000 max keys
 	SessionCache *expirable.LRU[uint64, *model.Session]
 )
 
 func init() {
 	// Initialize deployment cache
-	DeploymentCache = expirable.NewLRU[string, *model.Deployment](2000, nil, time.Second*5)
-	
+	DeploymentCache = expirable.NewLRU[string, *model.Deployment](2000, nil, time.Second*30)
+
 	// Initialize session cache
-	SessionCache = expirable.NewLRU[uint64, *model.Session](2000, nil, time.Second*5)
+	SessionCache = expirable.NewLRU[uint64, *model.Session](2000, nil, time.Second*30)
 }
 
 // GetCachedDeployment attempts to retrieve a deployment from cache
