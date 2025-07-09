@@ -10,6 +10,8 @@ import (
 	"gorm.io/plugin/dbresolver"
 )
 
+func ptr[T any](v T) *T { return &v }
+
 func GetSessionByID(sessionID uint64) (*model.Session, error) {
 	// Check cache first
 	if cachedSession, found := GetCachedSession(sessionID); found {
@@ -313,7 +315,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		SigninsJSON           string `json:"signins"`
 	}
 
-	var rawResult map[string]interface{}
+	var rawResult map[string]any
 	err := database.Connection.Clauses(dbresolver.Read).Raw(mainQuery, sessionID).Scan(&rawResult).Error
 	if err != nil {
 		return nil, fmt.Errorf("session not found: %w", err)
@@ -323,7 +325,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		session.ID = uint64(id)
 	}
 	if activeSigninID, ok := rawResult["active_signin_id"].(int64); ok {
-		session.ActiveSigninID = &[]uint64{uint64(activeSigninID)}[0]
+		session.ActiveSigninID = ptr(uint64(activeSigninID))
 	}
 
 	if activeSigninIDVal, ok := rawResult["ActiveSignin__id"].(int64); ok {
@@ -334,13 +336,13 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			session.ActiveSignin.SessionID = uint64(sessionID)
 		}
 		if userID, ok := rawResult["ActiveSignin__user_id"].(int64); ok {
-			session.ActiveSignin.UserID = &[]uint64{uint64(userID)}[0]
+			session.ActiveSignin.UserID = ptr(uint64(userID))
 		}
 		if activeOrgMembershipID, ok := rawResult["ActiveSignin__active_organization_membership_id"].(int64); ok {
-			session.ActiveSignin.ActiveOrganizationMembershipID = &[]uint64{uint64(activeOrgMembershipID)}[0]
+			session.ActiveSignin.ActiveOrganizationMembershipID = ptr(uint64(activeOrgMembershipID))
 		}
 		if activeWsMembershipID, ok := rawResult["ActiveSignin__active_workspace_membership_id"].(int64); ok {
-			session.ActiveSignin.ActiveWorkspaceMembershipID = &[]uint64{uint64(activeWsMembershipID)}[0]
+			session.ActiveSignin.ActiveWorkspaceMembershipID = ptr(uint64(activeWsMembershipID))
 		}
 		if expiresAt, ok := rawResult["ActiveSignin__expires_at"].(string); ok {
 			session.ActiveSignin.ExpiresAt = expiresAt
@@ -399,14 +401,14 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 				session.ActiveSignin.User.Availability = model.UserAvailability(availability)
 			}
 			if primaryEmailAddressID, ok := rawResult["ActiveSignin__User__primary_email_address_id"].(int64); ok {
-				session.ActiveSignin.User.PrimaryEmailAddressID = &[]uint64{uint64(primaryEmailAddressID)}[0]
+				session.ActiveSignin.User.PrimaryEmailAddressID = ptr(uint64(primaryEmailAddressID))
 			}
 
 			if primaryEmailData, ok := rawResult["ActiveSignin__User__primary_email_address"].(string); ok && primaryEmailData != "" {
-				var primaryEmailMap map[string]interface{}
+				var primaryEmailMap map[string]any
 				if err := json.Unmarshal([]byte(primaryEmailData), &primaryEmailMap); err == nil {
 					primaryEmail := &model.UserEmailAddress{}
-					if id, ok := primaryEmailMap["id"].(float64); ok {
+					if id, ok := primaryEmailMap["id"].(int64); ok {
 						primaryEmail.ID = uint64(id)
 					}
 					if emailAddress, ok := primaryEmailMap["email_address"].(string); ok {
@@ -456,19 +458,19 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 
 	if signinsData, ok := rawResult["signins"]; ok {
 		if signinsJSON, ok := signinsData.(string); ok && signinsJSON != "" && signinsJSON != "[]" {
-			var signinsData []map[string]interface{}
+			var signinsData []map[string]any
 			if err := json.Unmarshal([]byte(signinsJSON), &signinsData); err == nil {
 				for _, signinData := range signinsData {
 					signin := &model.Signin{}
 
-					if id, ok := signinData["id"].(float64); ok {
+					if id, ok := signinData["id"].(int64); ok {
 						signin.ID = uint64(id)
 					}
-					if sessionID, ok := signinData["session_id"].(float64); ok {
+					if sessionID, ok := signinData["session_id"].(int64); ok {
 						signin.SessionID = uint64(sessionID)
 					}
-					if userID, ok := signinData["user_id"].(float64); ok {
-						signin.UserID = &[]uint64{uint64(userID)}[0]
+					if userID, ok := signinData["user_id"].(int64); ok {
+						signin.UserID = ptr(uint64(userID))
 					}
 					if expiresAt, ok := signinData["expires_at"].(string); ok {
 						signin.ExpiresAt = expiresAt
@@ -495,9 +497,9 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 						signin.Country = country
 					}
 
-					if userData, ok := signinData["user"].(map[string]interface{}); ok {
+					if userData, ok := signinData["user"].(map[string]any); ok {
 						user := &model.User{}
-						if id, ok := userData["id"].(float64); ok {
+						if id, ok := userData["id"].(int64); ok {
 							user.ID = uint64(id)
 						}
 						if firstName, ok := userData["first_name"].(string); ok {
@@ -521,13 +523,13 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 						if availability, ok := userData["availability"].(string); ok {
 							user.Availability = model.UserAvailability(availability)
 						}
-						if primaryEmailAddressID, ok := userData["primary_email_address_id"].(float64); ok {
-							user.PrimaryEmailAddressID = &[]uint64{uint64(primaryEmailAddressID)}[0]
+						if primaryEmailAddressID, ok := userData["primary_email_address_id"].(int64); ok {
+							user.PrimaryEmailAddressID = ptr(uint64(primaryEmailAddressID))
 						}
 
-						if primaryEmailData, ok := userData["primary_email_address"].(map[string]interface{}); ok {
+						if primaryEmailData, ok := userData["primary_email_address"].(map[string]any); ok {
 							primaryEmail := &model.UserEmailAddress{}
-							if id, ok := primaryEmailData["id"].(float64); ok {
+							if id, ok := primaryEmailData["id"].(int64); ok {
 								primaryEmail.ID = uint64(id)
 							}
 							if emailAddress, ok := primaryEmailData["email_address"].(string); ok {
