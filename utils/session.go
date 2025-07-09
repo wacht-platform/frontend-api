@@ -420,7 +420,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 					'country', si.country,
 					'country_code', si.country_code,
 					'user', json_build_object(
-						'id', u.id,
+						'id', u.id::text,
 						'created_at', u.created_at,
 						'updated_at', u.updated_at,
 						'first_name', u.first_name,
@@ -442,7 +442,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 						'primary_email_address', CASE
 							WHEN u.primary_email_address_id IS NOT NULL
 							THEN (SELECT json_build_object(
-								'id', pe.id,
+								'id', pe.id::text,
 								'email_address', pe.email_address,
 								'is_primary', pe.is_primary,
 								'verified', pe.verified,
@@ -583,7 +583,6 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		}
 	}
 
-	// Parse signins array
 	if signinsJSON := getStringFromMap(rawResult, "signins"); signinsJSON != "" && signinsJSON != "[]" {
 		var signinsArray []map[string]any
 		if err := json.Unmarshal([]byte(signinsJSON), &signinsArray); err != nil {

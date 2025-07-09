@@ -35,6 +35,10 @@ func InitPgConnection() error {
 		}))
 	}
 
+	pool, _ := db.DB()
+	pool.SetMaxIdleConns(3)
+	pool.SetMaxOpenConns(5)
+
 	Connection = db
 
 	return nil

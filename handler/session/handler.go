@@ -194,14 +194,22 @@ func (h *Handler) SwitchOrganization(
 	}
 
 	// Use a transaction for atomicity
+	// When switching organizations, we need to clear any workspace membership
+	// since workspaces belong to specific organizations
 	tx := database.Connection.Begin()
 	if err := tx.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).
-		Update("active_organization_membership_id", membership.ID).Error; err != nil {
+		Updates(map[string]interface{}{
+			"active_organization_membership_id": membership.ID,
+			"active_workspace_membership_id": nil,
+		}).Error; err != nil {
 		tx.Rollback()
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to update user")
 	}
 	if err := tx.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).
-		Update("active_organization_membership_id", membership.ID).Error; err != nil {
+		Updates(map[string]interface{}{
+			"active_organization_membership_id": membership.ID,
+			"active_workspace_membership_id": nil,
+		}).Error; err != nil {
 		tx.Rollback()
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to update signin")
 	}
