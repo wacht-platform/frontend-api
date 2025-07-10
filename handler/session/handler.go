@@ -342,7 +342,7 @@ func (h *Handler) GetToken(
 		return handler.SendInternalServerError(c, nil, "Failed to generate token")
 	}
 
-	tok.Set("session_id", session.ID)
+	tok.Set("session_id", strconv.FormatUint(session.ID, 10))
 	if session.ActiveSignin.ActiveOrganizationMembership != nil {
 		permissionsMap := map[string]bool{}
 		for _, role := range session.ActiveSignin.ActiveOrganizationMembership.Roles {
@@ -352,7 +352,7 @@ func (h *Handler) GetToken(
 		}
 		permissions := slices.Collect(maps.Keys(permissionsMap))
 		tok.Set("organization_permissions", permissions)
-		tok.Set("organization", *&session.ActiveSignin.ActiveOrganizationMembership.OrganizationID)
+		tok.Set("organization", strconv.FormatUint(*&session.ActiveSignin.ActiveOrganizationMembership.OrganizationID, 10))
 	}
 	if session.ActiveSignin.ActiveWorkspaceMembership != nil {
 		permissionsMap := map[string]bool{}
@@ -363,7 +363,7 @@ func (h *Handler) GetToken(
 		}
 		permissions := slices.Collect(maps.Keys(permissionsMap))
 		tok.Set("workspace_permissions", permissions)
-		tok.Set("workspace", *&session.ActiveSignin.ActiveWorkspaceMembership.WorkspaceID)
+		tok.Set("workspace", strconv.FormatUint(*&session.ActiveSignin.ActiveWorkspaceMembership.WorkspaceID, 10))
 	}
 
 	signingAlg := template.CustomSigningKey.Algorithm
