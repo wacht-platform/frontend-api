@@ -36,23 +36,8 @@ type VerifyDomainRequest struct {
 	Domain string `form:"domain" validate:"required,fqdn"`
 }
 
-type BillingAddressRequest struct {
-	Address    string `form:"address" validate:"required"`
-	City       string `form:"city" validate:"required"`
-	State      string `form:"state" validate:"required"`
-	Country    string `form:"country" validate:"required"`
-	PostalCode string `form:"postal_code" validate:"required"`
-}
-
-type UpdateBillingAddressRequest struct {
-	Address    string `form:"address" validate:"required"`
-	City       string `form:"city" validate:"required"`
-	State      string `form:"state" validate:"required"`
-	Country    string `form:"country" validate:"required"`
-	PostalCode string `form:"postal_code" validate:"required"`
-}
-
 type OrganizationMemberQueryResult struct {
 	model.OrganizationMembership
 	RolesJSON string `gorm:"column:roles_json"`
+	UserJSON  string `gorm:"column:user_json"`
 }

@@ -3,6 +3,7 @@ package user
 import (
 	"crypto/rand"
 	"encoding/json"
+	"log"
 	"strconv"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
+	"gorm.io/datatypes"
 	"gorm.io/plugin/dbresolver"
 )
 
@@ -27,17 +29,337 @@ func NewHandler() *Handler {
 	}
 }
 
+// JSON parsing structs to handle string IDs from SQL
+type userEmailAddressJSON struct {
+	ID                   string `json:"id"`
+	CreatedAt            string `json:"created_at"`
+	UpdatedAt            string `json:"updated_at"`
+	EmailAddress         string `json:"email_address"`
+	IsPrimary            bool   `json:"is_primary"`
+	Verified             bool   `json:"verified"`
+	VerifiedAt           string `json:"verified_at"`
+	VerificationStrategy string `json:"verification_strategy"`
+}
+
+type userPhoneNumberJSON struct {
+	ID          string `json:"id"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+	PhoneNumber string `json:"phone_number"`
+	Verified    bool   `json:"verified"`
+	VerifiedAt  string `json:"verified_at"`
+}
+
+type socialConnectionJSON struct {
+	ID                 string `json:"id"`
+	CreatedAt          string `json:"created_at"`
+	UpdatedAt          string `json:"updated_at"`
+	UserEmailAddressID string `json:"user_email_address_id"`
+	Provider           string `json:"provider"`
+	EmailAddress       string `json:"email_address"`
+	FirstName          string `json:"first_name"`
+	LastName           string `json:"last_name"`
+}
+
+type userAuthenticatorJSON struct {
+	ID        string `json:"id"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+	UserID    string `json:"user_id"`
+	OtpUrl    string `json:"otp_url"`
+}
+
+// parseUserEmailAddressesJSON parses the JSON string into a slice of UserEmailAddress
+// Handles JSON parsing errors gracefully without breaking the response
+func parseUserEmailAddressesJSON(jsonStr string) []model.UserEmailAddress {
+	// Handle empty, null, or empty array cases
+	if jsonStr == "" || jsonStr == "[]" || jsonStr == "null" {
+		return []model.UserEmailAddress{}
+	}
+	
+	var jsonEmails []userEmailAddressJSON
+	if err := json.Unmarshal([]byte(jsonStr), &jsonEmails); err != nil {
+		log.Printf("Error parsing user email addresses JSON: %v, JSON: %s", err, jsonStr)
+		// Return empty slice to maintain backward compatibility and prevent response failure
+		return []model.UserEmailAddress{}
+	}
+	
+	var emailAddresses []model.UserEmailAddress
+	for _, jsonEmail := range jsonEmails {
+		// Parse fields with error handling - use zero values if parsing fails
+		id, err := strconv.ParseUint(jsonEmail.ID, 10, 64)
+		if err != nil {
+			log.Printf("Error parsing email address ID '%s': %v", jsonEmail.ID, err)
+			continue // Skip this record if ID parsing fails
+		}
+		
+		createdAt, _ := time.Parse(time.RFC3339, jsonEmail.CreatedAt)
+		updatedAt, _ := time.Parse(time.RFC3339, jsonEmail.UpdatedAt)
+		verifiedAt, _ := time.Parse(time.RFC3339, jsonEmail.VerifiedAt)
+		
+		emailAddresses = append(emailAddresses, model.UserEmailAddress{
+			Model: model.Model{
+				ID:        id,
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
+			},
+			EmailAddress:         jsonEmail.EmailAddress,
+			IsPrimary:            jsonEmail.IsPrimary,
+			Verified:             jsonEmail.Verified,
+			VerifiedAt:           verifiedAt,
+			VerificationStrategy: model.VerificationStrategy(jsonEmail.VerificationStrategy),
+		})
+	}
+	
+	return emailAddresses
+}
+
+// parseUserPhoneNumbersJSON parses the JSON string into a slice of UserPhoneNumber
+// Handles JSON parsing errors gracefully without breaking the response
+func parseUserPhoneNumbersJSON(jsonStr string) []model.UserPhoneNumber {
+	// Handle empty, null, or empty array cases
+	if jsonStr == "" || jsonStr == "[]" || jsonStr == "null" {
+		return []model.UserPhoneNumber{}
+	}
+	
+	var jsonPhones []userPhoneNumberJSON
+	if err := json.Unmarshal([]byte(jsonStr), &jsonPhones); err != nil {
+		log.Printf("Error parsing user phone numbers JSON: %v, JSON: %s", err, jsonStr)
+		// Return empty slice to maintain backward compatibility and prevent response failure
+		return []model.UserPhoneNumber{}
+	}
+	
+	var phoneNumbers []model.UserPhoneNumber
+	for _, jsonPhone := range jsonPhones {
+		// Parse fields with error handling - use zero values if parsing fails
+		id, err := strconv.ParseUint(jsonPhone.ID, 10, 64)
+		if err != nil {
+			log.Printf("Error parsing phone number ID '%s': %v", jsonPhone.ID, err)
+			continue // Skip this record if ID parsing fails
+		}
+		
+		createdAt, _ := time.Parse(time.RFC3339, jsonPhone.CreatedAt)
+		updatedAt, _ := time.Parse(time.RFC3339, jsonPhone.UpdatedAt)
+		verifiedAt, _ := time.Parse(time.RFC3339, jsonPhone.VerifiedAt)
+		
+		phoneNumbers = append(phoneNumbers, model.UserPhoneNumber{
+			Model: model.Model{
+				ID:        id,
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
+			},
+			PhoneNumber: jsonPhone.PhoneNumber,
+			Verified:    jsonPhone.Verified,
+			VerifiedAt:  verifiedAt,
+		})
+	}
+	
+	return phoneNumbers
+}
+
+// parseSocialConnectionsJSON parses the JSON string into a slice of SocialConnection
+// Handles JSON parsing errors gracefully without breaking the response
+func parseSocialConnectionsJSON(jsonStr string) []model.SocialConnection {
+	// Handle empty, null, or empty array cases
+	if jsonStr == "" || jsonStr == "[]" || jsonStr == "null" {
+		return []model.SocialConnection{}
+	}
+	
+	var jsonConnections []socialConnectionJSON
+	if err := json.Unmarshal([]byte(jsonStr), &jsonConnections); err != nil {
+		log.Printf("Error parsing social connections JSON: %v, JSON: %s", err, jsonStr)
+		// Return empty slice to maintain backward compatibility and prevent response failure
+		return []model.SocialConnection{}
+	}
+	
+	var socialConnections []model.SocialConnection
+	for _, jsonConn := range jsonConnections {
+		// Parse fields with error handling - use zero values if parsing fails
+		id, err := strconv.ParseUint(jsonConn.ID, 10, 64)
+		if err != nil {
+			log.Printf("Error parsing social connection ID '%s': %v", jsonConn.ID, err)
+			continue // Skip this record if ID parsing fails
+		}
+		
+		userEmailAddressID, err := strconv.ParseUint(jsonConn.UserEmailAddressID, 10, 64)
+		if err != nil {
+			log.Printf("Error parsing social connection user_email_address_id '%s': %v", jsonConn.UserEmailAddressID, err)
+			continue // Skip this record if user_email_address_id parsing fails
+		}
+		
+		createdAt, _ := time.Parse(time.RFC3339, jsonConn.CreatedAt)
+		updatedAt, _ := time.Parse(time.RFC3339, jsonConn.UpdatedAt)
+		
+		socialConnections = append(socialConnections, model.SocialConnection{
+			Model: model.Model{
+				ID:        id,
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
+			},
+			UserEmailAddressID: userEmailAddressID,
+			Provider:           model.SocialConnectionProvider(jsonConn.Provider),
+			EmailAddress:       jsonConn.EmailAddress,
+			FirstName:          jsonConn.FirstName,
+			LastName:           jsonConn.LastName,
+		})
+	}
+	
+	return socialConnections
+}
+
+// parseUserAuthenticatorJSON parses the JSON string into a UserAuthenticator pointer
+// Handles JSON parsing errors gracefully without breaking the response
+func parseUserAuthenticatorJSON(jsonStr string) *model.UserAuthenticator {
+	// Handle empty or null cases
+	if jsonStr == "" || jsonStr == "null" {
+		return nil
+	}
+	
+	var jsonAuth userAuthenticatorJSON
+	if err := json.Unmarshal([]byte(jsonStr), &jsonAuth); err != nil {
+		log.Printf("Error parsing user authenticator JSON: %v, JSON: %s", err, jsonStr)
+		// Return nil to maintain backward compatibility and prevent response failure
+		return nil
+	}
+	
+	// Parse fields with error handling - return nil if critical fields fail to parse
+	id, err := strconv.ParseUint(jsonAuth.ID, 10, 64)
+	if err != nil {
+		log.Printf("Error parsing user authenticator ID '%s': %v", jsonAuth.ID, err)
+		return nil // Return nil if ID parsing fails as it's critical
+	}
+	
+	userID, err := strconv.ParseUint(jsonAuth.UserID, 10, 64)
+	if err != nil {
+		log.Printf("Error parsing user authenticator user_id '%s': %v", jsonAuth.UserID, err)
+		return nil // Return nil if user_id parsing fails as it's critical
+	}
+	
+	createdAt, _ := time.Parse(time.RFC3339, jsonAuth.CreatedAt)
+	updatedAt, _ := time.Parse(time.RFC3339, jsonAuth.UpdatedAt)
+	
+	return &model.UserAuthenticator{
+		Model: model.Model{
+			ID:        id,
+			CreatedAt: createdAt,
+			UpdatedAt: updatedAt,
+		},
+		UserID: &userID,
+		OtpUrl: jsonAuth.OtpUrl,
+	}
+}
+
 func (h *Handler) GetUser(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 
-	err := database.Connection.Preload("ActiveSignin.User").
-		Preload("ActiveSignin.User.UserEmailAddresses").
-		Preload("ActiveSignin.User.UserPhoneNumbers").
-		Preload("ActiveSignin.User.SocialConnections").
-		Preload("ActiveSignin.User.UserAuthenticator").
-		Where("id = ?", session.ID).
-		First(session).Error
-	if err != nil {
+	// Validate session exists
+	if session == nil {
+		return handler.SendUnauthorized(
+			c,
+			nil,
+			"Unauthorized",
+		)
+	}
+
+	var queryResult UserQueryResult
+	rawSQL := `
+		SELECT
+			u.id as user_id,
+			u.created_at as user_created_at,
+			u.updated_at as user_updated_at,
+			u.first_name,
+			u.last_name,
+			u.username,
+			u.has_profile_picture,
+			u.profile_picture_url,
+			u.availability,
+			u.last_password_reset_at,
+			u.schema_version,
+			u.disabled,
+			u.primary_email_address_id,
+			u.primary_phone_number_id,
+			u.second_factor_policy,
+			u.active_organization_membership_id,
+			u.active_workspace_membership_id,
+			u.public_metadata,
+			u.backup_codes_generated,
+			
+			-- JSON aggregation for related data
+			COALESCE(
+				(SELECT json_agg(
+					json_build_object(
+						'id', uea.id::text,
+						'created_at', uea.created_at,
+						'updated_at', uea.updated_at,
+						'email_address', uea.email_address,
+						'is_primary', uea.is_primary,
+						'verified', uea.verified,
+						'verified_at', uea.verified_at,
+						'verification_strategy', uea.verification_strategy
+					)
+				)
+				FROM user_email_addresses uea
+				WHERE uea.user_id = u.id AND uea.deleted_at IS NULL
+				), '[]'::json
+			) as user_email_addresses_json,
+			
+			COALESCE(
+				(SELECT json_agg(
+					json_build_object(
+						'id', upn.id::text,
+						'created_at', upn.created_at,
+						'updated_at', upn.updated_at,
+						'phone_number', upn.phone_number,
+						'verified', upn.verified,
+						'verified_at', upn.verified_at
+					)
+				)
+				FROM user_phone_numbers upn
+				WHERE upn.user_id = u.id AND upn.deleted_at IS NULL
+				), '[]'::json
+			) as user_phone_numbers_json,
+			
+			COALESCE(
+				(SELECT json_agg(
+					json_build_object(
+						'id', sc.id::text,
+						'created_at', sc.created_at,
+						'updated_at', sc.updated_at,
+						'user_email_address_id', sc.user_email_address_id::text,
+						'provider', sc.provider,
+						'email_address', sc.email_address,
+						'first_name', sc.first_name,
+						'last_name', sc.last_name
+					)
+				)
+				FROM social_connections sc
+				WHERE sc.user_id = u.id AND sc.deleted_at IS NULL
+				), '[]'::json
+			) as social_connections_json,
+			
+			COALESCE(
+				(SELECT json_build_object(
+					'id', ua.id::text,
+					'created_at', ua.created_at,
+					'updated_at', ua.updated_at,
+					'user_id', ua.user_id::text,
+					'otp_url', ua.otp_url
+				)
+				FROM user_authenticators ua
+				WHERE ua.user_id = u.id AND ua.deleted_at IS NULL
+				LIMIT 1
+				), 'null'::json
+			) as user_authenticator_json
+
+		FROM sessions s
+		JOIN signins si ON s.active_signin_id = si.id
+		JOIN users u ON si.user_id = u.id
+		WHERE s.id = ? AND s.deleted_at IS NULL AND si.deleted_at IS NULL AND u.deleted_at IS NULL
+	`
+
+	// Execute the optimized query with proper error handling
+	if err := database.Connection.Clauses(dbresolver.Read).Raw(rawSQL, session.ID).Scan(&queryResult).Error; err != nil {
+		log.Printf("Database error in GetUser: %v", err)
 		return handler.SendInternalServerError(
 			c,
 			nil,
@@ -46,7 +368,8 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 		)
 	}
 
-	if session.ActiveSignin == nil {
+	// Check if we got a result - this handles the case where no active sign-in is found
+	if queryResult.UserID == 0 {
 		return handler.SendBadRequest(
 			c,
 			nil,
@@ -54,7 +377,51 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 		)
 	}
 
-	return handler.SendSuccess(c, session.ActiveSignin.User)
+	// Parse JSON fields and construct User model with error handling
+	user := model.User{
+		Model: model.Model{
+			ID:        queryResult.UserID,
+			CreatedAt: queryResult.UserCreatedAt,
+			UpdatedAt: queryResult.UserUpdatedAt,
+		},
+		FirstName:                      queryResult.FirstName,
+		LastName:                       queryResult.LastName,
+		Username:                       queryResult.Username,
+		HasProfilePicture:              queryResult.HasProfilePicture,
+		ProfilePictureURL:              queryResult.ProfilePictureURL,
+		Availability:                   model.UserAvailability(queryResult.Availability),
+		LastPasswordResetAt:            queryResult.LastPasswordResetAt,
+		SchemaVersion:                  model.SchemaVersion(queryResult.SchemaVersion),
+		Disabled:                       queryResult.Disabled,
+		PrimaryEmailAddressID:          queryResult.PrimaryEmailAddressID,
+		PrimaryPhoneNumberID:           queryResult.PrimaryPhoneNumberID,
+		SecondFactorPolicy:             model.SecondFactorPolicy(queryResult.SecondFactorPolicy),
+		ActiveOrganizationMembershipID: queryResult.ActiveOrganizationMembershipID,
+		ActiveWorkspaceMembershipID:    queryResult.ActiveWorkspaceMembershipID,
+		PublicMetadata:                 make(datatypes.JSONMap),
+		BackupCodesGenerated:           queryResult.BackupCodesGenerated,
+	}
+
+	// Parse JSON fields using helper functions - these functions handle JSON parsing errors gracefully
+	// by logging errors and returning empty collections to maintain backward compatibility
+	user.UserEmailAddresses = parseUserEmailAddressesJSON(queryResult.UserEmailAddressesJSON)
+	user.UserPhoneNumbers = parseUserPhoneNumbersJSON(queryResult.UserPhoneNumbersJSON)
+	user.SocialConnections = parseSocialConnectionsJSON(queryResult.SocialConnectionsJSON)
+	user.UserAuthenticator = parseUserAuthenticatorJSON(queryResult.UserAuthenticatorJSON)
+
+	// Parse PublicMetadata JSON with error handling
+	if queryResult.PublicMetadata != "" && queryResult.PublicMetadata != "null" {
+		var metadata datatypes.JSONMap
+		if err := json.Unmarshal([]byte(queryResult.PublicMetadata), &metadata); err != nil {
+			log.Printf("Error parsing PublicMetadata JSON in GetUser: %v, JSON: %s", err, queryResult.PublicMetadata)
+			// Continue with empty metadata to maintain backward compatibility
+			user.PublicMetadata = make(datatypes.JSONMap)
+		} else {
+			user.PublicMetadata = metadata
+		}
+	}
+
+	return handler.SendSuccess(c, user)
 }
 
 func (h *Handler) UpdateUser(c *fiber.Ctx) error {
@@ -579,7 +946,7 @@ func (h *Handler) AttemptPhoneVerification(c *fiber.Ctx) error {
 	}
 
 	phoneNumber.Verified = true
-	phoneNumber.VerifiedAt = time.Now()
+	phoneNumber.VerifiedAt = time.Now().UTC()
 	if err = database.Connection.Save(&phoneNumber).Error; err != nil {
 		return handler.SendInternalServerError(
 			c,
@@ -924,7 +1291,10 @@ func (h *Handler) GetUserSignins(c *fiber.Ctx) error {
 	}
 
 	var signins []model.Signin
-	if err := database.Connection.Where("user_id = ? AND (expires_at > ? OR expires_at IS NULL)", session.ActiveSignin.UserID, time.Now()).Find(&signins).Error; err != nil {
+	
+	// First, let's get all signins for this user to debug
+	var allSignins []model.Signin
+	if err := database.Connection.Where("user_id = ?", session.ActiveSignin.UserID).Find(&allSignins).Error; err != nil {
 		return handler.SendInternalServerError(
 			c,
 			nil,
@@ -932,6 +1302,26 @@ func (h *Handler) GetUserSignins(c *fiber.Ctx) error {
 			handler.ErrInternal,
 		)
 	}
+	
+	// Log what we found for debugging
+	currentTime := time.Now().UTC().Format(time.RFC3339)
+	log.Printf("DEBUG: Current time: %s", currentTime)
+	log.Printf("DEBUG: Found %d total signins for user %d", len(allSignins), session.ActiveSignin.UserID)
+	for i, signin := range allSignins {
+		log.Printf("DEBUG: Signin %d - ID: %d, ExpiresAt: %s", i, signin.ID, signin.ExpiresAt)
+	}
+	
+	// Now get the filtered signins
+	if err := database.Connection.Where("user_id = ? AND (expires_at > ? OR expires_at IS NULL OR expires_at = '')", session.ActiveSignin.UserID, currentTime).Find(&signins).Error; err != nil {
+		return handler.SendInternalServerError(
+			c,
+			nil,
+			"Failed to get user sessions",
+			handler.ErrInternal,
+		)
+	}
+	
+	log.Printf("DEBUG: Found %d active signins after filtering", len(signins))
 
 	return handler.SendSuccess(c, signins)
 }
@@ -995,7 +1385,7 @@ func (h *Handler) SignOutFromSession(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Failed to find signin")
 	}
 
-	signin.ExpiresAt = time.Now().Format(time.RFC3339)
+	signin.ExpiresAt = time.Now().UTC().Format(time.RFC3339)
 	if err := database.Connection.Save(&signin).Error; err != nil {
 		return handler.SendInternalServerError(
 			c,

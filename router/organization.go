@@ -28,8 +28,4 @@ func setupOrganizationRoutes(
 	router.Post("/:id/domains", orgHandler.AddOrganizationDomain)
 	router.Post("/:id/domains/:domainId/verify", orgHandler.VerifyOrganizationDomain)
 	router.Delete("/:id/domains/:domainId", orgHandler.DeleteOrganizationDomain)
-	router.Get("/:id/billing-addresses", orgHandler.GetOrganizationBillingAddresses)
-	router.Post("/:id/billing-addresses", orgHandler.AddOrganizationBillingAddress)
-	router.Put("/:id/billing-addresses/:billingAddressId", orgHandler.UpdateOrganizationBillingAddress)
-	router.Delete("/:id/billing-addresses/:billingAddressId", orgHandler.DeleteOrganizationBillingAddress)
 }

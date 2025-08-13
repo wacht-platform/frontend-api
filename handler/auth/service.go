@@ -32,14 +32,20 @@ import (
 )
 
 type AuthService struct {
-	db     *gorm.DB
-	celery *service.CeleryService
+	db   *gorm.DB
+	nats *service.NatsService
 }
 
 func NewAuthService() *AuthService {
+	natsService, err := service.NewNatsService()
+	if err != nil {
+		// Log error and panic - NATS is required
+		panic(fmt.Sprintf("Failed to initialize NATS service: %v", err))
+	}
+	
 	return &AuthService{
-		db:     database.Connection,
-		celery: service.NewCeleryService(),
+		db:   database.Connection,
+		nats: natsService,
 	}
 }
 
@@ -531,18 +537,49 @@ func (s *AuthService) ValidatePassword(password string) error {
 	return nil
 }
 
-func (s *AuthService) SendEmailOTPVerificationAsync(
+func (s *AuthService) SendSignupVerificationEmail(
+	signupAttemptID uint64,
 	email string,
+	code string,
 	deployment model.Deployment,
 ) error {
-	return s.celery.SendEmailAsync("auth_email_verification", deployment.ID, email)
+	return s.nats.SendVerificationEmail(deployment.ID, 0, email, code)
+}
+
+func (s *AuthService) SendSigninVerificationEmail(
+	userID uint64,
+	email string,
+	code string,
+	deployment model.Deployment,
+) error {
+	return s.nats.SendVerificationEmail(deployment.ID, userID, email, code)
+}
+
+func (s *AuthService) SendPasswordResetEmail(
+	userID uint64,
+	email string,
+	code string,
+	deployment model.Deployment,
+) error {
+	return s.nats.SendPasswordResetEmail(deployment.ID, userID, email, code)
+}
+
+func (s *AuthService) SendEmailVerificationEmail(
+	userID uint64,
+	email string,
+	code string,
+	deployment model.Deployment,
+) error {
+	return s.nats.SendVerificationEmail(deployment.ID, userID, email, code)
 }
 
 func (s *AuthService) SendSmsOTPVerificationAsync(
 	phoneNumber string,
 	deployment model.Deployment,
 ) error {
-	return s.celery.SendSMSAsync("auth_sms_verification", deployment.ID, phoneNumber)
+	// SMS sending would need to be implemented in NATS service
+	// For now, we'll skip SMS as the worker only handles email tasks
+	return fmt.Errorf("SMS sending not implemented in NATS service")
 }
 
 func (s *AuthService) GenerateMagicLink(
@@ -576,7 +613,14 @@ func (s *AuthService) SendMagicLinkAsync(
 	magicLink string,
 	deployment model.Deployment,
 ) error {
-	return s.celery.SendEmailAsync("auth_magic_link", deployment.ID, email)
+	// Get user ID for the email
+	userEmail, err := s.FindUserByEmail(email)
+	if err != nil {
+		// For new signups or non-existent users, use 0 as user ID
+		return s.nats.SendMagicLinkEmail(deployment.ID, 0, email, magicLink)
+	}
+	
+	return s.nats.SendMagicLinkEmail(deployment.ID, *userEmail.UserID, email, magicLink)
 }
 
 func (s *AuthService) VerifyMagicLinkToken(

@@ -987,7 +987,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			if err := h.service.SendEmailOTPVerificationAsync(email.EmailAddress, deployment); err != nil {
+			if err := h.service.SendSigninVerificationEmail(*email.UserID, email.EmailAddress, code, deployment); err != nil {
 				return handler.SendInternalServerError(
 					c,
 					err,
@@ -1244,7 +1244,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			if err := h.service.SendEmailOTPVerificationAsync(attempt.Email, deployment); err != nil {
+			if err := h.service.SendSignupVerificationEmail(attempt.ID, attempt.Email, code, deployment); err != nil {
 				return handler.SendInternalServerError(
 					c,
 					err,
@@ -1605,7 +1605,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 
 				if err := database.Connection.Transaction(func(tx *gorm.DB) error {
 					phone.Verified = true
-					phone.VerifiedAt = time.Now()
+					phone.VerifiedAt = time.Now().UTC()
 					if err := tx.Save(phone).Error; err != nil {
 						return err
 					}
@@ -2191,11 +2191,11 @@ func (h *Handler) ForgotPassword(c *fiber.Ctx) error {
 		)
 	}
 
-	if err := h.service.SendEmailOTPVerificationAsync(email.EmailAddress, d); err != nil {
+	if err := h.service.SendPasswordResetEmail(*email.UserID, email.EmailAddress, code, d); err != nil {
 		return handler.SendInternalServerError(
 			c,
 			err,
-			"Error sending email OTP verification",
+			"Error sending password reset email",
 		)
 	}
 

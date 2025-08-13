@@ -328,6 +328,14 @@ func (h *Handler) GetOrganizationInvitations(
 	var invitations []model.OrganizationInvitation
 	if err := database.Connection.
 		Where("organization_id = ?", orgID).
+		Preload("InitialOrganizationRole").
+		Preload("Inviter").
+		Preload("Inviter.Organization").
+		Preload("Inviter.User").
+		Preload("Inviter.User.PrimaryEmailAddress").
+		Preload("Inviter.Roles").
+		Preload("Workspace").
+		Preload("InitialWorkspaceRole").
 		Find(&invitations).
 		Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to fetch invitations")
@@ -624,14 +632,34 @@ func (h *Handler) GetOrganizationMembers(
 			organization_memberships.updated_at,
 			organization_memberships.organization_id,
 			organization_memberships.user_id,
+			json_build_object(
+				'id', users.id::text,
+				'first_name', users.first_name,
+				'last_name', users.last_name,
+				'username', users.username,
+				'profile_picture_url', users.profile_picture_url,
+				'has_profile_picture', users.has_profile_picture,
+				'availability', users.availability,
+				'created_at', users.created_at,
+				'updated_at', users.updated_at,
+				'primary_email_address', CASE 
+					WHEN primary_email.id IS NOT NULL THEN json_build_object(
+						'id', primary_email.id::text,
+						'email', primary_email.email_address,
+						'is_primary', primary_email.is_primary,
+						'verified', primary_email.verified
+					)
+					ELSE NULL
+				END
+			) as user_json,
 			COALESCE(
 				(SELECT json_agg(
 					json_build_object(
-						'id', organization_roles.id,
-						'organization_id', organization_roles.organization_id,
+						'id', organization_roles.id::text,
+						'organization_id', CASE WHEN organization_roles.organization_id IS NOT NULL THEN organization_roles.organization_id::text ELSE NULL END,
 						'name', organization_roles.name,
 						'permissions', organization_roles.permissions,
-						'deployment_id', organization_roles.deployment_id,
+						'deployment_id', organization_roles.deployment_id::text,
 						'created_at', organization_roles.created_at,
 						'updated_at', organization_roles.updated_at
 					) ORDER BY organization_roles.name
@@ -642,8 +670,11 @@ func (h *Handler) GetOrganizationMembers(
 				), '[]'::json
 			) as roles_json
 		FROM organization_memberships
+		JOIN users ON organization_memberships.user_id = users.id
+		LEFT JOIN user_email_addresses primary_email ON users.primary_email_address_id = primary_email.id
 		WHERE organization_memberships.organization_id = ?
 			AND organization_memberships.deleted_at IS NULL
+			AND users.deleted_at IS NULL
 		ORDER BY organization_memberships.created_at ASC
 	`
 
@@ -655,11 +686,31 @@ func (h *Handler) GetOrganizationMembers(
 	for i, result := range queryResults {
 		members[i] = result.OrganizationMembership
 
+		// Parse user data
+		if result.UserJSON != "" {
+			var userData model.PublicUserData
+			if err := json.Unmarshal([]byte(result.UserJSON), &userData); err != nil {
+				log.Printf("Error parsing user data for member %d: %v", members[i].ID, err)
+				log.Printf("UserJSON: %s", result.UserJSON)
+			} else {
+				members[i].User = userData
+			}
+		} else {
+			log.Printf("No user data JSON for member %d", members[i].ID)
+		}
+
+		// Parse roles
 		var roles []*model.OrganizationRole
 		if result.RolesJSON != "" && result.RolesJSON != "[]" {
-			if err := json.Unmarshal([]byte(result.RolesJSON), &roles); err == nil {
+			if err := json.Unmarshal([]byte(result.RolesJSON), &roles); err != nil {
+				log.Printf("Error parsing roles for member %d: %v", members[i].ID, err)
+				log.Printf("RolesJSON: %s", result.RolesJSON)
+			} else {
 				members[i].Roles = roles
+				log.Printf("Successfully parsed %d roles for member %d", len(roles), members[i].ID)
 			}
+		} else {
+			log.Printf("No roles JSON for member %d", members[i].ID)
 		}
 	}
 
@@ -703,13 +754,13 @@ func (h *Handler) CreateOrganizationRole(
 		}
 	}
 
+	orgIDValue := getuint64(orgID)
 	role := model.OrganizationRole{
 		Model:          model.Model{ID: snowflake.ID()},
-		OrganizationID: getuint64(orgID),
-	}
-
-	if err := database.Connection.Create(&role).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to create organization role")
+		OrganizationID: &orgIDValue,
+		Name:           body.Name,
+		Permissions:    body.Permissions,
+		DeploymentID:   deployment.ID,
 	}
 
 	if err := database.Connection.Create(&role).Error; err != nil {
@@ -962,187 +1013,6 @@ func (h *Handler) DeleteOrganizationDomain(
 		Delete(&model.OrganizationDomain{OrganizationID: getuint64(orgID), ID: getuint64(domainID)}).
 		Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to delete domain")
-	}
-
-	return handler.SendSuccess(c, fiber.Map{
-		"success": true,
-	})
-}
-
-func (h *Handler) GetOrganizationBillingAddresses(
-	c *fiber.Ctx,
-) error {
-	orgID := c.Params("id")
-
-	session := handler.GetSession(c)
-	if session.ActiveSignin == nil {
-		return handler.SendUnauthorized(c, nil, "No active sign in")
-	}
-
-	var membership model.OrganizationMembership
-	if err := database.Connection.
-		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		First(&membership).
-		Error; err != nil {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
-	}
-
-	var billingAddresses []model.OrganizationBillingAddress
-	if err := database.Connection.
-		Where("organization_id = ?", getuint64(orgID)).
-		Find(&billingAddresses).
-		Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to get organization billing addresses")
-	}
-
-	return handler.SendSuccess(c, billingAddresses)
-}
-
-func (h *Handler) AddOrganizationBillingAddress(
-	c *fiber.Ctx,
-) error {
-	orgID := c.Params("id")
-	b, validation := handler.Validate[BillingAddressRequest](c)
-	if validation != nil {
-		return handler.SendBadRequest(c, validation, "Bad request body")
-	}
-
-	session := handler.GetSession(c)
-	if session.ActiveSignin == nil {
-		return handler.SendUnauthorized(c, nil, "No active sign in")
-	}
-
-	var membership model.OrganizationMembership
-	if err := database.Connection.
-		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		Preload("Roles").
-		First(&membership).
-		Error; err != nil {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
-	}
-
-	requiredPermissions := map[string]bool{
-		"organization:owner":  true,
-		"organization:admin":  true,
-		"organization:manage": true,
-	}
-	hasPermission := h.service.hasPermission(membership, requiredPermissions)
-	if !hasPermission {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
-	}
-
-	billingAddress := model.OrganizationBillingAddress{
-		Model: model.Model{
-			ID: snowflake.ID(),
-		},
-		OrganizationID: getuint64(orgID),
-		Address:        b.Address,
-		City:           b.City,
-		State:          b.State,
-		Country:        b.Country,
-		PostalCode:     b.PostalCode,
-	}
-
-	if err := database.Connection.Create(&billingAddress).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to add billing address")
-	}
-
-	return handler.SendSuccess(c, fiber.Map{
-		"billing_address": billingAddress,
-	})
-}
-
-func (h *Handler) UpdateOrganizationBillingAddress(
-	c *fiber.Ctx,
-) error {
-	orgID := c.Params("id")
-	billingAddressID := c.Params("billingAddressId")
-	b, validation := handler.Validate[UpdateBillingAddressRequest](c)
-	if validation != nil {
-		return handler.SendBadRequest(c, validation, "Bad request body")
-	}
-
-	session := handler.GetSession(c)
-	if session.ActiveSignin == nil {
-		return handler.SendUnauthorized(c, nil, "No active sign in")
-	}
-
-	var membership model.OrganizationMembership
-	if err := database.Connection.
-		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		Preload("Roles").
-		First(&membership).
-		Error; err != nil {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
-	}
-
-	requiredPermissions := map[string]bool{
-		"organization:owner":  true,
-		"organization:admin":  true,
-		"organization:manage": true,
-	}
-	hasPermission := h.service.hasPermission(membership, requiredPermissions)
-	if !hasPermission {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
-	}
-
-	var billingAddress model.OrganizationBillingAddress
-	if err := database.Connection.
-		Where("id = ? AND organization_id = ?", getuint64(billingAddressID), getuint64(orgID)).
-		First(&billingAddress).
-		Error; err != nil {
-		return handler.SendNotFound(c, nil, "Billing address not found")
-	}
-
-	billingAddress.Address = b.Address
-	billingAddress.City = b.City
-	billingAddress.State = b.State
-	billingAddress.Country = b.Country
-	billingAddress.PostalCode = b.PostalCode
-
-	if err := database.Connection.Save(&billingAddress).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to update billing address")
-	}
-
-	return handler.SendSuccess(c, fiber.Map{
-		"billing_address": billingAddress,
-	})
-}
-
-func (h *Handler) DeleteOrganizationBillingAddress(
-	c *fiber.Ctx,
-) error {
-	orgID := c.Params("id")
-	billingAddressID := c.Params("billingAddressId")
-
-	session := handler.GetSession(c)
-	if session.ActiveSignin == nil {
-		return handler.SendUnauthorized(c, nil, "No active sign in")
-	}
-
-	var membership model.OrganizationMembership
-	if err := database.Connection.
-		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
-		Preload("Roles").
-		First(&membership).
-		Error; err != nil {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
-	}
-
-	requiredPermissions := map[string]bool{
-		"organization:owner":  true,
-		"organization:admin":  true,
-		"organization:manage": true,
-	}
-	hasPermission := h.service.hasPermission(membership, requiredPermissions)
-	if !hasPermission {
-		return handler.SendForbidden(c, nil, "Insufficient permissions")
-	}
-
-	if err := database.Connection.
-		Delete(&model.OrganizationBillingAddress{OrganizationID: getuint64(orgID), Model: model.Model{ID: getuint64(billingAddressID)}}).
-		Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to delete billing address")
 	}
 
 	return handler.SendSuccess(c, fiber.Map{

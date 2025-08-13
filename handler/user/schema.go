@@ -1,6 +1,10 @@
 package user
 
-import "github.com/ilabs/wacht-fe/model"
+import (
+	"time"
+
+	"github.com/ilabs/wacht-fe/model"
+)
 
 type UpdateUserSchema struct {
 	FirstName             string                   `form:"first_name"`
@@ -35,6 +39,35 @@ type DeleteAccountSchema struct {
 
 type RemovePasswordSchema struct {
 	CurrentPassword string `form:"current_password" validate:"required"`
+}
+
+type UserQueryResult struct {
+	// User fields
+	UserID                         uint64    `gorm:"column:user_id"`
+	UserCreatedAt                  time.Time `gorm:"column:user_created_at"`
+	UserUpdatedAt                  time.Time `gorm:"column:user_updated_at"`
+	FirstName                      string    `gorm:"column:first_name"`
+	LastName                       string    `gorm:"column:last_name"`
+	Username                       string    `gorm:"column:username"`
+	HasProfilePicture              bool      `gorm:"column:has_profile_picture"`
+	ProfilePictureURL              string    `gorm:"column:profile_picture_url"`
+	Availability                   string    `gorm:"column:availability"`
+	LastPasswordResetAt            time.Time `gorm:"column:last_password_reset_at"`
+	SchemaVersion                  string    `gorm:"column:schema_version"`
+	Disabled                       bool      `gorm:"column:disabled"`
+	PrimaryEmailAddressID          *uint64   `gorm:"column:primary_email_address_id"`
+	PrimaryPhoneNumberID           *uint64   `gorm:"column:primary_phone_number_id"`
+	SecondFactorPolicy             string    `gorm:"column:second_factor_policy"`
+	ActiveOrganizationMembershipID *uint64   `gorm:"column:active_organization_membership_id"`
+	ActiveWorkspaceMembershipID    *uint64   `gorm:"column:active_workspace_membership_id"`
+	PublicMetadata                 string    `gorm:"column:public_metadata"`
+	BackupCodesGenerated           bool      `gorm:"column:backup_codes_generated"`
+
+	// JSON aggregated fields
+	UserEmailAddressesJSON string `gorm:"column:user_email_addresses_json"`
+	UserPhoneNumbersJSON   string `gorm:"column:user_phone_numbers_json"`
+	SocialConnectionsJSON  string `gorm:"column:social_connections_json"`
+	UserAuthenticatorJSON  string `gorm:"column:user_authenticator_json"`
 }
 
 type OrganizationMembershipQueryResult struct {

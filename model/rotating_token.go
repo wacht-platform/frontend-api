@@ -14,7 +14,7 @@ type RotatingToken struct {
 }
 
 func (r *RotatingToken) IsValid() bool {
-	return r.ValidUntil.After(time.Now())
+	return r.ValidUntil.After(time.Now().UTC())
 }
 
 func (r *RotatingToken) HasNextToken() bool {

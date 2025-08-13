@@ -19,7 +19,6 @@ type Organization struct {
 	WorkspaceRoles          []*WorkspaceRole              `json:"workspace_roles"`
 	WorkspaceMembers        []*WorkspaceMembership        `json:"workspace_members"`
 	Domains                 []*OrganizationDomain         `json:"domains"`
-	BillingAddresses        []*OrganizationBillingAddress `json:"billing_addresses"`
 	Invitations             []*OrganizationInvitation     `json:"invitations"`
 	EnforceMFASetup         bool                          `json:"enforce_mfa" gorm:"not null;default:false"`
 	EnableIPRestriction     bool                          `json:"enable_ip_restriction" gorm:"not null;default:false"`

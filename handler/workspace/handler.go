@@ -166,7 +166,7 @@ func (h *Handler) GetWorkspace(c *fiber.Ctx) error {
 		"workspace_id = ? AND user_id = ?",
 		workspaceIDStr, // Use string for direct param match if that's how it was stored
 		session.ActiveSignin.UserID,
-	).Preload("Role").First(&membership).Error; err != nil {
+	).Preload("Roles").First(&membership).Error; err != nil {
 		return handler.SendForbidden(
 			c,
 			nil,
@@ -204,6 +204,7 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 		return handler.SendForbidden(c, nil, "Insufficient permissions to view members (not a member of the workspace).")
 	}
 
+	log.Printf("Fetching workspace members for workspace %d", workspaceID)
 	var queryResults []WorkspaceMemberQueryResult
 	rawSQL := `
 		SELECT
@@ -214,15 +215,38 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 			workspace_memberships.organization_id,
 			workspace_memberships.organization_membership_id,
 			workspace_memberships.user_id,
+			CASE
+				WHEN users.id IS NOT NULL THEN json_build_object(
+					'id', users.id::text,
+					'first_name', users.first_name,
+					'last_name', users.last_name,
+					'username', users.username,
+					'profile_picture_url', users.profile_picture_url,
+					'has_profile_picture', users.has_profile_picture,
+					'availability', users.availability,
+					'created_at', users.created_at,
+					'updated_at', users.updated_at,
+					'primary_email_address', CASE
+						WHEN primary_email.id IS NOT NULL THEN json_build_object(
+							'id', primary_email.id::text,
+							'email', primary_email.email_address,
+							'is_primary', primary_email.is_primary,
+							'verified', primary_email.verified
+						)
+						ELSE NULL
+					END
+				)
+				ELSE NULL
+			END as public_user_data_json,
 			COALESCE(
 				(SELECT json_agg(
 					json_build_object(
-						'id', workspace_roles.id,
+						'id', workspace_roles.id::text,
 						'name', workspace_roles.name,
 						'permissions', workspace_roles.permissions,
-						'organization_id', workspace_roles.organization_id,
-						'deployment_id', workspace_roles.deployment_id,
-						'workspace_id', workspace_roles.workspace_id,
+						'organization_id', workspace_roles.organization_id::text,
+						'deployment_id', workspace_roles.deployment_id::text,
+						'workspace_id', workspace_roles.workspace_id::text,
 						'created_at', workspace_roles.created_at,
 						'updated_at', workspace_roles.updated_at
 					) ORDER BY workspace_roles.name
@@ -233,6 +257,8 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 				), '[]'::json
 			) as roles_json
 		FROM workspace_memberships
+		LEFT JOIN users ON workspace_memberships.user_id = users.id AND users.deleted_at IS NULL
+		LEFT JOIN user_email_addresses primary_email ON users.primary_email_address_id = primary_email.id
 		WHERE workspace_memberships.workspace_id = ?
 			AND workspace_memberships.deleted_at IS NULL
 		ORDER BY workspace_memberships.created_at ASC
@@ -247,6 +273,20 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 	for i, result := range queryResults {
 		members[i] = result.WorkspaceMembership
 
+		// Parse user data
+		if result.PublicUserDataJSON != "" && result.PublicUserDataJSON != "null" {
+			var userData model.PublicUserData
+			if err := json.Unmarshal([]byte(result.PublicUserDataJSON), &userData); err != nil {
+				log.Printf("Error parsing user data for member %d: %v", members[i].ID, err)
+				log.Printf("PublicUserDataJSON: %s", result.PublicUserDataJSON)
+			} else {
+				members[i].User = userData
+			}
+		} else {
+			log.Printf("No user data JSON for member %d (user_id: %d)", members[i].ID, members[i].UserID)
+		}
+
+		// Parse roles
 		var roles []*model.WorkspaceRole
 		if result.RolesJSON != "" && result.RolesJSON != "[]" {
 			if err := json.Unmarshal([]byte(result.RolesJSON), &roles); err == nil {
@@ -278,12 +318,154 @@ func (h *Handler) GetWorkspaceRoles(c *fiber.Ctx) error {
 
 	var roles []model.WorkspaceRole
 	if err := database.Connection.
-		Where("(deployment_id = ? AND workspace_id IS NULL) OR workspace_id = ?", d.ID, workspaceID).
+		Where("deployment_id = ? AND (workspace_id = ? OR workspace_id IS NULL)", d.ID, workspaceID).
 		Find(&roles).Error; err != nil {
 		log.Printf("Error fetching workspace roles for workspace %d: %v", workspaceID, err)
 		return handler.SendInternalServerError(c, err, "Failed to get workspace roles")
 	}
 	return handler.SendSuccess(c, roles)
+}
+
+func (h *Handler) CreateWorkspaceRole(c *fiber.Ctx) error {
+	workspaceID, err := getuint64Param(c, "id")
+	if err != nil {
+		return handler.SendBadRequest(c, err, err.Error())
+	}
+
+	d := handler.GetDeployment(c)
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign-in")
+	}
+
+	// Check workspace membership
+	var membership model.WorkspaceMembership
+	if err := database.Connection.
+		Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&membership).Error; err != nil {
+		return handler.SendForbidden(c, nil, "Insufficient permissions (not a member of the workspace).")
+	}
+
+	// Check if user has permission to manage workspace
+	hasPermission := false
+	for _, role := range membership.Roles {
+		for _, perm := range role.Permissions {
+			if perm == "workspace:owner" || perm == "workspace:admin" || perm == "workspace:manage" {
+				hasPermission = true
+				break
+			}
+		}
+		if hasPermission {
+			break
+		}
+	}
+
+	if !hasPermission {
+		return handler.SendForbidden(c, nil, "Insufficient permissions to manage workspace roles.")
+	}
+
+	// Validate request body
+	var body struct {
+		Name        string   `json:"name" validate:"required,min=2,max=100"`
+		Permissions []string `json:"permissions"`
+	}
+
+	if err := c.BodyParser(&body); err != nil {
+		return handler.SendBadRequest(c, err, "Invalid request body")
+	}
+
+	// Create the role
+	role := model.WorkspaceRole{
+		Model:          model.Model{ID: snowflake.ID()},
+		DeploymentID:   d.ID,
+		WorkspaceID:    workspaceID,
+		OrganizationID: membership.OrganizationID,
+		Name:           body.Name,
+		Permissions:    body.Permissions,
+	}
+
+	if err := database.Connection.Create(&role).Error; err != nil {
+		log.Printf("Failed to create workspace role: %v", err)
+		return handler.SendInternalServerError(c, err, "Failed to create workspace role")
+	}
+
+	return handler.SendSuccess(c, role)
+}
+
+func (h *Handler) DeleteWorkspaceRole(c *fiber.Ctx) error {
+	workspaceID, err := getuint64Param(c, "id")
+	if err != nil {
+		return handler.SendBadRequest(c, err, err.Error())
+	}
+
+	roleID, err := getuint64Param(c, "roleId")
+	if err != nil {
+		return handler.SendBadRequest(c, err, "Invalid role ID")
+	}
+
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign-in")
+	}
+
+	// Check workspace membership
+	var membership model.WorkspaceMembership
+	if err := database.Connection.
+		Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&membership).Error; err != nil {
+		return handler.SendForbidden(c, nil, "Insufficient permissions (not a member of the workspace).")
+	}
+
+	// Check if user has permission to manage workspace
+	hasPermission := false
+	for _, role := range membership.Roles {
+		for _, perm := range role.Permissions {
+			if perm == "workspace:owner" || perm == "workspace:admin" || perm == "workspace:manage" {
+				hasPermission = true
+				break
+			}
+		}
+		if hasPermission {
+			break
+		}
+	}
+
+	if !hasPermission {
+		return handler.SendForbidden(c, nil, "Insufficient permissions to manage workspace roles.")
+	}
+
+	// Check if role exists and belongs to this workspace
+	var roleToDelete model.WorkspaceRole
+	if err := database.Connection.
+		Where("id = ? AND workspace_id = ?", roleID, workspaceID).
+		First(&roleToDelete).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return handler.SendNotFound(c, nil, "Role not found")
+		}
+		return handler.SendInternalServerError(c, err, "Failed to find role")
+	}
+
+	// Check if any members have this role
+	var memberCount int64
+	database.Connection.Model(&model.WorkspaceMembershipRoleAssoc{}).
+		Where("workspace_role_id = ?", roleID).
+		Count(&memberCount)
+
+	if memberCount > 0 {
+		return handler.SendBadRequest(c, nil, fmt.Sprintf("Cannot delete role - %d members still have this role assigned", memberCount))
+	}
+
+	// Delete the role
+	if err := database.Connection.Delete(&roleToDelete).Error; err != nil {
+		log.Printf("Failed to delete workspace role %d: %v", roleID, err)
+		return handler.SendInternalServerError(c, err, "Failed to delete role")
+	}
+
+	return handler.SendSuccess(c, fiber.Map{
+		"message": "Role deleted successfully",
+	})
 }
 
 func (h *Handler) AddWorkspaceMemberRole(c *fiber.Ctx) error {
@@ -308,7 +490,7 @@ func (h *Handler) AddWorkspaceMemberRole(c *fiber.Ctx) error {
 	var actingUserMembership model.WorkspaceMembership
 	if err := database.Connection.
 		Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignin.UserID).
-		Preload("Role").
+		Preload("Roles").
 		First(&actingUserMembership).Error; err != nil {
 		return handler.SendForbidden(c, nil, "Permission check failed: not a member of the workspace.")
 	}
@@ -375,7 +557,7 @@ func (h *Handler) RemoveWorkspaceMemberRole(c *fiber.Ctx) error {
 	var actingUserMembership model.WorkspaceMembership
 	if err := database.Connection.
 		Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignin.UserID).
-		Preload("Role").
+		Preload("Roles").
 		First(&actingUserMembership).Error; err != nil {
 		return handler.SendForbidden(c, nil, "Permission check failed: not a member of the workspace.")
 	}
@@ -451,7 +633,7 @@ func (h *Handler) UpdateWorkspace(c *fiber.Ctx) error {
 		workspaceID,
 		session.ActiveSignin.UserID,
 	).
-		Preload("Role").
+		Preload("Roles").
 		Preload("OrganizationMembership").
 		Preload("OrganizationMembership.Roles").
 		First(&actingUserMembership).Error; err != nil {
@@ -508,7 +690,7 @@ func (h *Handler) DeleteWorkspace(c *fiber.Ctx) error {
 		workspaceID,
 		session.ActiveSignin.UserID,
 	).
-		Preload("Role").First(&actingUserMembership).Error; err != nil {
+		Preload("Roles").First(&actingUserMembership).Error; err != nil {
 		return handler.SendForbidden(
 			c,
 			nil,
@@ -570,7 +752,7 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 	var actingUserMembership model.WorkspaceMembership
 	if err := database.Connection.
 		Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignin.UserID).
-		Preload("Role").
+		Preload("Roles").
 		First(&actingUserMembership).Error; err != nil {
 		return handler.SendForbidden(c, nil, "Permission check failed: not a member of the workspace.")
 	}
@@ -648,7 +830,7 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, txErr, "Failed to add member to workspace.")
 	}
 
-	database.Connection.Preload("User").Preload("Role").First(&newWorkspaceMembership, newWorkspaceMembership.ID)
+	database.Connection.Preload("User").Preload("Roles").First(&newWorkspaceMembership, newWorkspaceMembership.ID)
 
 	return handler.SendSuccess(c, fiber.Map{"membership": newWorkspaceMembership})
 }
@@ -672,7 +854,7 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 	var actingUserMembership model.WorkspaceMembership
 	if err := database.Connection.
 		Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignin.UserID).
-		Preload("Role").
+		Preload("Roles").
 		First(&actingUserMembership).Error; err != nil {
 		return handler.SendForbidden(c, nil, "Permission check failed: not a member of the workspace.")
 	}

@@ -5,10 +5,6 @@ func InitConnection() error {
 		return err
 	}
 
-	if err := InitCeleryApp(); err != nil {
-		return err
-	}
-
 	err := InitPgConnection()
 
 	return err

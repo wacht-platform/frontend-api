@@ -29,7 +29,7 @@ const (
 type CacheResponse map[string]interface{}
 
 func SetRequestPrelude(c *fiber.Ctx) error {
-	host := c.Hostname()
+	host := "dimwitted-axis-1.frontend-api.services"
 	path := c.Path()
 
 	if net.ParseIP(host) != nil {
@@ -209,7 +209,11 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token, deployment model.Deployment)
 			return err
 		}
 
-		service.NewCeleryService().ScheduleTokenCleanup(rotatingToken.ID, sessionID, 1)
+		// Schedule token cleanup via NATS
+		natsService, err := service.NewNatsService()
+		if err == nil {
+			natsService.ScheduleTokenCleanup(uint64(rotatingToken.ID), sessionID, 1)
+		}
 
 		finalRotatingTokenID = uint64(newRotatingToken.ID)
 		return nil

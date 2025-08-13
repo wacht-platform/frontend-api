@@ -20,18 +20,23 @@ import (
 const otpExpirationTime = 5 * time.Minute
 
 type UserService struct {
-	db     *gorm.DB
-	sns    *service.SnsService
-	s3     *service.S3Service
-	celery *service.CeleryService
+	db   *gorm.DB
+	sns  *service.SnsService
+	s3   *service.S3Service
+	nats *service.NatsService
 }
 
 func NewUserService() *UserService {
+	natsService, err := service.NewNatsService()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to initialize NATS service: %v", err))
+	}
+	
 	return &UserService{
-		db:     database.Connection,
-		sns:    service.NewSnsService(),
-		s3:     service.NewS3Service(),
-		celery: service.NewCeleryService(),
+		db:   database.Connection,
+		sns:  service.NewSnsService(),
+		s3:   service.NewS3Service(),
+		nats: natsService,
 	}
 }
 
@@ -62,14 +67,25 @@ func (s *UserService) sendEmailOTPVerificationAsync(
 	deploymentID uint64,
 	email string,
 ) error {
-	return s.celery.SendEmailAsync("user_email_verification", deploymentID, email)
+	var emailAddress model.UserEmailAddress
+	if err := s.db.Where("email_address = ?", email).First(&emailAddress).Error; err != nil {
+		return fmt.Errorf("email address not found: %s", email)
+	}
+	
+	cacheKey := fmt.Sprintf("otp:%d", emailAddress.ID)
+	code, err := database.Redis.Get(context.Background(), cacheKey).Result()
+	if err != nil {
+		return fmt.Errorf("verification code not found for email ID: %d", emailAddress.ID)
+	}
+	
+	return s.nats.SendVerificationEmail(deploymentID, *emailAddress.UserID, email, code)
 }
 
 func (s *UserService) sendSmsOTPVerificationAsync(
 	deploymentID uint64,
 	phone string,
 ) error {
-	return s.celery.SendSMSAsync("user_sms_verification", deploymentID, phone)
+	return fmt.Errorf("SMS sending not implemented in NATS service")
 }
 
 func (s *UserService) uploadProfilePicture(

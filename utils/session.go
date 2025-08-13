@@ -14,7 +14,7 @@ import (
 func ptr[T any](v T) *T { return &v }
 
 // Helper functions to safely parse IDs from various types
-func parseUint64FromInterface(v interface{}) (uint64, error) {
+func parseUint64FromInterface(v any) (uint64, error) {
 	switch val := v.(type) {
 	case string:
 		return strconv.ParseUint(val, 10, 64)
@@ -70,37 +70,37 @@ func parseUserFromMap(userData map[string]any) *model.User {
 	if userData == nil {
 		return nil
 	}
-	
+
 	user := &model.User{}
-	
+
 	// Parse ID
 	if id, err := getUint64FromMap(userData, "id"); err == nil {
 		user.ID = id
 	}
-	
+
 	// Parse string fields
 	user.FirstName = getStringFromMap(userData, "first_name")
 	user.LastName = getStringFromMap(userData, "last_name")
 	user.Username = getStringFromMap(userData, "username")
 	user.ProfilePictureURL = getStringFromMap(userData, "profile_picture_url")
-	
+
 	// Parse bool fields
 	user.Disabled = getBoolFromMap(userData, "disabled")
 	user.HasProfilePicture = getBoolFromMap(userData, "has_profile_picture")
-	
+
 	// Parse availability
 	if availability := getStringFromMap(userData, "availability"); availability != "" {
 		user.Availability = model.UserAvailability(availability)
 	}
-	
+
 	// Parse primary email address ID
 	user.PrimaryEmailAddressID = getOptionalUint64FromMap(userData, "primary_email_address_id")
-	
+
 	// Parse primary email address object
 	if primaryEmailData, ok := userData["primary_email_address"].(map[string]any); ok {
 		user.PrimaryEmailAddress = parsePrimaryEmailFromMap(primaryEmailData)
 	}
-	
+
 	return user
 }
 
@@ -109,26 +109,26 @@ func parsePrimaryEmailFromMap(emailData map[string]any) *model.UserEmailAddress 
 	if emailData == nil {
 		return nil
 	}
-	
+
 	email := &model.UserEmailAddress{}
-	
+
 	// Parse ID
 	if id, err := getUint64FromMap(emailData, "id"); err == nil {
 		email.ID = id
 	}
-	
+
 	// Parse string fields
 	email.EmailAddress = getStringFromMap(emailData, "email_address")
-	
+
 	// Parse bool fields
 	email.IsPrimary = getBoolFromMap(emailData, "is_primary")
 	email.Verified = getBoolFromMap(emailData, "verified")
-	
+
 	// Parse verification strategy
 	if strategy := getStringFromMap(emailData, "verification_strategy"); strategy != "" {
 		email.VerificationStrategy = model.VerificationStrategy(strategy)
 	}
-	
+
 	return email
 }
 
@@ -137,26 +137,26 @@ func parseSigninFromMap(signinData map[string]any) (*model.Signin, error) {
 	if signinData == nil {
 		return nil, fmt.Errorf("signin data is nil")
 	}
-	
+
 	signin := &model.Signin{}
-	
+
 	// Parse ID (comes as string from SQL)
 	if id, err := getUint64FromMap(signinData, "id"); err != nil {
 		return nil, fmt.Errorf("failed to parse signin ID: %w", err)
 	} else {
 		signin.ID = id
 	}
-	
+
 	// Parse session ID
 	if sessionID, err := getUint64FromMap(signinData, "session_id"); err == nil {
 		signin.SessionID = sessionID
 	}
-	
+
 	// Parse optional IDs
 	signin.UserID = getOptionalUint64FromMap(signinData, "user_id")
 	signin.ActiveOrganizationMembershipID = getOptionalUint64FromMap(signinData, "active_organization_membership_id")
 	signin.ActiveWorkspaceMembershipID = getOptionalUint64FromMap(signinData, "active_workspace_membership_id")
-	
+
 	// Parse string fields
 	signin.ExpiresAt = getStringFromMap(signinData, "expires_at")
 	signin.LastActiveAt = getStringFromMap(signinData, "last_active_at")
@@ -166,12 +166,12 @@ func parseSigninFromMap(signinData map[string]any) (*model.Signin, error) {
 	signin.City = getStringFromMap(signinData, "city")
 	signin.Region = getStringFromMap(signinData, "region")
 	signin.Country = getStringFromMap(signinData, "country")
-	
+
 	// Parse user object if exists
 	if userData, ok := signinData["user"].(map[string]any); ok {
 		signin.User = parseUserFromMap(userData)
 	}
-	
+
 	return signin, nil
 }
 
@@ -490,7 +490,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 	} else {
 		log.Printf("Warning: failed to parse session ID: %v", err)
 	}
-	
+
 	// Parse active signin ID
 	if activeSigninID, err := parseUint64FromInterface(rawResult["active_signin_id"]); err == nil {
 		session.ActiveSigninID = ptr(activeSigninID)
@@ -500,16 +500,16 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 	if activeSigninID, err := parseUint64FromInterface(rawResult["ActiveSignin__id"]); err == nil {
 		session.ActiveSignin = &model.Signin{}
 		session.ActiveSignin.ID = activeSigninID
-		
+
 		// Parse signin fields
 		if sessionID, err := parseUint64FromInterface(rawResult["ActiveSignin__session_id"]); err == nil {
 			session.ActiveSignin.SessionID = sessionID
 		}
-		
+
 		session.ActiveSignin.UserID = getOptionalUint64FromMap(rawResult, "ActiveSignin__user_id")
 		session.ActiveSignin.ActiveOrganizationMembershipID = getOptionalUint64FromMap(rawResult, "ActiveSignin__active_organization_membership_id")
 		session.ActiveSignin.ActiveWorkspaceMembershipID = getOptionalUint64FromMap(rawResult, "ActiveSignin__active_workspace_membership_id")
-		
+
 		// Parse string fields
 		session.ActiveSignin.ExpiresAt = getStringFromMap(rawResult, "ActiveSignin__expires_at")
 		session.ActiveSignin.LastActiveAt = getStringFromMap(rawResult, "ActiveSignin__last_active_at")
@@ -525,23 +525,23 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		// Parse user if exists
 		if userID, err := parseUint64FromInterface(rawResult["ActiveSignin__User__id"]); err == nil {
 			session.ActiveSignin.User = &model.User{
-				FirstName: getStringFromMap(rawResult, "ActiveSignin__User__first_name"),
-				LastName: getStringFromMap(rawResult, "ActiveSignin__User__last_name"),
-				Username: getStringFromMap(rawResult, "ActiveSignin__User__username"),
-				Disabled: getBoolFromMap(rawResult, "ActiveSignin__User__disabled"),
+				FirstName:         getStringFromMap(rawResult, "ActiveSignin__User__first_name"),
+				LastName:          getStringFromMap(rawResult, "ActiveSignin__User__last_name"),
+				Username:          getStringFromMap(rawResult, "ActiveSignin__User__username"),
+				Disabled:          getBoolFromMap(rawResult, "ActiveSignin__User__disabled"),
 				HasProfilePicture: getBoolFromMap(rawResult, "ActiveSignin__User__has_profile_picture"),
 				ProfilePictureURL: getStringFromMap(rawResult, "ActiveSignin__User__profile_picture_url"),
 			}
 			session.ActiveSignin.User.ID = userID
-			
+
 			// Parse availability
 			if availability := getStringFromMap(rawResult, "ActiveSignin__User__availability"); availability != "" {
 				session.ActiveSignin.User.Availability = model.UserAvailability(availability)
 			}
-			
+
 			// Parse primary email address ID
 			session.ActiveSignin.User.PrimaryEmailAddressID = getOptionalUint64FromMap(rawResult, "ActiveSignin__User__primary_email_address_id")
-			
+
 			// Parse primary email JSON
 			if primaryEmailJSON := getStringFromMap(rawResult, "ActiveSignin__User__primary_email_address"); primaryEmailJSON != "" {
 				var primaryEmailMap map[string]any
@@ -557,7 +557,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		if orgMembershipID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveOrganizationMembership__id"]); err == nil {
 			session.ActiveSignin.ActiveOrganizationMembership = &model.OrganizationMembership{}
 			session.ActiveSignin.ActiveOrganizationMembership.ID = orgMembershipID
-			
+
 			if orgID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveOrganizationMembership__organization_id"]); err == nil {
 				session.ActiveSignin.ActiveOrganizationMembership.OrganizationID = orgID
 			}
@@ -570,7 +570,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		if wsMembershipID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveWorkspaceMembership__id"]); err == nil {
 			session.ActiveSignin.ActiveWorkspaceMembership = &model.WorkspaceMembership{}
 			session.ActiveSignin.ActiveWorkspaceMembership.ID = wsMembershipID
-			
+
 			if wsID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveWorkspaceMembership__workspace_id"]); err == nil {
 				session.ActiveSignin.ActiveWorkspaceMembership.WorkspaceID = wsID
 			}

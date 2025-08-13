@@ -91,7 +91,7 @@ func NewSignInAttempt(method SignInMethod) *SignInAttempt {
 			ID: snowflake.ID(),
 		},
 		Method:    method,
-		ExpiresAt: time.Now().Add(time.Minute * 10),
+		ExpiresAt: time.Now().UTC().Add(time.Minute * 10),
 	}
 }
 

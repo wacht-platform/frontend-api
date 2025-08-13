@@ -25,6 +25,7 @@ func setupRoutes(app *fiber.App) {
 	setupWorkspaceRoutes(app)
 	setupUserRoutes(app)
 	setupWaitlistRoutes(app)
+	setupNotificationRoutes(app)
 }
 
 func setupMiddleware(app *fiber.App) {

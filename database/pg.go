@@ -66,7 +66,6 @@ func AutoMigratePg() error {
 		&model.OrgMembershipRoleAssoc{},
 		&model.OrganizationInvitation{},
 		&model.OrganizationDomain{},
-		&model.OrganizationBillingAddress{},
 		&model.Workspace{},
 		&model.WorkspaceRole{},
 		&model.WorkspaceMembership{},
