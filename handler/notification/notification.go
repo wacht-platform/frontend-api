@@ -12,7 +12,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// List returns a list of notifications for the current user
 func List(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session == nil {
@@ -28,15 +27,13 @@ func List(c *fiber.Ctx) error {
 	}
 	req.SetDefaults()
 
-	// Build base query
 	baseQuery := database.Connection.Model(&model.Notification{}).
-		Where("user_id = ?", session.ActiveSignin.UserID).
 		Where("deployment_id = ?", deployment.ID)
 
-	// Apply filters
+	baseQuery = req.ApplyChannelFilters(baseQuery, *session.ActiveSignin.UserID, session)
+
 	baseQuery = req.ApplyFilters(baseQuery)
 
-	// Get total count
 	var total int64
 	if err := baseQuery.Count(&total).Error; err != nil {
 		log.Printf("Failed to count notifications: %v", err)
@@ -72,11 +69,20 @@ func List(c *fiber.Ctx) error {
 		notifications = []model.Notification{}
 	}
 
+	channelCounts := model.GetChannelCounts(*session.ActiveSignin.UserID, session)
+
+	channels := req.Channels
+	if len(channels) == 0 {
+		channels = []string{"user"}
+	}
+
 	response := model.NotificationListResponse{
 		Notifications: notifications,
 		Total:         total,
-		UnreadCount:   unreadCount,
+		UnreadCount:   channelCounts.Total,
 		HasMore:       int64(req.Offset+req.Limit) < total,
+		Channels:      channels,
+		UnreadCounts:  channelCounts,
 	}
 
 	return handler.SendSuccess(c, response)
@@ -106,6 +112,17 @@ func GetUnreadCount(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, model.UnreadCountResponse{
 		Count: count,
 	})
+}
+
+func GetChannelCounts(c *fiber.Ctx) error {
+	session := handler.GetSession(c)
+	if session == nil {
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
+	}
+
+	channelCounts := model.GetChannelCounts(*session.ActiveSignin.UserID, session)
+
+	return handler.SendSuccess(c, channelCounts)
 }
 
 // MarkAsRead marks a notification as read
@@ -141,7 +158,7 @@ func MarkAsRead(c *fiber.Ctx) error {
 
 	// Mark as read
 	notification.MarkAsRead()
-	
+
 	// Update in database
 	if err := database.Connection.Save(&notification).Error; err != nil {
 		log.Printf("Failed to update notification: %v", err)
@@ -218,7 +235,7 @@ func Delete(c *fiber.Ctx) error {
 
 	// Archive the notification
 	notification.Archive()
-	
+
 	// Update in database
 	if err := database.Connection.Save(&notification).Error; err != nil {
 		log.Printf("Failed to archive notification: %v", err)

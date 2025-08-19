@@ -11,6 +11,7 @@ func setupNotificationRoutes(app *fiber.App) {
 	// List and count endpoints
 	router.Get("/", notification.List)
 	router.Get("/unread-count", notification.GetUnreadCount)
+	router.Get("/channel-counts", notification.GetChannelCounts)
 	
 	// Single notification operations
 	router.Get("/:id", notification.Get)
