@@ -30,7 +30,7 @@ func List(c *fiber.Ctx) error {
 	baseQuery := database.Connection.Model(&model.Notification{}).
 		Where("deployment_id = ?", deployment.ID)
 
-	baseQuery = req.ApplyChannelFilters(baseQuery, *session.ActiveSignin.UserID, session)
+	baseQuery = ApplyChannelFilters(baseQuery, &req, *session.ActiveSignin.UserID, session)
 
 	baseQuery = req.ApplyFilters(baseQuery)
 
@@ -69,7 +69,7 @@ func List(c *fiber.Ctx) error {
 		notifications = []model.Notification{}
 	}
 
-	channelCounts := model.GetChannelCounts(*session.ActiveSignin.UserID, session)
+	channelCounts := CalculateChannelCounts(*session.ActiveSignin.UserID, session)
 
 	channels := req.Channels
 	if len(channels) == 0 {
@@ -120,7 +120,7 @@ func GetChannelCounts(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
 	}
 
-	channelCounts := model.GetChannelCounts(*session.ActiveSignin.UserID, session)
+	channelCounts := CalculateChannelCounts(*session.ActiveSignin.UserID, session)
 
 	return handler.SendSuccess(c, channelCounts)
 }
