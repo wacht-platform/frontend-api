@@ -26,10 +26,8 @@ const (
 	sessionDuration   = 6 * time.Hour
 )
 
-type CacheResponse map[string]interface{}
-
 func SetRequestPrelude(c *fiber.Ctx) error {
-	host := "dimwitted-axis-1.frontend-api.services"
+	host := c.Hostname()
 	path := c.Path()
 
 	if net.ParseIP(host) != nil {
