@@ -40,11 +40,9 @@ const (
 )
 
 type NatsTaskMessage struct {
-	TaskType  string          `json:"task_type"`
-	TaskID    string          `json:"task_id"`
-	Payload   json.RawMessage `json:"payload"`
-	Retry     int             `json:"retry"`
-	CreatedAt time.Time       `json:"created_at"`
+	TaskType string          `json:"task_type"`
+	TaskID   string          `json:"task_id"`
+	Payload  json.RawMessage `json:"payload"`
 }
 
 type VerificationEmailTask struct {
@@ -194,11 +192,9 @@ func (s *NatsService) publishTask(ctx context.Context, taskType string, payload 
 	}
 
 	message := NatsTaskMessage{
-		TaskType:  taskType,
-		TaskID:    fmt.Sprintf("%d", snowflake.ID()),
-		Payload:   payloadBytes,
-		Retry:     0,
-		CreatedAt: time.Now(),
+		TaskType: taskType,
+		TaskID:   fmt.Sprintf("%d", snowflake.ID()),
+		Payload:  payloadBytes,
 	}
 
 	messageBytes, err := json.Marshal(message)
