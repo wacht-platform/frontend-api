@@ -36,7 +36,7 @@ const (
 type TaskType string
 
 const (
-	TokenCleanup TaskType = "token.cleanup"
+	TokenCleanup TaskType = "token.clean"
 )
 
 type NatsTaskMessage struct {
