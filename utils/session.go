@@ -43,15 +43,33 @@ func getStringFromMap(m map[string]any, key string) string {
 // Helper to safely get time from map
 func getTimeFromMap(m map[string]any, key string) time.Time {
 	if v, ok := m[key]; ok {
-		// Try to parse as string
+		// Try to parse as time.Time first
+		if t, ok := v.(time.Time); ok {
+			return t
+		}
+		// Try to parse as string with various formats
 		if s, ok := v.(string); ok && s != "" {
+			// Try multiple timestamp formats
+			formats := []string{
+				time.RFC3339,
+				time.RFC3339Nano,
+				"2006-01-02T15:04:05.999999Z",
+				"2006-01-02T15:04:05.999999",
+				"2006-01-02 15:04:05.999999",
+				"2006-01-02 15:04:05",
+			}
+			for _, format := range formats {
+				if t, err := time.Parse(format, s); err == nil {
+					return t
+				}
+			}
+		}
+		// Try to handle []uint8 (byte array from database)
+		if b, ok := v.([]uint8); ok {
+			s := string(b)
 			if t, err := time.Parse(time.RFC3339, s); err == nil {
 				return t
 			}
-		}
-		// Try to parse as time.Time
-		if t, ok := v.(time.Time); ok {
-			return t
 		}
 	}
 	return time.Time{}
@@ -178,6 +196,18 @@ func parseSigninFromMap(signinData map[string]any) (*model.Signin, error) {
 	// Parse time fields
 	signin.ExpiresAt = getTimeFromMap(signinData, "expires_at")
 	signin.LastActiveAt = getTimeFromMap(signinData, "last_active_at")
+	
+	// Debug log if times are zero
+	if signin.ExpiresAt.IsZero() {
+		if v, ok := signinData["expires_at"]; ok {
+			log.Printf("DEBUG: Failed to parse expires_at, raw value: %v (type: %T)", v, v)
+		}
+	}
+	if signin.LastActiveAt.IsZero() {
+		if v, ok := signinData["last_active_at"]; ok {
+			log.Printf("DEBUG: Failed to parse last_active_at, raw value: %v (type: %T)", v, v)
+		}
+	}
 	signin.IpAddress = getStringFromMap(signinData, "ip_address")
 	signin.Browser = getStringFromMap(signinData, "browser")
 	signin.Device = getStringFromMap(signinData, "device")
@@ -427,8 +457,8 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 					'user_id', si.user_id,
 					'active_organization_membership_id', si.active_organization_membership_id,
 					'active_workspace_membership_id', si.active_workspace_membership_id,
-					'expires_at', si.expires_at,
-					'last_active_at', si.last_active_at,
+					'expires_at', to_char(si.expires_at, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+					'last_active_at', to_char(si.last_active_at, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
 					'ip_address', si.ip_address,
 					'browser', si.browser,
 					'device', si.device,
