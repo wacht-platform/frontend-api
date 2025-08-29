@@ -54,7 +54,8 @@ func getTimeFromMap(m map[string]any, key string) time.Time {
 				time.RFC3339,
 				time.RFC3339Nano,
 				"2006-01-02T15:04:05.999999Z",
-				"2006-01-02T15:04:05.999999",
+				"2006-01-02T15:04:05.999999",  // PostgreSQL JSON format without Z
+				"2006-01-02T15:04:05.000000",  // Alternative microsecond format
 				"2006-01-02 15:04:05.999999",
 				"2006-01-02 15:04:05",
 			}
@@ -196,18 +197,6 @@ func parseSigninFromMap(signinData map[string]any) (*model.Signin, error) {
 	// Parse time fields
 	signin.ExpiresAt = getTimeFromMap(signinData, "expires_at")
 	signin.LastActiveAt = getTimeFromMap(signinData, "last_active_at")
-	
-	// Debug log if times are zero
-	if signin.ExpiresAt.IsZero() {
-		if v, ok := signinData["expires_at"]; ok {
-			log.Printf("DEBUG: Failed to parse expires_at, raw value: %v (type: %T)", v, v)
-		}
-	}
-	if signin.LastActiveAt.IsZero() {
-		if v, ok := signinData["last_active_at"]; ok {
-			log.Printf("DEBUG: Failed to parse last_active_at, raw value: %v (type: %T)", v, v)
-		}
-	}
 	signin.IpAddress = getStringFromMap(signinData, "ip_address")
 	signin.Browser = getStringFromMap(signinData, "browser")
 	signin.Device = getStringFromMap(signinData, "device")
