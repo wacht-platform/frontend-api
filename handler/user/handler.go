@@ -1303,16 +1303,8 @@ func (h *Handler) GetUserSignins(c *fiber.Ctx) error {
 		)
 	}
 	
-	// Log what we found for debugging
-	currentTime := time.Now().UTC().Format(time.RFC3339)
-	log.Printf("DEBUG: Current time: %s", currentTime)
-	log.Printf("DEBUG: Found %d total signins for user %d", len(allSignins), session.ActiveSignin.UserID)
-	for i, signin := range allSignins {
-		log.Printf("DEBUG: Signin %d - ID: %d, ExpiresAt: %s", i, signin.ID, signin.ExpiresAt)
-	}
-	
 	// Now get the filtered signins
-	if err := database.Connection.Where("user_id = ? AND (expires_at > ? OR expires_at IS NULL OR expires_at = '')", session.ActiveSignin.UserID, currentTime).Find(&signins).Error; err != nil {
+	if err := database.Connection.Where("user_id = ? AND (expires_at > ? OR expires_at IS NULL)", session.ActiveSignin.UserID, time.Now()).Find(&signins).Error; err != nil {
 		return handler.SendInternalServerError(
 			c,
 			nil,
@@ -1320,8 +1312,6 @@ func (h *Handler) GetUserSignins(c *fiber.Ctx) error {
 			handler.ErrInternal,
 		)
 	}
-	
-	log.Printf("DEBUG: Found %d active signins after filtering", len(signins))
 
 	return handler.SendSuccess(c, signins)
 }
