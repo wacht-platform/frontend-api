@@ -1,6 +1,8 @@
 package model
 
 import (
+	"time"
+
 	"github.com/godruoyi/go-snowflake"
 	"gorm.io/gorm"
 )
@@ -14,8 +16,8 @@ type Signin struct {
 	User                           *User                   `json:"user,omitempty" gorm:"foreignKey:UserID"`
 	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace,omitempty"`
 	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization,omitempty"`
-	ExpiresAt                      string                  `json:"expires_at"     gorm:"not null"`
-	LastActiveAt                   string                  `json:"last_active_at" gorm:"not null"`
+	ExpiresAt                      time.Time               `json:"expires_at"     gorm:"not null"`
+	LastActiveAt                   time.Time               `json:"last_active_at" gorm:"not null"`
 	IpAddress                      string                  `json:"ip_address"`
 	Browser                        string                  `json:"browser"`
 	Device                         string                  `json:"device"`
@@ -26,13 +28,16 @@ type Signin struct {
 	CountryCode                    string                  `json:"country_code"`
 }
 
-func NewSignIn(sessionID, userID uint64) *Signin {
+func NewSignIn(sessionID, userID uint64, validityPeriodSeconds uint64) *Signin {
+	now := time.Now()
 	return &Signin{
 		Model: Model{
 			ID: snowflake.ID(),
 		},
-		SessionID: sessionID,
-		UserID:    &userID,
+		SessionID:    sessionID,
+		UserID:       &userID,
+		ExpiresAt:    now.Add(time.Duration(validityPeriodSeconds) * time.Second),
+		LastActiveAt: now,
 	}
 }
 

@@ -144,7 +144,7 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 				return err
 			}
 
-			signIn := h.service.CreateSignin(user.ID, session.ID, c)
+			signIn := h.service.CreateSignin(user.ID, session.ID, c, d.AuthSettings.SessionValidityPeriod)
 			if err := tx.Create(signIn).Error; err != nil {
 				return err
 			}
@@ -267,7 +267,7 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 				return err
 			}
 
-			signIn := h.service.CreateSignin(email.User.ID, session.ID, c)
+			signIn := h.service.CreateSignin(email.User.ID, session.ID, c, d.AuthSettings.SessionValidityPeriod)
 			if err := tx.Create(signIn).Error; err != nil {
 				return err
 			}
@@ -560,7 +560,7 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 				return err
 			}
 
-			signIn := h.service.CreateSignin(u.ID, session.ID, c)
+			signIn := h.service.CreateSignin(u.ID, session.ID, c, d.AuthSettings.SessionValidityPeriod)
 			signIn.User = &u
 
 			if err := tx.Create(signIn).Error; err != nil {
@@ -837,7 +837,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			attempt.Available2FAMethods = datatypes.NewJSONSlice([]string{})
 			attempt.Completed = false
 		} else {
-			signIn := h.service.CreateSignin(u.ID, session.ID, c)
+			signIn := h.service.CreateSignin(u.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 
 			if err := tx.Create(&signIn).Error; err != nil {
 				return err
@@ -1333,7 +1333,7 @@ func (h *Handler) VerifyMagicLink(c *fiber.Ctx) error {
 			return handler.SendBadRequest(c, nil, err.Error(), handler.ErrCountryRestricted)
 		}
 
-		signIn := h.service.CreateSignin(email.User.ID, session.ID, c)
+		signIn := h.service.CreateSignin(email.User.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 		signIn.User = &email.User
 
 		err = database.Connection.Transaction(func(tx *gorm.DB) error {
@@ -1405,6 +1405,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 	attemptIdentifier := c.QueryInt("attempt_identifier")
 	identifierType := c.Query("identifier_type")
 	session := handler.GetSession(c)
+	deployment := handler.GetDeployment(c)
 
 	if attemptIdentifier == 0 {
 		return handler.SendBadRequest(
@@ -1494,7 +1495,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				if len(attempt.RemainingSteps) == 1 {
 					attempt.Completed = true
 					attempt.RemainingSteps = nil
-					signin = h.service.CreateSignin(*email.UserID, session.ID, c)
+					signin = h.service.CreateSignin(*email.UserID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 					signin.User = &email.User
 
 					session.Signins = append(session.Signins, *signin)
@@ -1593,7 +1594,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				if len(attempt.RemainingSteps) == 1 {
 					attempt.Completed = true
 					attempt.RemainingSteps = nil
-					signin = h.service.CreateSignin(phone.User.ID, session.ID, c)
+					signin = h.service.CreateSignin(phone.User.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 					signin.User = &phone.User
 
 					session.Signins = append(session.Signins, *signin)
@@ -1759,7 +1760,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 			if len(attempt.RemainingSteps) == 1 {
 				attempt.Completed = true
 				attempt.RemainingSteps = nil
-				signin = h.service.CreateSignin(user.ID, session.ID, c)
+				signin = h.service.CreateSignin(user.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 				signin.User = &user
 
 				session.Signins = append(session.Signins, *signin)
@@ -1836,7 +1837,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				return handler.SendBadRequest(c, nil, err.Error(), handler.ErrCountryRestricted)
 			}
 
-			signIn := h.service.CreateSignin(user.ID, session.ID, c)
+			signIn := h.service.CreateSignin(user.ID, session.ID, c, d.AuthSettings.SessionValidityPeriod)
 			signIn.User = user
 
 			if err := database.Connection.Transaction(func(tx *gorm.DB) error {
@@ -1985,7 +1986,7 @@ func (h *Handler) CompleteOAuthSignup(c *fiber.Ctx) error {
 			return handler.SendBadRequest(c, nil, err.Error(), handler.ErrCountryRestricted)
 		}
 
-		signIn := h.service.CreateSignin(user.ID, session.ID, c)
+		signIn := h.service.CreateSignin(user.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 		signIn.User = user
 
 		err = database.Connection.Transaction(func(tx *gorm.DB) error {
@@ -2096,7 +2097,7 @@ func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
 			return handler.SendBadRequest(c, nil, err.Error(), handler.ErrCountryRestricted)
 		}
 
-		signIn := h.service.CreateSignin(user.ID, session.ID, c)
+		signIn := h.service.CreateSignin(user.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 		signIn.User = &user
 
 		err := database.Connection.Transaction(func(tx *gorm.DB) error {
@@ -2337,7 +2338,7 @@ func (h *Handler) handleOAuthSignupCompletion(c *fiber.Ctx, attempt *model.Signu
 			return handler.SendBadRequest(c, nil, err.Error(), handler.ErrCountryRestricted)
 		}
 
-		signIn := h.service.CreateSignin(user.ID, session.ID, c)
+		signIn := h.service.CreateSignin(user.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 		signIn.User = user
 
 		err = database.Connection.Transaction(func(tx *gorm.DB) error {
@@ -2451,7 +2452,7 @@ func (h *Handler) handleSigninProfileCompletion(c *fiber.Ctx, attempt *model.Sig
 			return handler.SendBadRequest(c, nil, err.Error(), handler.ErrCountryRestricted)
 		}
 
-		signIn := h.service.CreateSignin(user.ID, session.ID, c)
+		signIn := h.service.CreateSignin(user.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 		signIn.User = &user
 
 		err := database.Connection.Transaction(func(tx *gorm.DB) error {

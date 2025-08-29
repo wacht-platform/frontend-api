@@ -39,6 +39,23 @@ func getStringFromMap(m map[string]any, key string) string {
 	return ""
 }
 
+// Helper to safely get time from map
+func getTimeFromMap(m map[string]any, key string) time.Time {
+	if v, ok := m[key]; ok {
+		// Try to parse as string
+		if s, ok := v.(string); ok && s != "" {
+			if t, err := time.Parse(time.RFC3339, s); err == nil {
+				return t
+			}
+		}
+		// Try to parse as time.Time
+		if t, ok := v.(time.Time); ok {
+			return t
+		}
+	}
+	return time.Time{}
+}
+
 // Helper to safely get bool from map
 func getBoolFromMap(m map[string]any, key string) bool {
 	if v, ok := m[key]; ok {
@@ -157,9 +174,9 @@ func parseSigninFromMap(signinData map[string]any) (*model.Signin, error) {
 	signin.ActiveOrganizationMembershipID = getOptionalUint64FromMap(signinData, "active_organization_membership_id")
 	signin.ActiveWorkspaceMembershipID = getOptionalUint64FromMap(signinData, "active_workspace_membership_id")
 
-	// Parse string fields
-	signin.ExpiresAt = getStringFromMap(signinData, "expires_at")
-	signin.LastActiveAt = getStringFromMap(signinData, "last_active_at")
+	// Parse time fields
+	signin.ExpiresAt = getTimeFromMap(signinData, "expires_at")
+	signin.LastActiveAt = getTimeFromMap(signinData, "last_active_at")
 	signin.IpAddress = getStringFromMap(signinData, "ip_address")
 	signin.Browser = getStringFromMap(signinData, "browser")
 	signin.Device = getStringFromMap(signinData, "device")
@@ -511,8 +528,8 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		session.ActiveSignin.ActiveWorkspaceMembershipID = getOptionalUint64FromMap(rawResult, "ActiveSignin__active_workspace_membership_id")
 
 		// Parse string fields
-		session.ActiveSignin.ExpiresAt = getStringFromMap(rawResult, "ActiveSignin__expires_at")
-		session.ActiveSignin.LastActiveAt = getStringFromMap(rawResult, "ActiveSignin__last_active_at")
+		session.ActiveSignin.ExpiresAt = getTimeFromMap(rawResult, "ActiveSignin__expires_at")
+		session.ActiveSignin.LastActiveAt = getTimeFromMap(rawResult, "ActiveSignin__last_active_at")
 		session.ActiveSignin.IpAddress = getStringFromMap(rawResult, "ActiveSignin__ip_address")
 		session.ActiveSignin.Browser = getStringFromMap(rawResult, "ActiveSignin__browser")
 		session.ActiveSignin.Device = getStringFromMap(rawResult, "ActiveSignin__device")

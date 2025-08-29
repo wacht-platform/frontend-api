@@ -1385,7 +1385,7 @@ func (h *Handler) SignOutFromSession(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Failed to find signin")
 	}
 
-	signin.ExpiresAt = time.Now().UTC().Format(time.RFC3339)
+	signin.ExpiresAt = time.Now().UTC()
 	if err := database.Connection.Save(&signin).Error; err != nil {
 		return handler.SendInternalServerError(
 			c,

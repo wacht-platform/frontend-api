@@ -407,6 +407,7 @@ func (s *AuthService) HandleExistingUser(
 	signIn := model.NewSignIn(
 		attempt.SessionID,
 		email.User.ID,
+		deploymentSettings.SessionValidityPeriod,
 	)
 	if err := tx.Create(&signIn).Error; err != nil {
 		return nil, err
@@ -997,8 +998,9 @@ func (s *AuthService) CreateSignin(
 	userID uint64,
 	sessionID uint64,
 	ctx *fiber.Ctx,
+	validityPeriodSeconds uint64,
 ) *model.Signin {
-	signIn := model.NewSignIn(sessionID, userID)
+	signIn := model.NewSignIn(sessionID, userID, validityPeriodSeconds)
 	ua := ctx.Get("User-Agent")
 
 	var ip string
@@ -1020,7 +1022,7 @@ func (s *AuthService) CreateSignin(
 	signIn.CountryCode = ipLocation.CountryCode
 	signIn.RegionCode = ipLocation.Region
 	signIn.IpAddress = ip
-	signIn.LastActiveAt = time.Now().Format(time.RFC3339)
+	signIn.LastActiveAt = time.Now()
 
 	return signIn
 }
