@@ -115,7 +115,7 @@ func (h *Handler) SignOut(
 		err = database.Connection.Transaction(
 			func(tx *gorm.DB) error {
 				tx.Delete(signIn)
-				tx.Model(session).Update("active_sign_in_id", nil)
+				tx.Model(session).Update("active_signin_id", nil)
 				return nil
 			},
 		)
@@ -137,7 +137,7 @@ func (h *Handler) SignOut(
 		)
 	} else {
 		err := database.Connection.Transaction(func(tx *gorm.DB) error {
-			tx.Model(session).Update("active_sign_in_id", nil)
+			tx.Model(session).Update("active_signin_id", nil)
 			tx.Where("session_id = ?", session.ID).Delete(&model.Signin{})
 			return nil
 		})
