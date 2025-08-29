@@ -473,12 +473,12 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 				) ORDER BY si.created_at DESC
 			) FROM signins si
 			LEFT JOIN users u ON si.user_id = u.id
-			WHERE si.session_id = s.id AND (si.expires_at > NOW() OR si.expires_at IS NULL OR si.expires_at = '')),
+			WHERE si.session_id = s.id AND (si.expires_at > NOW() OR si.expires_at IS NULL)),
 			'[]'::json
 		) as signins
 
 	FROM sessions s
-	LEFT JOIN signins asi ON s.active_signin_id = asi.id AND (asi.expires_at > NOW() OR asi.expires_at IS NULL OR asi.expires_at = '')
+	LEFT JOIN signins asi ON s.active_signin_id = asi.id AND (asi.expires_at > NOW() OR asi.expires_at IS NULL)
 	LEFT JOIN users au ON asi.user_id = au.id
 	LEFT JOIN organization_memberships aom ON asi.active_organization_membership_id = aom.id
 	LEFT JOIN workspace_memberships awm ON asi.active_workspace_membership_id = awm.id
