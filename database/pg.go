@@ -7,7 +7,6 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"gorm.io/plugin/dbresolver"
 )
 
 var Connection *gorm.DB
@@ -23,16 +22,6 @@ func InitPgConnection() error {
 	})
 	if err != nil {
 		return err
-	}
-
-	if os.Getenv("READ_REPLICA") != "" {
-		db.Use(dbresolver.Register(dbresolver.Config{
-			Replicas: []gorm.Dialector{
-				postgres.New(postgres.Config{
-					DSN: os.Getenv("READ_REPLICA"),
-				}),
-			},
-		}))
 	}
 
 	pool, _ := db.DB()

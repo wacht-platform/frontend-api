@@ -24,7 +24,7 @@ type Organization struct {
 	EnableIPRestriction     bool                          `json:"enable_ip_restriction" gorm:"not null;default:false"`
 	WhitelistedIPs          pq.StringArray                `json:"whitelisted_ips" gorm:"type:text[]"`
 	AutoAssignedWorkspaceID *uint64                       `json:"auto_assigned_workspace_id,string"`
-	AutoAssignedWorkspace   *Workspace                    `json:"auto_assigned_workspace" gorm:"foreignKey:AutoAssignedWorkspaceID"`
+	AutoAssignedWorkspace   *Workspace                    `json:"auto_assigned_workspace" gorm:"-:migration;foreignKey:AutoAssignedWorkspaceID;references:ID"`
 	PublicMetadata          datatypes.JSONMap             `json:"public_metadata" gorm:"not null"`
 	PrivateMetadata         datatypes.JSONMap             `json:"-"               gorm:"not null"`
 }

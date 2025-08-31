@@ -56,8 +56,8 @@ type User struct {
 	Disabled                       bool                    `json:"disabled"                        gorm:"not null"`
 	PrimaryEmailAddressID          *uint64                 `json:"primary_email_address_id,string"`
 	PrimaryPhoneNumberID           *uint64                 `json:"primary_phone_number_id,string"`
-	PrimaryPhoneNumber             *UserPhoneNumber        `json:"primary_phone_number"            gorm:"constraint:OnDelete:SET NULL;foreignKey:PrimaryPhoneNumberID"`
-	PrimaryEmailAddress            *UserEmailAddress       `json:"primary_email_address"           gorm:"constraint:OnDelete:SET NULL;foreignKey:PrimaryEmailAddressID"`
+	PrimaryPhoneNumber             *UserPhoneNumber        `json:"primary_phone_number"            gorm:"-:migration;foreignKey:PrimaryPhoneNumberID;references:ID"`
+	PrimaryEmailAddress            *UserEmailAddress       `json:"primary_email_address"           gorm:"-:migration;foreignKey:PrimaryEmailAddressID;references:ID"`
 	SecondFactorPolicy             SecondFactorPolicy      `json:"second_factor_policy"            gorm:"not null"`
 	UserEmailAddresses             []UserEmailAddress      `json:"user_email_addresses"            gorm:"constraint:OnDelete:CASCADE;"`
 	UserPhoneNumbers               []UserPhoneNumber       `json:"user_phone_numbers"              gorm:"constraint:OnDelete:CASCADE;"`
@@ -65,9 +65,9 @@ type User struct {
 	SocialConnections              []SocialConnection      `json:"social_connections,omitempty"    gorm:"constraint:OnDelete:CASCADE;"`
 	SignIns                        []*Signin               `json:"-"                               gorm:"constraint:OnDelete:CASCADE;"`
 	ActiveOrganizationMembershipID *uint64                 `json:"active_organization_membership_id,string"`
-	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization"             gorm:"constraint:OnDelete:SET NULL;"`
+	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization"             gorm:"-:migration;foreignKey:ActiveOrganizationMembershipID;references:ID"`
 	ActiveWorkspaceMembershipID    *uint64                 `json:"active_workspace_membership_id,string"`
-	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace"                gorm:"constraint:OnDelete:SET NULL;"`
+	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace"                gorm:"-:migration;foreignKey:ActiveWorkspaceMembershipID;references:ID"`
 	DeploymentID                   uint64                  `json:"-"                               gorm:"not null;select:false"`
 	PublicMetadata                 datatypes.JSONMap       `json:"public_metadata"                 gorm:"not null"`
 	PrivateMetadata                datatypes.JSONMap       `json:"-"                               gorm:"not null"`
@@ -86,8 +86,8 @@ type PublicUserData struct {
 	Availability          UserAvailability  `json:"availability"                    gorm:"default:away;not null"`
 	PrimaryEmailAddressID *uint64           `json:"primary_email_address_id"`
 	PrimaryPhoneNumberID  *uint64           `json:"-"`
-	PrimaryPhoneNumber    *UserPhoneNumber  `json:"primary_phone_number" gorm:"foreignKey:PrimaryPhoneNumberID;references:ID"`
-	PrimaryEmailAddress   *UserEmailAddress `json:"primary_email_address" gorm:"foreignKey:PrimaryEmailAddressID;references:ID"`
+	PrimaryPhoneNumber    *UserPhoneNumber  `json:"primary_phone_number" gorm:"-:migration;foreignKey:PrimaryPhoneNumberID;references:ID"`
+	PrimaryEmailAddress   *UserEmailAddress `json:"primary_email_address" gorm:"-:migration;foreignKey:PrimaryEmailAddressID;references:ID"`
 }
 
 func (PublicUserData) TableName() string {
