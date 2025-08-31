@@ -40,22 +40,18 @@ func getStringFromMap(m map[string]any, key string) string {
 	return ""
 }
 
-// Helper to safely get time from map
 func getTimeFromMap(m map[string]any, key string) time.Time {
 	if v, ok := m[key]; ok {
-		// Try to parse as time.Time first
 		if t, ok := v.(time.Time); ok {
 			return t
 		}
-		// Try to parse as string with various formats
 		if s, ok := v.(string); ok && s != "" {
-			// Try multiple timestamp formats
 			formats := []string{
 				time.RFC3339,
 				time.RFC3339Nano,
 				"2006-01-02T15:04:05.999999Z",
-				"2006-01-02T15:04:05.999999",  // PostgreSQL JSON format without Z
-				"2006-01-02T15:04:05.000000",  // Alternative microsecond format
+				"2006-01-02T15:04:05.999999",
+				"2006-01-02T15:04:05.000000",
 				"2006-01-02 15:04:05.999999",
 				"2006-01-02 15:04:05",
 			}
