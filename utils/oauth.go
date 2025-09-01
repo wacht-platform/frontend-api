@@ -103,7 +103,7 @@ func GetOAuthConfigForDeployment(
 		)
 	} else {
 		conf.RedirectURL = fmt.Sprintf(
-			"https://shared.sso.wacht.services/?host=%s",
+			"https://ssocallback.wacht.services/?host=%s",
 			fmt.Sprintf("https://%s/sso-callback?redirect_uri=%s", deployment.FrontendHost, customRedirectURI),
 		)
 	}

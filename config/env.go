@@ -1,6 +1,8 @@
 package config
 
 import (
+	"context"
+	"log"
 	"os"
 	"github.com/joho/godotenv"
 )
@@ -9,6 +11,23 @@ func Init() {
 	godotenv.Load()
 	InitAwsSession()
 	RegisterHandlebarsHelpers()
+	loadSecrets()
+}
+
+func loadSecrets() {
+	ctx := context.Background()
+	secretConfig := SecretConfig{
+		ProjectID: GetEnv("GCP_PROJECT_ID", ""),
+		Prefix:    GetEnv("SECRET_PREFIX", ""),
+	}
+
+	if secretConfig.ProjectID == "" {
+		log.Fatal("GCP_PROJECT_ID must be set")
+	}
+
+	if err := InitSecrets(ctx, secretConfig); err != nil {
+		log.Fatalf("Failed to load secrets from Secret Manager: %v", err)
+	}
 }
 
 // GetEnv gets an environment variable with a default value

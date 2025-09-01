@@ -28,21 +28,6 @@ func getSSOConfig() map[string]model.OauthCredentials {
 			ClientSecret: GetEnv("GITHUB_CLIENT_SECRET", ""),
 			Scopes:       []string{"user"},
 		},
-		"x_oauth": {
-			ClientID:     GetEnv("X_CLIENT_ID", ""),
-			ClientSecret: GetEnv("X_CLIENT_SECRET", ""),
-			Scopes:       []string{"users.read", "users.email", "offline.access"},
-		},
-		"facebook_oauth": {
-			ClientID:     GetEnv("FACEBOOK_CLIENT_ID", ""),
-			ClientSecret: GetEnv("FACEBOOK_CLIENT_SECRET", ""),
-			Scopes:       []string{"email"},
-		},
-		"apple_oauth": {
-			ClientID:     GetEnv("APPLE_CLIENT_ID", ""),
-			ClientSecret: GetEnv("APPLE_CLIENT_SECRET", ""),
-			Scopes:       []string{"name", "email", "openid"},
-		},
 		"linkedin_oauth": {
 			ClientID:     GetEnv("LINKEDIN_CLIENT_ID", ""),
 			ClientSecret: GetEnv("LINKEDIN_CLIENT_SECRET", ""),
