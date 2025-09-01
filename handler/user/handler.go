@@ -471,7 +471,7 @@ func (h *Handler) UpdateUser(c *fiber.Ctx) error {
 		)
 	}
 
-	return nil
+	return c.SendStatus(fiber.StatusOK)
 }
 
 func (h *Handler) GetUserEmailAddresses(c *fiber.Ctx) error {
