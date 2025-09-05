@@ -28,6 +28,7 @@ func main() {
 		ErrorHandler:            handler.DefaultErrorHandler,
 		EnableTrustedProxyCheck: true,
 		TrustedProxies:          []string{config.GetEnv("LOAD_BALANCER_IP", "127.0.0.1")},
+		ReadBufferSize:          16384,
 	})
 
 	router.Setup(app)
