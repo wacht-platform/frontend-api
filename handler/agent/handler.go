@@ -77,14 +77,24 @@ func (h *Handler) CreateContext(c *fiber.Ctx) error {
 		return err
 	}
 
-	req, validation := handler.Validate[CreateContextRequest](c)
-	if validation != nil {
-		return handler.SendBadRequest(c, nil, "Invalid request body")
+	title := c.FormValue("title")
+	if title == "" {
+		return handler.SendBadRequest(c, nil, "Title is required")
+	}
+	
+	var systemInstructions *string
+	if si := c.FormValue("system_instructions"); si != "" {
+		systemInstructions = &si
+	}
+
+	req := CreateContextRequest{
+		Title:              title,
+		SystemInstructions: systemInstructions,
 	}
 
 	deployment := handler.GetDeployment(c)
 
-	context, err := h.service.CreateContext(deployment.ID, contextGroup, *req)
+	context, err := h.service.CreateContext(deployment.ID, contextGroup, req)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, err.Error())
 	}
