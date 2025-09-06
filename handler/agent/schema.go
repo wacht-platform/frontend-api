@@ -14,6 +14,7 @@ type ListContextsRequest struct {
 	Limit  int    `query:"limit"`
 	Offset int    `query:"offset"`
 	Status string `query:"status"`
+	Search string `query:"search"`
 }
 
 type ListContextsResponse struct {

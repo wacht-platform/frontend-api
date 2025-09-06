@@ -61,6 +61,7 @@ func (h *Handler) ListContexts(c *fiber.Ctx) error {
 		Limit:  c.QueryInt("limit", 50),
 		Offset: c.QueryInt("offset", 0),
 		Status: c.Query("status"),
+		Search: c.Query("search"),
 	}
 
 	response, err := h.service.ListContexts(deployment.ID, contextGroup, params)

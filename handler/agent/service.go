@@ -53,6 +53,11 @@ func (s *Service) ListContexts(deploymentID uint64, contextGroup *string, params
 		query = query.Where("status = ?", params.Status)
 	}
 
+	if params.Search != "" {
+		searchPattern := "%" + params.Search + "%"
+		query = query.Where("title ILIKE ?", searchPattern)
+	}
+
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		return nil, fmt.Errorf("failed to count contexts: %w", err)
@@ -93,7 +98,7 @@ func (s *Service) ListContexts(deploymentID uint64, contextGroup *string, params
 
 func (s *Service) GetContext(deploymentID uint64, contextGroup *string, contextID uint64) (*model.AgentExecutionContext, error) {
 	query := s.db.Where("id = ? AND deployment_id = ?", contextID, deploymentID)
-	
+
 	if contextGroup != nil && *contextGroup != "" {
 		query = query.Where("context_group = ?", *contextGroup)
 	}
@@ -111,7 +116,7 @@ func (s *Service) GetContext(deploymentID uint64, contextGroup *string, contextI
 
 func (s *Service) DeleteContext(deploymentID uint64, contextGroup *string, contextID uint64) error {
 	query := s.db.Where("id = ? AND deployment_id = ?", contextID, deploymentID)
-	
+
 	if contextGroup != nil && *contextGroup != "" {
 		query = query.Where("context_group = ?", *contextGroup)
 	}
@@ -136,19 +141,19 @@ func (s *Service) GetContextMessages(deploymentID uint64, contextGroup *string, 
 	if contextGroup != nil {
 		query = query.Where("context_group = ?", *contextGroup)
 	}
-	
+
 	if err := query.First(&context).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, false, fmt.Errorf("context not found or access denied")
 		}
 		return nil, false, fmt.Errorf("failed to fetch context: %w", err)
 	}
-	
+
 	// Now fetch messages from conversations table
 	messagesQuery := s.db.Model(&model.Conversation{}).
 		Where("context_id = ?", contextID).
 		Where("message_type != ?", "execution_summary")
-		
+
 	// Apply pagination
 	if beforeID != "" {
 		messagesQuery = messagesQuery.Where("id < ?", beforeID)
@@ -158,20 +163,20 @@ func (s *Service) GetContextMessages(deploymentID uint64, contextGroup *string, 
 	} else {
 		messagesQuery = messagesQuery.Order("id DESC")
 	}
-	
+
 	// Fetch limit + 1 to check if there are more
 	messagesQuery = messagesQuery.Limit(limit + 1)
-	
+
 	var conversations []model.Conversation
 	if err := messagesQuery.Find(&conversations).Error; err != nil {
 		return nil, false, fmt.Errorf("failed to fetch messages: %w", err)
 	}
-	
+
 	hasMore := len(conversations) > limit
 	if hasMore {
 		conversations = conversations[:limit]
 	}
-	
+
 	// If we fetched in ascending order (afterID), reverse to maintain chronological order
 	if afterID != "" {
 		for i := len(conversations)/2 - 1; i >= 0; i-- {
@@ -179,7 +184,7 @@ func (s *Service) GetContextMessages(deploymentID uint64, contextGroup *string, 
 			conversations[i], conversations[opp] = conversations[opp], conversations[i]
 		}
 	}
-	
+
 	// Convert to ConversationMessage format
 	messages := make([]ConversationMessage, len(conversations))
 	for i, conv := range conversations {
@@ -191,7 +196,7 @@ func (s *Service) GetContextMessages(deploymentID uint64, contextGroup *string, 
 			Metadata:  extractMetadata(conv.MessageType),
 		}
 	}
-	
+
 	return messages, hasMore, nil
 }
 
