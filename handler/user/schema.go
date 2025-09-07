@@ -62,6 +62,7 @@ type UserQueryResult struct {
 	ActiveWorkspaceMembershipID    *uint64   `gorm:"column:active_workspace_membership_id"`
 	PublicMetadata                 string    `gorm:"column:public_metadata"`
 	BackupCodesGenerated           bool      `gorm:"column:backup_codes_generated"`
+	HasPassword                    bool      `gorm:"column:has_password"`
 
 	// JSON aggregated fields
 	UserEmailAddressesJSON string `gorm:"column:user_email_addresses_json"`

@@ -31,7 +31,7 @@ func NewUserService() *UserService {
 	if err != nil {
 		panic(fmt.Sprintf("Failed to initialize NATS service: %v", err))
 	}
-	
+
 	return &UserService{
 		db:   database.Connection,
 		sns:  service.NewSnsService(),
@@ -65,20 +65,10 @@ func (s *UserService) getOTPFromCache(key string) (string, error) {
 
 func (s *UserService) sendEmailOTPVerificationAsync(
 	deploymentID uint64,
-	email string,
+	email model.UserEmailAddress,
+	code string,
 ) error {
-	var emailAddress model.UserEmailAddress
-	if err := s.db.Where("email_address = ?", email).First(&emailAddress).Error; err != nil {
-		return fmt.Errorf("email address not found: %s", email)
-	}
-	
-	cacheKey := fmt.Sprintf("otp:%d", emailAddress.ID)
-	code, err := database.Redis.Get(context.Background(), cacheKey).Result()
-	if err != nil {
-		return fmt.Errorf("verification code not found for email ID: %d", emailAddress.ID)
-	}
-	
-	return s.nats.SendVerificationEmail(deploymentID, *emailAddress.UserID, email, code)
+	return s.nats.SendVerificationEmail(deploymentID, *email.UserID, email.EmailAddress, code)
 }
 
 func (s *UserService) sendSmsOTPVerificationAsync(

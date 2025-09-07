@@ -3,8 +3,10 @@ package user
 import (
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/godruoyi/go-snowflake"
@@ -76,27 +78,27 @@ func parseUserEmailAddressesJSON(jsonStr string) []model.UserEmailAddress {
 	if jsonStr == "" || jsonStr == "[]" || jsonStr == "null" {
 		return []model.UserEmailAddress{}
 	}
-	
+
 	var jsonEmails []userEmailAddressJSON
 	if err := json.Unmarshal([]byte(jsonStr), &jsonEmails); err != nil {
 		log.Printf("Error parsing user email addresses JSON: %v, JSON: %s", err, jsonStr)
 		// Return empty slice to maintain backward compatibility and prevent response failure
 		return []model.UserEmailAddress{}
 	}
-	
+
 	var emailAddresses []model.UserEmailAddress
 	for _, jsonEmail := range jsonEmails {
-		// Parse fields with error handling - use zero values if parsing fails
+
 		id, err := strconv.ParseUint(jsonEmail.ID, 10, 64)
 		if err != nil {
 			log.Printf("Error parsing email address ID '%s': %v", jsonEmail.ID, err)
-			continue // Skip this record if ID parsing fails
+			continue
 		}
-		
+
 		createdAt, _ := time.Parse(time.RFC3339, jsonEmail.CreatedAt)
 		updatedAt, _ := time.Parse(time.RFC3339, jsonEmail.UpdatedAt)
 		verifiedAt, _ := time.Parse(time.RFC3339, jsonEmail.VerifiedAt)
-		
+
 		emailAddresses = append(emailAddresses, model.UserEmailAddress{
 			Model: model.Model{
 				ID:        id,
@@ -110,7 +112,7 @@ func parseUserEmailAddressesJSON(jsonStr string) []model.UserEmailAddress {
 			VerificationStrategy: model.VerificationStrategy(jsonEmail.VerificationStrategy),
 		})
 	}
-	
+
 	return emailAddresses
 }
 
@@ -121,27 +123,27 @@ func parseUserPhoneNumbersJSON(jsonStr string) []model.UserPhoneNumber {
 	if jsonStr == "" || jsonStr == "[]" || jsonStr == "null" {
 		return []model.UserPhoneNumber{}
 	}
-	
+
 	var jsonPhones []userPhoneNumberJSON
 	if err := json.Unmarshal([]byte(jsonStr), &jsonPhones); err != nil {
 		log.Printf("Error parsing user phone numbers JSON: %v, JSON: %s", err, jsonStr)
 		// Return empty slice to maintain backward compatibility and prevent response failure
 		return []model.UserPhoneNumber{}
 	}
-	
+
 	var phoneNumbers []model.UserPhoneNumber
 	for _, jsonPhone := range jsonPhones {
-		// Parse fields with error handling - use zero values if parsing fails
+
 		id, err := strconv.ParseUint(jsonPhone.ID, 10, 64)
 		if err != nil {
 			log.Printf("Error parsing phone number ID '%s': %v", jsonPhone.ID, err)
-			continue // Skip this record if ID parsing fails
+			continue
 		}
-		
+
 		createdAt, _ := time.Parse(time.RFC3339, jsonPhone.CreatedAt)
 		updatedAt, _ := time.Parse(time.RFC3339, jsonPhone.UpdatedAt)
 		verifiedAt, _ := time.Parse(time.RFC3339, jsonPhone.VerifiedAt)
-		
+
 		phoneNumbers = append(phoneNumbers, model.UserPhoneNumber{
 			Model: model.Model{
 				ID:        id,
@@ -153,7 +155,7 @@ func parseUserPhoneNumbersJSON(jsonStr string) []model.UserPhoneNumber {
 			VerifiedAt:  verifiedAt,
 		})
 	}
-	
+
 	return phoneNumbers
 }
 
@@ -164,32 +166,32 @@ func parseSocialConnectionsJSON(jsonStr string) []model.SocialConnection {
 	if jsonStr == "" || jsonStr == "[]" || jsonStr == "null" {
 		return []model.SocialConnection{}
 	}
-	
+
 	var jsonConnections []socialConnectionJSON
 	if err := json.Unmarshal([]byte(jsonStr), &jsonConnections); err != nil {
 		log.Printf("Error parsing social connections JSON: %v, JSON: %s", err, jsonStr)
 		// Return empty slice to maintain backward compatibility and prevent response failure
 		return []model.SocialConnection{}
 	}
-	
+
 	var socialConnections []model.SocialConnection
 	for _, jsonConn := range jsonConnections {
-		// Parse fields with error handling - use zero values if parsing fails
+
 		id, err := strconv.ParseUint(jsonConn.ID, 10, 64)
 		if err != nil {
 			log.Printf("Error parsing social connection ID '%s': %v", jsonConn.ID, err)
-			continue // Skip this record if ID parsing fails
+			continue
 		}
-		
+
 		userEmailAddressID, err := strconv.ParseUint(jsonConn.UserEmailAddressID, 10, 64)
 		if err != nil {
 			log.Printf("Error parsing social connection user_email_address_id '%s': %v", jsonConn.UserEmailAddressID, err)
-			continue // Skip this record if user_email_address_id parsing fails
+			continue
 		}
-		
+
 		createdAt, _ := time.Parse(time.RFC3339, jsonConn.CreatedAt)
 		updatedAt, _ := time.Parse(time.RFC3339, jsonConn.UpdatedAt)
-		
+
 		socialConnections = append(socialConnections, model.SocialConnection{
 			Model: model.Model{
 				ID:        id,
@@ -203,7 +205,7 @@ func parseSocialConnectionsJSON(jsonStr string) []model.SocialConnection {
 			LastName:           jsonConn.LastName,
 		})
 	}
-	
+
 	return socialConnections
 }
 
@@ -214,30 +216,30 @@ func parseUserAuthenticatorJSON(jsonStr string) *model.UserAuthenticator {
 	if jsonStr == "" || jsonStr == "null" {
 		return nil
 	}
-	
+
 	var jsonAuth userAuthenticatorJSON
 	if err := json.Unmarshal([]byte(jsonStr), &jsonAuth); err != nil {
 		log.Printf("Error parsing user authenticator JSON: %v, JSON: %s", err, jsonStr)
 		// Return nil to maintain backward compatibility and prevent response failure
 		return nil
 	}
-	
+
 	// Parse fields with error handling - return nil if critical fields fail to parse
 	id, err := strconv.ParseUint(jsonAuth.ID, 10, 64)
 	if err != nil {
 		log.Printf("Error parsing user authenticator ID '%s': %v", jsonAuth.ID, err)
-		return nil // Return nil if ID parsing fails as it's critical
+		return nil
 	}
-	
+
 	userID, err := strconv.ParseUint(jsonAuth.UserID, 10, 64)
 	if err != nil {
 		log.Printf("Error parsing user authenticator user_id '%s': %v", jsonAuth.UserID, err)
-		return nil // Return nil if user_id parsing fails as it's critical
+		return nil
 	}
-	
+
 	createdAt, _ := time.Parse(time.RFC3339, jsonAuth.CreatedAt)
 	updatedAt, _ := time.Parse(time.RFC3339, jsonAuth.UpdatedAt)
-	
+
 	return &model.UserAuthenticator{
 		Model: model.Model{
 			ID:        id,
@@ -283,7 +285,8 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 			u.active_workspace_membership_id,
 			u.public_metadata,
 			u.backup_codes_generated,
-			
+			CASE WHEN u.password != '' AND u.password IS NOT NULL THEN true ELSE false END as has_password,
+
 			-- JSON aggregation for related data
 			COALESCE(
 				(SELECT json_agg(
@@ -302,7 +305,7 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 				WHERE uea.user_id = u.id AND uea.deleted_at IS NULL
 				), '[]'::json
 			) as user_email_addresses_json,
-			
+
 			COALESCE(
 				(SELECT json_agg(
 					json_build_object(
@@ -318,7 +321,7 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 				WHERE upn.user_id = u.id AND upn.deleted_at IS NULL
 				), '[]'::json
 			) as user_phone_numbers_json,
-			
+
 			COALESCE(
 				(SELECT json_agg(
 					json_build_object(
@@ -336,7 +339,7 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 				WHERE sc.user_id = u.id AND sc.deleted_at IS NULL
 				), '[]'::json
 			) as social_connections_json,
-			
+
 			COALESCE(
 				(SELECT json_build_object(
 					'id', ua.id::text,
@@ -421,7 +424,17 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 		}
 	}
 
-	return handler.SendSuccess(c, user)
+	type UserResponse struct {
+		model.User
+		HasPassword bool `json:"has_password"`
+	}
+
+	response := UserResponse{
+		User:        user,
+		HasPassword: queryResult.HasPassword,
+	}
+
+	return handler.SendSuccess(c, response)
 }
 
 func (h *Handler) UpdateUser(c *fiber.Ctx) error {
@@ -724,7 +737,8 @@ func (h *Handler) PrepareEmailVerification(c *fiber.Ctx) error {
 
 	err = h.service.sendEmailOTPVerificationAsync(
 		deployment.ID,
-		emailAddress.EmailAddress,
+		emailAddress,
+		code,
 	)
 	if err != nil {
 		return handler.SendInternalServerError(
@@ -990,9 +1004,28 @@ func (h *Handler) DeletePhoneNumber(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GenerateAuthenticator(c *fiber.Ctx) error {
+	deployment := handler.GetDeployment(c)
+	session := handler.GetSession(c)
+
+	if session == nil || session.ActiveSignin == nil || session.ActiveSignin.User == nil {
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
+	}
+
+	var accountName string
+	user := session.ActiveSignin.User
+
+	if user.FirstName != "" || user.LastName != "" {
+		name := strings.TrimSpace(user.FirstName + " " + user.LastName)
+		accountName = fmt.Sprintf("%s (%d)", name, session.ActiveSignin.UserID)
+	} else if user.PrimaryEmailAddress != nil {
+		accountName = fmt.Sprintf("%s (%d)", user.PrimaryEmailAddress.EmailAddress, session.ActiveSignin.UserID)
+	} else {
+		accountName = fmt.Sprintf("User (%d)", session.ActiveSignin.UserID)
+	}
+
 	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      "Wacht",
-		AccountName: "User",
+		Issuer:      deployment.UISettings.AppName,
+		AccountName: accountName,
 		SecretSize:  20,
 	})
 	if err != nil {
@@ -1292,7 +1325,7 @@ func (h *Handler) GetUserSignins(c *fiber.Ctx) error {
 	}
 
 	var signins []model.Signin
-	
+
 	// First, let's get all signins for this user to debug
 	var allSignins []model.Signin
 	if err := database.Connection.Where("user_id = ?", session.ActiveSignin.UserID).Find(&allSignins).Error; err != nil {
@@ -1303,7 +1336,7 @@ func (h *Handler) GetUserSignins(c *fiber.Ctx) error {
 			handler.ErrInternal,
 		)
 	}
-	
+
 	// Now get the filtered signins
 	if err := database.Connection.Where("user_id = ? AND (expires_at > ? OR expires_at IS NULL)", session.ActiveSignin.UserID, time.Now()).Find(&signins).Error; err != nil {
 		return handler.SendInternalServerError(
@@ -1617,13 +1650,16 @@ func (h *Handler) UpdatePassword(c *fiber.Ctx) error {
 	}
 
 	var user model.User
-	if err := database.Connection.First(&user, session.ActiveSignin.UserID).Error; err != nil {
+	if err := database.Connection.Clauses(dbresolver.Read).Select("*").First(&user, session.ActiveSignin.UserID).Error; err != nil {
 		return handler.SendInternalServerError(c, nil, "Failed to load user")
 	}
 
-	isValid, err := utils.ComparePassword(user.Password, b.CurrentPassword)
-	if err != nil || !isValid {
-		return handler.SendBadRequest(c, nil, "Current password is incorrect")
+	// If user has a password set, verify the current password
+	if user.Password != "" {
+		isValid, err := utils.ComparePassword(user.Password, b.CurrentPassword)
+		if err != nil || !isValid {
+			return handler.SendBadRequest(c, nil, "Current password is incorrect")
+		}
 	}
 
 	if len(b.NewPassword) < 6 || len(b.NewPassword) > 125 {
