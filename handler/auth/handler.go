@@ -320,7 +320,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 	var identifierID uint64
 
 	if method == model.SignInMethodEmailOTP {
-		email, err := h.service.FindUserByEmail(b.Email)
+		email, err := h.service.FindUserByVerifiedEmail(b.Email)
 
 		if email != nil {
 			userID = *email.UserID
@@ -379,7 +379,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 }
 
 func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
-	email, _ := h.service.FindUserByEmail(b.Email)
+	email, _ := h.service.FindUserByVerifiedEmail(b.Email)
 	steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyEmailLink}
 	requiresCompletion := false
 	missingFields := []string{}
@@ -1556,10 +1556,6 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				}
 
 				if err := database.Connection.Transaction(func(tx *gorm.DB) error {
-					if err := tx.Save(email).Error; err != nil {
-						return err
-					}
-
 					if attempt.Completed {
 						d := handler.GetDeployment(c)
 						if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {

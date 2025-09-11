@@ -62,6 +62,19 @@ func (s *AuthService) FindUserByEmail(
 	return &userEmail, nil
 }
 
+func (s *AuthService) FindUserByVerifiedEmail(
+	email string,
+) (*model.UserEmailAddress, error) {
+	var userEmail model.UserEmailAddress
+	if res := s.db.Where(&model.UserEmailAddress{EmailAddress: email, Verified: true}).Joins("User").First(&userEmail); res.RowsAffected == 0 {
+		return nil, handler.ErrUserNotFound
+	} else if res.Error != nil {
+		return nil, res.Error
+	}
+
+	return &userEmail, nil
+}
+
 func (s *AuthService) FindUserByEmailID(
 	emailId uint64,
 ) (*model.UserEmailAddress, error) {
