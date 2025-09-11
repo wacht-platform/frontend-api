@@ -271,7 +271,7 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 				return err
 			}
 
-			if err := tx.Model(&session).Update("active_signin_id", signIn.ID).Error; err != nil {
+			if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error; err != nil {
 				return err
 			}
 		}

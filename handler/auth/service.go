@@ -42,7 +42,7 @@ func NewAuthService() *AuthService {
 		// Log error and panic - NATS is required
 		panic(fmt.Sprintf("Failed to initialize NATS service: %v", err))
 	}
-	
+
 	return &AuthService{
 		db:   database.Connection,
 		nats: natsService,
@@ -620,7 +620,7 @@ func (s *AuthService) SendMagicLinkAsync(
 		// For new signups or non-existent users, use 0 as user ID
 		return s.nats.SendMagicLinkEmail(deployment.ID, 0, email, magicLink)
 	}
-	
+
 	return s.nats.SendMagicLinkEmail(deployment.ID, *userEmail.UserID, email, magicLink)
 }
 
@@ -1200,13 +1200,7 @@ func (s *AuthService) ValidatePhoneRestrictions(phoneNumber string, restrictions
 		}
 
 		if restrictions.CountryRestrictions.Enabled && len(restrictions.CountryRestrictions.CountryCodes) > 0 {
-			allowed := false
-			for _, allowedCountry := range restrictions.CountryRestrictions.CountryCodes {
-				if result.CountryCode == allowedCountry {
-					allowed = true
-					break
-				}
-			}
+			allowed := slices.Contains(restrictions.CountryRestrictions.CountryCodes, result.CountryCode)
 			if !allowed {
 				return handler.ErrCountryRestricted
 			}
@@ -1221,13 +1215,7 @@ func (s *AuthService) ValidatePhoneRestrictions(phoneNumber string, restrictions
 func (s *AuthService) validatePhoneBasic(phoneNumber string, restrictions model.DeploymentRestrictions) error {
 	if restrictions.CountryRestrictions.Enabled && len(restrictions.CountryRestrictions.CountryCodes) > 0 {
 		countryCode := s.extractCountryCodeFromPhone(phoneNumber)
-		allowed := false
-		for _, allowedCountry := range restrictions.CountryRestrictions.CountryCodes {
-			if countryCode == allowedCountry {
-				allowed = true
-				break
-			}
-		}
+		allowed := slices.Contains(restrictions.CountryRestrictions.CountryCodes, countryCode)
 		if !allowed {
 			return handler.ErrCountryRestricted
 		}
@@ -1275,13 +1263,7 @@ func (s *AuthService) ValidateIPCountryRestrictions(ctx *fiber.Ctx, restrictions
 		return nil
 	}
 
-	allowed := false
-	for _, allowedCountry := range restrictions.CountryRestrictions.CountryCodes {
-		if ipLocation.CountryCode == allowedCountry {
-			allowed = true
-			break
-		}
-	}
+	allowed := slices.Contains(restrictions.CountryRestrictions.CountryCodes, ipLocation.CountryCode)
 
 	if !allowed {
 		return handler.ErrCountryRestricted
