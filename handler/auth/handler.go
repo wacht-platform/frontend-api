@@ -148,7 +148,7 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 				return err
 			}
 
-			if err := tx.Model(&session).Update("active_signin_id", signIn.ID).Error; err != nil {
+			if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error; err != nil {
 				return err
 			}
 		}
@@ -566,7 +566,7 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 				return err
 			}
 
-			if err := tx.Model(&session).Update("active_signin_id", signIn.ID).Error; err != nil {
+			if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error; err != nil {
 				return err
 			}
 		}
@@ -1375,7 +1375,7 @@ func (h *Handler) VerifyMagicLink(c *fiber.Ctx) error {
 				return err
 			}
 
-			if err := tx.Model(&session).Update("active_signin_id", signIn.ID).Error; err != nil {
+			if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error; err != nil {
 				return err
 			}
 
@@ -1899,7 +1899,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					return err
 				}
 
-				return tx.Model(&session).Update("active_signin_id", signIn.ID).Error
+				return tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error
 			}); err != nil {
 				return handler.SendInternalServerError(c, err, "Something went wrong")
 			}
@@ -2032,7 +2032,7 @@ func (h *Handler) CompleteOAuthSignup(c *fiber.Ctx) error {
 				return err
 			}
 
-			return tx.Model(&session).Update("active_signin_id", signIn.ID).Error
+			return tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error
 		})
 		if err != nil {
 			return handler.SendInternalServerError(c, err, "Error completing signup")
@@ -2148,7 +2148,7 @@ func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
 				return err
 			}
 
-			return tx.Model(&session).Update("active_signin_id", signIn.ID).Error
+			return tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error
 		})
 		if err != nil {
 			return handler.SendInternalServerError(c, err, "Error completing signin")
@@ -2384,7 +2384,7 @@ func (h *Handler) handleOAuthSignupCompletion(c *fiber.Ctx, attempt *model.Signu
 				return err
 			}
 
-			return tx.Model(session).Update("active_signin_id", signIn.ID).Error
+			return tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error
 		})
 		if err != nil {
 			return handler.SendInternalServerError(c, err, "Error completing signup")
@@ -2503,7 +2503,7 @@ func (h *Handler) handleSigninProfileCompletion(c *fiber.Ctx, attempt *model.Sig
 				return err
 			}
 
-			return tx.Model(session).Update("active_signin_id", signIn.ID).Error
+			return tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error
 		})
 		if err != nil {
 			return handler.SendInternalServerError(c, err, "Error completing signin")
