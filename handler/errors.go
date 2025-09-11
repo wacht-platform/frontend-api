@@ -152,6 +152,10 @@ var (
 		Code:    ErrCodeNoAlternativeAuthMethod,
 		Message: "Cannot remove password. You must have at least one alternative authentication method configured (verified email for OTP/magic link, social connection, or passkey).",
 	}
+	ErrSocialAccountAlreadyConnected = Error{
+		Code:    "SOCIAL_ACCOUNT_ALREADY_CONNECTED",
+		Message: "This social account is already connected to another user.",
+	}
 )
 
 func ErrRequiredField(field string) error {

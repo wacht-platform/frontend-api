@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/ilabs/wacht-fe/config"
@@ -30,6 +29,7 @@ func GenerateVerificationUrlForDeployment(
 	attempt model.SignInAttempt,
 	deployment *model.Deployment,
 	customRedirectURI string,
+	keypair model.DeploymentKeyPair,
 ) (string, error) {
 	url := ""
 
@@ -38,9 +38,20 @@ func GenerateVerificationUrlForDeployment(
 		return "", err
 	}
 
-	state := strconv.FormatUint(uint64(attempt.ID), 10)
+	fullRedirectURI := fmt.Sprintf("https://%s/sso-callback", deployment.FrontendHost)
 	if customRedirectURI != "" {
-		state += ":" + customRedirectURI
+		fullRedirectURI = fmt.Sprintf("%s?redirect_uri=%s", fullRedirectURI, customRedirectURI)
+	}
+
+	secret := GetOAuthStateSecret(deployment.ID, keypair.PrivateKey)
+	stateData := OAuthStateData{
+		Action:      "sign_in",
+		AttemptID:   &attempt.ID,
+		RedirectURI: fullRedirectURI,
+	}
+	state, err := GenerateOAuthState(stateData, secret)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate state: %w", err)
 	}
 
 	switch ssoProvider {
@@ -95,17 +106,14 @@ func GetOAuthConfigForDeployment(
 		Scopes:       cred.Scopes,
 	}
 
-	if deployment.Mode == "production" {
+	if deployment.Mode == model.DeploymentModeProduction {
 		conf.RedirectURL = fmt.Sprintf(
-			"https://%s/sso-callback?redirect_uri=%s",
+			"https://%s/sso-callback",
 			deployment.FrontendHost,
-			customRedirectURI,
 		)
 	} else {
-		conf.RedirectURL = fmt.Sprintf(
-			"https://ssocallback.wacht.services/?host=%s",
-			fmt.Sprintf("https://%s/sso-callback?redirect_uri=%s", deployment.FrontendHost, customRedirectURI),
-		)
+		// For staging, use the OAuth relay service (no trailing slash)
+		conf.RedirectURL = "https://ssocallback.wacht.services"
 	}
 
 	switch provider {
@@ -568,4 +576,83 @@ func ExchangeTokenForUser(
 		}, nil
 	}
 	return nil, nil
+}
+
+func GenerateOAuthConnectURL(
+	provider string,
+	stateToken string,
+	customRedirectURI string,
+	deployment *model.Deployment,
+) (string, error) {
+	var ssoProvider model.SocialConnectionProvider
+	switch provider {
+	case "google_oauth":
+		ssoProvider = model.SocialConnectionProviderGoogle
+	case "github_oauth":
+		ssoProvider = model.SocialConnectionProviderGitHub
+	case "microsoft_oauth":
+		ssoProvider = model.SocialConnectionProviderMicrosoft
+	case "facebook_oauth":
+		ssoProvider = model.SocialConnectionProviderFacebook
+	case "x_oauth":
+		ssoProvider = model.SocialConnectionProviderX
+	case "linkedin_oauth":
+		ssoProvider = model.SocialConnectionProviderLinkedIn
+	case "gitlab_oauth":
+		ssoProvider = model.SocialConnectionProviderGitLab
+	case "discord_oauth":
+		ssoProvider = model.SocialConnectionProviderDiscord
+	case "apple_oauth":
+		ssoProvider = model.SocialConnectionProviderApple
+	default:
+		return "", fmt.Errorf("unsupported provider: %s", provider)
+	}
+
+	cred, err := config.GetDeploymentOAuthCredentials(deployment, ssoProvider)
+	if err != nil {
+		return "", err
+	}
+
+	conf := &oauth2.Config{
+		ClientID:     cred.ClientID,
+		ClientSecret: cred.ClientSecret,
+		Scopes:       cred.Scopes,
+	}
+
+	if deployment.Mode == model.DeploymentModeProduction {
+		conf.RedirectURL = fmt.Sprintf(
+			"https://%s/sso-callback",
+			deployment.FrontendHost,
+		)
+	} else {
+		conf.RedirectURL = "https://ssocallback.wacht.services"
+	}
+
+	switch ssoProvider {
+	case model.SocialConnectionProviderGoogle:
+		conf.Endpoint = google.Endpoint
+	case model.SocialConnectionProviderGitHub:
+		conf.Endpoint = github.Endpoint
+	case model.SocialConnectionProviderMicrosoft:
+		conf.Endpoint = microsoft.AzureADEndpoint("")
+	case model.SocialConnectionProviderFacebook:
+		conf.Endpoint = facebook.Endpoint
+	case model.SocialConnectionProviderLinkedIn:
+		conf.Endpoint = linkedin.Endpoint
+	case model.SocialConnectionProviderX:
+		conf.Endpoint = oauth2.Endpoint{
+			AuthURL:  "https://x.com/i/oauth2/authorize",
+			TokenURL: "https://x.com/i/oauth2/token",
+		}
+	case model.SocialConnectionProviderDiscord:
+		conf.Endpoint = config.DiscordOAuthEndpoint
+	case model.SocialConnectionProviderGitLab:
+		conf.Endpoint = config.GitLabOAuthEndpoint
+	case model.SocialConnectionProviderApple:
+		conf.Endpoint = config.AppleOAuthEndpoint
+	}
+
+	url := conf.AuthCodeURL(stateToken)
+
+	return url, nil
 }

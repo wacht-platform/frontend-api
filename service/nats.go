@@ -24,13 +24,19 @@ const (
 	EmailPasswordReset      EmailTaskType = "email.send_password_reset"
 	EmailMagicLink          EmailTaskType = "email.send_magic_link"
 	EmailSignInNotification EmailTaskType = "email.send_signin_notification"
-	EmailPrimaryChange      EmailTaskType = "email.send_primary_change"
-	EmailPasswordChange     EmailTaskType = "email.send_password_change"
-	EmailPasswordRemove     EmailTaskType = "email.send_password_remove"
+	EmailPrimaryChange      EmailTaskType = "email.send_email_change_notification"
+	EmailPasswordChange     EmailTaskType = "email.send_password_change_notification"
+	EmailPasswordRemove     EmailTaskType = "email.send_password_remove_notification"
 	EmailWaitlistSignup     EmailTaskType = "email.send_waitlist_signup"
-	EmailOrganizationInvite EmailTaskType = "email.send_organization_invite"
+	EmailOrganizationInvite EmailTaskType = "email.send_organization_membership_invite"
 	EmailWorkspaceInvite    EmailTaskType = "email.send_workspace_invite"
-	EmailWaitlistInvite     EmailTaskType = "email.send_waitlist_invite"
+	EmailWaitlistInvite     EmailTaskType = "email.send_waitlist_approval"
+)
+
+type SMSTaskType string
+
+const (
+	SMSOTPVerification SMSTaskType = "sms.send_otp"
 )
 
 type TaskType string
@@ -127,6 +133,13 @@ type WaitlistInviteTask struct {
 type TokenCleanupTask struct {
 	RotatingTokenID uint64 `json:"rotating_token_id"`
 	SessionID       uint64 `json:"session_id"`
+}
+
+type SMSOTPTask struct {
+	DeploymentID uint64 `json:"deployment_id"`
+	PhoneNumber  string `json:"phone_number"`
+	UserID       uint64 `json:"user_id"`
+	CountryCode  string `json:"country_code"`
 }
 
 var natsService *NatsService
@@ -331,6 +344,16 @@ func (s *NatsService) ScheduleTokenCleanup(rotatingTokenID, sessionID uint64, de
 	}
 	// TODO: Add delay support if needed
 	return s.publishTask(context.Background(), string(TokenCleanup), task)
+}
+
+func (s *NatsService) SendOTPSMS(deploymentID, userID uint64, phoneNumber, countryCode string) error {
+	task := SMSOTPTask{
+		DeploymentID: deploymentID,
+		PhoneNumber:  phoneNumber,
+		UserID:       userID,
+		CountryCode:  countryCode,
+	}
+	return s.publishTask(context.Background(), string(SMSOTPVerification), task)
 }
 
 func (s *NatsService) Close() {

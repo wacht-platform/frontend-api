@@ -15,9 +15,12 @@ import (
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/utils"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/lib/pq"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"gorm.io/datatypes"
+	"gorm.io/gorm"
 	"gorm.io/plugin/dbresolver"
 )
 
@@ -313,6 +316,7 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 						'created_at', upn.created_at,
 						'updated_at', upn.updated_at,
 						'phone_number', upn.phone_number,
+						'country_code', upn.country_code,
 						'verified', upn.verified,
 						'verified_at', upn.verified_at
 					)
@@ -471,6 +475,12 @@ func (h *Handler) UpdateUser(c *fiber.Ctx) error {
 		updates["second_factor_policy"] = b.SecondFactorPolicy
 	}
 
+	// Handle profile picture removal
+	if b.RemoveProfilePicture {
+		updates["profile_picture_url"] = ""
+		updates["has_profile_picture"] = false
+	}
+
 	query := database.Connection.Model(&model.User{}).
 		Where("id = ?", session.ActiveSignin.UserID).
 		Updates(updates)
@@ -484,7 +494,9 @@ func (h *Handler) UpdateUser(c *fiber.Ctx) error {
 		)
 	}
 
-	return c.SendStatus(fiber.StatusOK)
+	utils.RemoveCachedSession(session.ID)
+
+	return handler.SendSuccess(c, "Profile updated successfully")
 }
 
 func (h *Handler) GetUserEmailAddresses(c *fiber.Ctx) error {
@@ -826,7 +838,10 @@ func (h *Handler) AddPhoneNumber(c *fiber.Ctx) error {
 		Model: model.Model{
 			ID: snowflake.ID(),
 		},
-		PhoneNumber: b.PhoneNumber,
+		PhoneNumber:           b.PhoneNumber,
+		CountryCode:           b.CountryCode,
+		CanUseForSecondFactor: true,
+		DeploymentID:          deployment.ID,
 	}
 
 	phoneNumber.UserID = *session.ActiveSignin.UserID
@@ -872,38 +887,17 @@ func (h *Handler) PreparePhoneVerification(c *fiber.Ctx) error {
 
 	session.ActiveSignin.LoadUser(database.Connection)
 
-	code, err := utils.GenerateOTP()
-	if err != nil {
-		return handler.SendInternalServerError(
-			c,
-			nil,
-			"Something went wrong",
-			handler.ErrInternal,
-		)
-	}
-
-	err = h.service.storeOTPInCache(
-		strconv.Itoa(int(phoneNumber.ID)),
-		code,
-	)
-	if err != nil {
-		return handler.SendInternalServerError(
-			c,
-			nil,
-			"Something went wrong",
-			handler.ErrInternal,
-		)
-	}
-
-	err = h.service.sendSmsOTPVerificationAsync(
+	err := h.service.sendSmsOTPVerification(
 		deployment.ID,
+		*session.ActiveSignin.UserID,
 		phoneNumber.PhoneNumber,
+		phoneNumber.CountryCode,
 	)
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,
 			nil,
-			"Something went wrong",
+			"Failed to send SMS",
 			handler.ErrInternal,
 		)
 	}
@@ -916,6 +910,8 @@ func (h *Handler) AttemptPhoneVerification(c *fiber.Ctx) error {
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
 	}
+
+	deployment := handler.GetDeployment(c)
 
 	phoneID := c.Params("id")
 	if phoneID == "" {
@@ -936,28 +932,28 @@ func (h *Handler) AttemptPhoneVerification(c *fiber.Ctx) error {
 		)
 	}
 
-	providedCode := c.Query("code")
-	if providedCode == "" {
+	code := c.FormValue("code")
+	if code == "" {
 		return handler.SendBadRequest(c, nil, "OTP code is required")
 	}
 
-	expectedOTP, err := h.service.getOTPFromCache(
-		strconv.Itoa(int(phoneNumber.ID)),
+	isValid, err := h.service.verifyPhoneOTP(
+		deployment.ID,
+		phoneNumber.PhoneNumber,
+		phoneNumber.CountryCode,
+		code,
 	)
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,
 			nil,
-			"Something went wrong",
+			"Failed to verify OTP",
 			handler.ErrInternal,
 		)
 	}
 
-	if providedCode != expectedOTP {
+	if !isValid {
 		return handler.SendBadRequest(c, nil, "Invalid OTP code")
-	}
-
-	if err = h.service.removeOTPFromCache(strconv.Itoa(int(phoneNumber.ID))); err != nil {
 	}
 
 	phoneNumber.Verified = true
@@ -1239,7 +1235,7 @@ func (h *Handler) GenerateBackupCodes(c *fiber.Ctx) error {
 	}
 
 	if err := database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Updates(map[string]interface{}{
-		"backup_codes":           backupCodes,
+		"backup_codes":           pq.Array(backupCodes),
 		"backup_codes_generated": true,
 	}).Error; err != nil {
 		return handler.SendInternalServerError(
@@ -1304,7 +1300,7 @@ func (h *Handler) RegenerateBackupCodes(c *fiber.Ctx) error {
 	}
 
 	if err := database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Updates(map[string]interface{}{
-		"backup_codes":           backupCodes,
+		"backup_codes":           pq.Array(backupCodes),
 		"backup_codes_generated": true,
 	}).Error; err != nil {
 		return handler.SendInternalServerError(
@@ -1409,14 +1405,19 @@ func (h *Handler) SignOutFromSession(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Failed to find signin")
 	}
 
-	signin.ExpiresAt = time.Now().UTC()
-	if err := database.Connection.Save(&signin).Error; err != nil {
+	isCurrentSignin := session.ActiveSignin != nil && session.ActiveSignin.ID == signin.ID
+
+	if err := database.Connection.Delete(&signin).Error; err != nil {
 		return handler.SendInternalServerError(
 			c,
 			nil,
 			"Failed to sign out from session",
 			handler.ErrInternal,
 		)
+	}
+
+	if isCurrentSignin {
+		database.Connection.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", nil)
 	}
 
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
@@ -1608,9 +1609,32 @@ func (h *Handler) MakeEmailPrimary(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Email address not found or not verified")
 	}
 
+	var user model.User
+	if err := database.Connection.Preload("UserEmailAddresses").First(&user, session.ActiveSignin.UserID).Error; err != nil {
+		return handler.SendInternalServerError(c, nil, "Failed to load user")
+	}
+
+	var oldPrimaryEmail string
+	if user.PrimaryEmailAddressID != nil {
+		for _, email := range user.UserEmailAddresses {
+			if email.ID == *user.PrimaryEmailAddressID {
+				oldPrimaryEmail = email.EmailAddress
+				break
+			}
+		}
+	}
+
 	if err := database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Update("primary_email_address_id", emailID).Error; err != nil {
 		return handler.SendInternalServerError(c, nil, "Failed to update primary email", handler.ErrInternal)
 	}
+
+	deployment := handler.GetDeployment(c)
+	if oldPrimaryEmail != "" && oldPrimaryEmail != emailAddress.EmailAddress {
+		_ = h.service.nats.SendPrimaryEmailChangeEmail(deployment.ID, user.ID, oldPrimaryEmail, oldPrimaryEmail, emailAddress.EmailAddress)
+		_ = h.service.nats.SendPrimaryEmailChangeEmail(deployment.ID, user.ID, emailAddress.EmailAddress, oldPrimaryEmail, emailAddress.EmailAddress)
+	}
+
+	utils.RemoveCachedSession(session.ID)
 
 	return handler.SendSuccess(c, "Primary email updated successfully")
 }
@@ -1634,6 +1658,7 @@ func (h *Handler) MakePhonePrimary(c *fiber.Ctx) error {
 	if err := database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Update("primary_phone_number_id", phoneID).Error; err != nil {
 		return handler.SendInternalServerError(c, nil, "Failed to update primary phone", handler.ErrInternal)
 	}
+	utils.RemoveCachedSession(session.ID)
 
 	return handler.SendSuccess(c, "Primary phone updated successfully")
 }
@@ -1650,7 +1675,7 @@ func (h *Handler) UpdatePassword(c *fiber.Ctx) error {
 	}
 
 	var user model.User
-	if err := database.Connection.Clauses(dbresolver.Read).Select("*").First(&user, session.ActiveSignin.UserID).Error; err != nil {
+	if err := database.Connection.Preload("UserEmailAddresses").Clauses(dbresolver.Read).Select("*").First(&user, session.ActiveSignin.UserID).Error; err != nil {
 		return handler.SendInternalServerError(c, nil, "Failed to load user")
 	}
 
@@ -1674,6 +1699,18 @@ func (h *Handler) UpdatePassword(c *fiber.Ctx) error {
 	if err := database.Connection.Model(&user).Update("password", hashedPassword).Error; err != nil {
 		return handler.SendInternalServerError(c, nil, "Failed to update password")
 	}
+
+	deployment := handler.GetDeployment(c)
+	if user.PrimaryEmailAddressID != nil {
+		for _, email := range user.UserEmailAddresses {
+			if email.ID == *user.PrimaryEmailAddressID {
+				_ = h.service.nats.SendPasswordChangeEmail(deployment.ID, user.ID, email.EmailAddress)
+				break
+			}
+		}
+	}
+
+	utils.RemoveCachedSession(session.ID)
 
 	return handler.SendSuccess(c, "Password updated successfully")
 }
@@ -1712,6 +1749,18 @@ func (h *Handler) RemovePassword(c *fiber.Ctx) error {
 	if err := database.Connection.Model(&user).Update("password", "").Error; err != nil {
 		return handler.SendInternalServerError(c, nil, "Failed to remove password")
 	}
+
+	deploymentID := deployment.ID
+	if user.PrimaryEmailAddressID != nil {
+		for _, email := range user.UserEmailAddresses {
+			if email.ID == *user.PrimaryEmailAddressID {
+				_ = h.service.nats.SendPasswordRemoveEmail(deploymentID, user.ID, email.EmailAddress)
+				break
+			}
+		}
+	}
+
+	utils.RemoveCachedSession(session.ID)
 
 	return handler.SendSuccess(c, "Password removed successfully")
 }
@@ -1785,4 +1834,304 @@ func (h *Handler) DisconnectSocialConnection(c *fiber.Ctx) error {
 	}
 
 	return handler.SendSuccess(c, "Social connection disconnected successfully")
+}
+
+func (h *Handler) InitConnectSocial(c *fiber.Ctx) error {
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
+	}
+
+	provider := c.Query("provider")
+	if provider == "" {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"provider is required",
+			handler.ErrProviderRequired,
+		)
+	}
+
+	deployment := handler.GetDeployment(c)
+	customRedirectURI := c.Query("redirect_uri")
+
+	var keypair model.DeploymentKeyPair
+	if err := database.Connection.Where("deployment_id = ?", deployment.ID).
+		First(&keypair).Error; err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to get deployment keypair",
+		)
+	}
+
+	fullRedirectURI := fmt.Sprintf("https://%s/sso-callback", deployment.FrontendHost)
+	if customRedirectURI != "" {
+		fullRedirectURI = fmt.Sprintf("%s?redirect_uri=%s", fullRedirectURI, customRedirectURI)
+	}
+
+	secret := utils.GetOAuthStateSecret(deployment.ID, keypair.PrivateKey)
+	stateData := utils.OAuthStateData{
+		Action:      "connect_social",
+		UserID:      session.ActiveSignin.UserID,
+		SessionID:   &session.ID,
+		Provider:    provider,
+		RedirectURI: fullRedirectURI,
+	}
+	stateToken, err := utils.GenerateOAuthState(stateData, secret)
+	if err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to generate state token",
+		)
+	}
+
+	url, err := utils.GenerateOAuthConnectURL(provider, stateToken, customRedirectURI, &deployment)
+	if err != nil {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			err.Error(),
+			handler.ErrProviderNotConfigured,
+		)
+	}
+
+	return handler.SendSuccess(c, fiber.Map{
+		"oauth_url": url,
+	})
+}
+
+func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
+	code := c.Query("code")
+	deployment := handler.GetDeployment(c)
+	session := handler.GetSession(c)
+
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
+	}
+
+	if code == "" {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"code is not present in uri",
+			handler.ErrCodeRequired,
+		)
+	}
+
+	stateToken := c.Query("state")
+	if stateToken == "" {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"State parameter is missing",
+			handler.ErrInvalidState,
+		)
+	}
+
+	var keypair model.DeploymentKeyPair
+	if err := database.Connection.Where("deployment_id = ?", deployment.ID).
+		First(&keypair).Error; err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to get deployment keypair",
+		)
+	}
+
+	secret := utils.GetOAuthStateSecret(deployment.ID, keypair.PrivateKey)
+	stateData, err := utils.ValidateOAuthState(stateToken, secret, 10*time.Minute)
+	if err != nil {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			fmt.Sprintf("Invalid or expired state: %v", err),
+			handler.ErrInvalidState,
+		)
+	}
+
+	if stateData.Action != "connect_social" {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Invalid state action for connect social",
+			handler.ErrInvalidState,
+		)
+	}
+
+	if stateData.UserID == nil || *stateData.UserID != *session.ActiveSignin.UserID {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"State token user mismatch",
+			handler.ErrInvalidState,
+		)
+	}
+
+	if stateData.SessionID == nil || *stateData.SessionID != session.ID {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"State token session mismatch",
+			handler.ErrInvalidState,
+		)
+	}
+
+	provider := stateData.Provider
+	if provider == "" {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Invalid provider in state",
+			handler.ErrInvalidState,
+		)
+	}
+
+	customRedirectURI := stateData.RedirectURI
+
+	var ssoProvider model.SocialConnectionProvider
+	switch provider {
+	case "google_oauth":
+		ssoProvider = model.SocialConnectionProviderGoogle
+	case "github_oauth":
+		ssoProvider = model.SocialConnectionProviderGitHub
+	case "microsoft_oauth":
+		ssoProvider = model.SocialConnectionProviderMicrosoft
+	case "facebook_oauth":
+		ssoProvider = model.SocialConnectionProviderFacebook
+	case "x_oauth":
+		ssoProvider = model.SocialConnectionProviderX
+	case "linkedin_oauth":
+		ssoProvider = model.SocialConnectionProviderLinkedIn
+	case "gitlab_oauth":
+		ssoProvider = model.SocialConnectionProviderGitLab
+	case "discord_oauth":
+		ssoProvider = model.SocialConnectionProviderDiscord
+	case "apple_oauth":
+		ssoProvider = model.SocialConnectionProviderApple
+	default:
+		return handler.SendBadRequest(c, nil, "Invalid provider")
+	}
+
+	conf, err := utils.GetOAuthConfigForDeployment(ssoProvider, &deployment, customRedirectURI)
+	if err != nil {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			err.Error(),
+			handler.ErrProviderNotConfigured,
+		)
+	}
+
+	token, err := conf.Exchange(c.Context(), code)
+	if err != nil || !token.Valid() {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Failed to exchange code for token",
+			handler.ErrCodeRequired,
+		)
+	}
+
+	oauthUser, err := utils.ExchangeTokenForUser(token, ssoProvider)
+	if err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to get user info from provider",
+		)
+	}
+
+	err = database.Connection.Transaction(func(tx *gorm.DB) error {
+		var userEmailAddress model.UserEmailAddress
+		err := tx.Where("deployment_id = ? AND user_id = ? AND email_address = ?",
+			deployment.ID, session.ActiveSignin.UserID, oauthUser.Email).
+			First(&userEmailAddress).Error
+
+		if err == gorm.ErrRecordNotFound {
+			userEmailAddress = model.UserEmailAddress{
+				DeploymentID:         deployment.ID,
+				UserID:               session.ActiveSignin.UserID,
+				EmailAddress:         oauthUser.Email,
+				IsPrimary:            false,
+				Verified:             true,
+				VerifiedAt:           time.Now(),
+				VerificationStrategy: getVerificationStrategyForProvider(provider),
+			}
+
+			if err := tx.Create(&userEmailAddress).Error; err != nil {
+				if pgErr, ok := err.(*pgconn.PgError); ok {
+					if pgErr.ConstraintName == "idx_deployment_user_email_address_email" {
+						return handler.ErrEmailExists
+					}
+				}
+				return err
+			}
+		} else if err != nil {
+			return err
+		}
+
+		socialConnection := model.SocialConnection{
+			UserID:             *session.ActiveSignin.UserID,
+			UserEmailAddressID: userEmailAddress.ID,
+			Provider:           ssoProvider,
+			EmailAddress:       oauthUser.Email,
+			FirstName:          oauthUser.FirstName,
+			LastName:           oauthUser.LastName,
+			AccessToken:        token.AccessToken,
+			RefreshToken:       token.RefreshToken,
+		}
+
+		if err := tx.Create(&socialConnection).Error; err != nil {
+			if pgErr, ok := err.(*pgconn.PgError); ok {
+				if strings.Contains(pgErr.ConstraintName, "provider") || strings.Contains(pgErr.ConstraintName, "social") {
+					return handler.ErrSocialAccountAlreadyConnected
+				}
+			}
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		// Return specific errors
+		if err == handler.ErrEmailExists {
+			return handler.SendBadRequest(c, nil, "This email address is already associated with another user")
+		}
+		if err == handler.ErrSocialAccountAlreadyConnected {
+			return handler.SendBadRequest(c, nil, "This social account is already connected")
+		}
+		return handler.SendInternalServerError(c, err, "Failed to connect social account")
+	}
+
+	utils.RemoveCachedSession(session.ID)
+
+	return handler.SendSuccess(c, fiber.Map{
+		"message":      "Social account connected successfully",
+		"session":      session,
+		"redirect_uri": customRedirectURI,
+	})
+}
+
+func getVerificationStrategyForProvider(provider string) model.VerificationStrategy {
+	switch provider {
+	case "google_oauth":
+		return model.OauthGoogle
+	case "github_oauth":
+		return model.OauthGithub
+	case "microsoft_oauth":
+		return model.OauthMicrosoft
+	case "facebook_oauth":
+		return model.OauthFacebook
+	case "linkedin_oauth":
+		return model.OauthLinkedIn
+	case "discord_oauth":
+		return model.OauthDiscord
+	case "apple_oauth":
+		return model.OauthApple
+	default:
+		return model.Otp
+	}
 }

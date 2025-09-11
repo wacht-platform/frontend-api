@@ -13,6 +13,7 @@ type UpdateUserSchema struct {
 	PrimaryEmailAddressID string                   `form:"primary_email_address_id"`
 	PrimaryPhoneNumberID  string                   `form:"primary_phone_number_id"`
 	SecondFactorPolicy    model.SecondFactorPolicy `form:"second_factor_policy" validate:"omitempty,oneof=none optional enforced"`
+	RemoveProfilePicture  bool                     `form:"remove_profile_picture"`
 }
 
 type AddUserEmailAddressSchema struct {
@@ -21,6 +22,7 @@ type AddUserEmailAddressSchema struct {
 
 type AddUserPhoneNumberSchema struct {
 	PhoneNumber string `form:"phone_number" validate:"required"`
+	CountryCode string `form:"country_code" validate:"required"`
 }
 
 type VerifyAuthenticatorSchema struct {
@@ -29,8 +31,8 @@ type VerifyAuthenticatorSchema struct {
 }
 
 type UpdatePasswordSchema struct {
-	CurrentPassword string `form:"current_password" validate:"required"`
-	NewPassword     string `form:"new_password"     validate:"required"`
+	CurrentPassword string `form:"current_password"`
+	NewPassword     string `form:"new_password" validate:"required"`
 }
 
 type DeleteAccountSchema struct {

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"slices"
@@ -605,6 +604,8 @@ func (h *Handler) InitSSO(c *fiber.Ctx) error {
 
 	session := handler.GetSession(c)
 	deployment := handler.GetDeployment(c)
+	customRedirectURI := c.Query("redirect_uri")
+
 	attempt := model.NewSignInAttempt(model.SignInMethodSSO)
 	attempt.Method = model.SignInMethodSSO
 	attempt.SessionID = session.ID
@@ -628,9 +629,17 @@ func (h *Handler) InitSSO(c *fiber.Ctx) error {
 		)
 	}
 
-	customRedirectURI := c.Query("redirect_uri")
+	var keypair model.DeploymentKeyPair
+	if err := database.Connection.Where("deployment_id = ?", deployment.ID).
+		First(&keypair).Error; err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to get deployment keypair",
+		)
+	}
 
-	url, err := utils.GenerateVerificationUrlForDeployment(provider, *attempt, &deployment, customRedirectURI)
+	url, err := utils.GenerateVerificationUrlForDeployment(provider, *attempt, &deployment, customRedirectURI, keypair)
 	if err != nil {
 		return handler.SendBadRequest(
 			c,
@@ -669,25 +678,47 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			handler.ErrInvalidState,
 		)
 	}
-	
-	stateParts := strings.Split(state, ":")
-	if len(stateParts) == 0 || stateParts[0] == "" {
+	var keypair model.DeploymentKeyPair
+	if err := database.Connection.Where("deployment_id = ?", deployment.ID).
+		First(&keypair).Error; err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to get deployment keypair",
+		)
+	}
+
+	secret := utils.GetOAuthStateSecret(deployment.ID, keypair.PrivateKey)
+	stateData, err := utils.ValidateOAuthState(state, secret, 10*time.Minute)
+	if err != nil {
 		return handler.SendBadRequest(
 			c,
 			nil,
-			"Invalid state format",
+			fmt.Sprintf("Invalid or expired state: %v", err),
 			handler.ErrInvalidState,
 		)
 	}
-	
-	attemptID := stateParts[0]
-	var customRedirectURI string
-	if len(stateParts) > 1 {
-		customRedirectURI = stateParts[1]
+
+	if stateData.Action != "sign_in" {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Invalid state action for sign-in",
+			handler.ErrInvalidState,
+		)
+	}
+
+	if stateData.AttemptID == nil {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Missing attempt ID in state",
+			handler.ErrInvalidState,
+		)
 	}
 
 	var attempt model.SignInAttempt
-	if err := database.Connection.Where("id = ? AND session_id = ?", attemptID, session.ID).First(&attempt).Error; err != nil {
+	if err := database.Connection.Where("id = ? AND session_id = ?", *stateData.AttemptID, session.ID).First(&attempt).Error; err != nil {
 		return handler.SendBadRequest(
 			c,
 			nil,
@@ -695,7 +726,10 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			handler.ErrInvalidState,
 		)
 	}
-	
+
+	// Get redirect_uri from the state data
+	customRedirectURI := stateData.RedirectURI
+
 	// Check if attempt is expired (more than 10 minutes old)
 	if time.Since(attempt.CreatedAt) > 10*time.Minute {
 		return handler.SendBadRequest(

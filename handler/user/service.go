@@ -2,9 +2,12 @@ package user
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -71,11 +74,77 @@ func (s *UserService) sendEmailOTPVerificationAsync(
 	return s.nats.SendVerificationEmail(deploymentID, *email.UserID, email.EmailAddress, code)
 }
 
-func (s *UserService) sendSmsOTPVerificationAsync(
+func (s *UserService) sendSmsOTPVerification(
 	deploymentID uint64,
-	phone string,
+	userID uint64,
+	phoneNumber string,
+	countryCode string,
 ) error {
-	return fmt.Errorf("SMS sending not implemented in NATS service")
+	return s.nats.SendOTPSMS(deploymentID, userID, phoneNumber, countryCode)
+}
+
+func (s *UserService) verifyPhoneOTP(
+	deploymentID uint64,
+	phoneNumber string,
+	countryCode string,
+	code string,
+) (bool, error) {
+	cleanPhone := strings.TrimPrefix(phoneNumber, "+")
+	cacheKey := fmt.Sprintf("sms_verification:%d:%s", deploymentID, cleanPhone)
+	verificationID, err := database.Redis.Get(context.Background(), cacheKey).Result()
+	if err != nil {
+		return false, fmt.Errorf("verification session expired or not found")
+	}
+
+	customerID := config.GetEnv("MESSAGE_CENTRAL_CUSTOMER_ID", "")
+	authToken := config.GetEnv("MESSAGE_CENTRAL_AUTH_TOKEN", "")
+
+	if customerID == "" || authToken == "" {
+		return false, fmt.Errorf("MessageCentral credentials not configured")
+	}
+
+	url := fmt.Sprintf(
+		"https://cpaas.messagecentral.com/verification/v3/validateOtp?verificationId=%s&code=%s",
+		verificationID, code,
+	)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("authToken", authToken)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("failed to call MessageCentral API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return false, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	responseCode, ok := result["responseCode"].(float64)
+	if ok && responseCode == 200 {
+		database.Redis.Del(context.Background(), cacheKey)
+		return true, nil
+	}
+
+	responseCodeStr, _ := result["responseCode"].(string)
+	if responseCodeStr == "200" {
+		database.Redis.Del(context.Background(), cacheKey)
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func (s *UserService) uploadProfilePicture(
