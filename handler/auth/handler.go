@@ -573,7 +573,6 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 			}
 
 			signIn := h.service.CreateSignin(u.ID, session.ID, c, d.AuthSettings.SessionValidityPeriod)
-			signIn.User = &u
 
 			if err := tx.Create(signIn).Error; err != nil {
 				return err
@@ -1390,7 +1389,6 @@ func (h *Handler) VerifyMagicLink(c *fiber.Ctx) error {
 		}
 
 		signIn := h.service.CreateSignin(email.User.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
-		signIn.User = &email.User
 
 		err = database.Connection.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Create(signIn).Error; err != nil {
@@ -1546,7 +1544,6 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					attempt.Completed = true
 					attempt.RemainingSteps = nil
 					signin = h.service.CreateSignin(*email.UserID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
-					signin.User = &email.User
 
 					session.Signins = append(session.Signins, *signin)
 					session.ActiveSigninID = &signin.ID
@@ -1643,7 +1640,6 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					attempt.Completed = true
 					attempt.RemainingSteps = nil
 					signin = h.service.CreateSignin(phone.User.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
-					signin.User = &phone.User
 
 					session.Signins = append(session.Signins, *signin)
 					session.ActiveSigninID = &signin.ID
@@ -1818,7 +1814,6 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				attempt.Completed = true
 				attempt.RemainingSteps = nil
 				signin = h.service.CreateSignin(user.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
-				signin.User = &user
 
 				session.Signins = append(session.Signins, *signin)
 				session.ActiveSigninID = &signin.ID
@@ -2164,7 +2159,6 @@ func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
 		}
 
 		signIn := h.service.CreateSignin(user.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
-		signIn.User = &user
 
 		err := database.Connection.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Save(&user).Error; err != nil {
@@ -2528,7 +2522,6 @@ func (h *Handler) handleSigninProfileCompletion(c *fiber.Ctx, attempt *model.Sig
 		}
 
 		signIn := h.service.CreateSignin(user.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
-		signIn.User = &user
 
 		err := database.Connection.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Save(&user).Error; err != nil {
