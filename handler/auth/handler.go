@@ -151,6 +151,15 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 			if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error; err != nil {
 				return err
 			}
+
+			if user.PrimaryEmailAddressID != nil {
+				for _, email := range user.UserEmailAddresses {
+					if email.ID == *user.PrimaryEmailAddressID {
+						_ = h.service.nats.SendSignInNotificationEmail(d.ID, user.ID, signIn.ID, email.EmailAddress)
+						break
+					}
+				}
+			}
 		}
 
 		return nil
@@ -273,6 +282,10 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 
 			if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error; err != nil {
 				return err
+			}
+
+			if email.User.PrimaryEmailAddressID != nil && email.ID == *email.User.PrimaryEmailAddressID {
+				_ = h.service.nats.SendSignInNotificationEmail(d.ID, email.User.ID, signIn.ID, email.EmailAddress)
 			}
 		}
 
@@ -880,6 +893,15 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			session.Signins = append(session.Signins, *signIn)
 			session.ActiveSigninID = &signIn.ID
 			attempt.Completed = true
+
+			if u.PrimaryEmailAddressID != nil {
+				for _, email := range u.UserEmailAddresses {
+					if email.ID == *u.PrimaryEmailAddressID {
+						_ = h.service.nats.SendSignInNotificationEmail(deployment.ID, u.ID, signIn.ID, email.EmailAddress)
+						break
+					}
+				}
+			}
 		}
 
 		if err := tx.Save(&attempt).Error; err != nil {
@@ -1379,6 +1401,8 @@ func (h *Handler) VerifyMagicLink(c *fiber.Ctx) error {
 				return err
 			}
 
+			_ = h.service.nats.SendSignInNotificationEmail(deployment.ID, email.User.ID, signIn.ID, email.EmailAddress)
+
 			return tx.Save(&attempt).Error
 		})
 
@@ -1498,14 +1522,6 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 						"Error fetching user",
 					)
 				}
-				if attempt.CurrentStep == model.SignInAttemptStepVerifyEmailOTP &&
-					email.Verified {
-					return handler.SendBadRequest(
-						c,
-						nil,
-						"Email already verified",
-					)
-				}
 
 				storedOTP, err := h.service.GetOTPFromRedis(
 					fmt.Sprintf("signin:%d", attempt.ID),
@@ -1553,6 +1569,8 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 						if err := tx.Create(signin).Error; err != nil {
 							return err
 						}
+
+						_ = h.service.nats.SendSignInNotificationEmail(d.ID, *email.UserID, signin.ID, email.EmailAddress)
 					}
 
 					if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]interface{}{
@@ -1654,6 +1672,15 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 						if err := tx.Create(signin).Error; err != nil {
 							return err
 						}
+
+						if phone.User.PrimaryEmailAddressID != nil {
+							for _, email := range phone.User.UserEmailAddresses {
+								if email.ID == *phone.User.PrimaryEmailAddressID {
+									_ = h.service.nats.SendSignInNotificationEmail(d.ID, phone.User.ID, signin.ID, email.EmailAddress)
+									break
+								}
+							}
+						}
 					}
 
 					if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]interface{}{
@@ -1687,7 +1714,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 			}
 
 			var user model.User
-			if err := database.Connection.Preload("UserAuthenticator").Where("id = ?", *attempt.UserID).First(&user).Error; err != nil {
+			if err := database.Connection.Preload("UserAuthenticator").Preload("UserEmailAddresses").Where("id = ?", *attempt.UserID).First(&user).Error; err != nil {
 				return handler.SendInternalServerError(
 					c,
 					err,
@@ -1825,6 +1852,15 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 					h.service.Delete2FAMethodFromCache(fmt.Sprintf("2fa_method:%d", attempt.ID))
+
+					if user.PrimaryEmailAddressID != nil {
+						for _, email := range user.UserEmailAddresses {
+							if email.ID == *user.PrimaryEmailAddressID {
+								_ = h.service.nats.SendSignInNotificationEmail(deployment.ID, user.ID, signin.ID, email.EmailAddress)
+								break
+							}
+						}
+					}
 				}
 
 				return tx.Save(attempt).Error
@@ -2146,6 +2182,15 @@ func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
 			attempt.Completed = true
 			if err := tx.Save(&attempt).Error; err != nil {
 				return err
+			}
+
+			if user.PrimaryEmailAddressID != nil {
+				for _, email := range user.UserEmailAddresses {
+					if email.ID == *user.PrimaryEmailAddressID {
+						_ = h.service.nats.SendSignInNotificationEmail(deployment.ID, user.ID, signIn.ID, email.EmailAddress)
+						break
+					}
+				}
 			}
 
 			return tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error
@@ -2501,6 +2546,15 @@ func (h *Handler) handleSigninProfileCompletion(c *fiber.Ctx, attempt *model.Sig
 			attempt.Completed = true
 			if err := tx.Save(attempt).Error; err != nil {
 				return err
+			}
+
+			if user.PrimaryEmailAddressID != nil {
+				for _, email := range user.UserEmailAddresses {
+					if email.ID == *user.PrimaryEmailAddressID {
+						_ = h.service.nats.SendSignInNotificationEmail(deployment.ID, user.ID, signIn.ID, email.EmailAddress)
+						break
+					}
+				}
 			}
 
 			return tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error

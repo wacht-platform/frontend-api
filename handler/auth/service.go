@@ -91,7 +91,10 @@ func (s *AuthService) FindUserByPhoneNumberID(
 	phoneId uint64,
 ) (*model.UserPhoneNumber, error) {
 	var userPhone model.UserPhoneNumber
-	if res := s.db.Where(&model.UserPhoneNumber{Model: model.Model{ID: phoneId}}).Joins("User").First(&userPhone); res.RowsAffected == 0 {
+	if res := s.db.Where(&model.UserPhoneNumber{Model: model.Model{ID: phoneId}}).
+		Joins("User").
+		Preload("User.UserEmailAddresses").
+		First(&userPhone); res.RowsAffected == 0 {
 		return nil, handler.ErrUserNotFound
 	} else if res.Error != nil {
 		return nil, res.Error
