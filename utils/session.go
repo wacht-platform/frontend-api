@@ -208,6 +208,102 @@ func parseSigninFromMap(signinData map[string]any) (*model.Signin, error) {
 	return signin, nil
 }
 
+func parseSigninAttemptFromMap(attemptData map[string]any) (*model.SignInAttempt, error) {
+	if attemptData == nil {
+		return nil, fmt.Errorf("signin attempt data is nil")
+	}
+
+	attempt := &model.SignInAttempt{}
+
+	// Parse basic fields
+	if id, err := getUint64FromMap(attemptData, "id"); err == nil {
+		attempt.ID = id
+	}
+	if sessionID, err := getUint64FromMap(attemptData, "session_id"); err == nil {
+		attempt.SessionID = sessionID
+	}
+	
+	// Parse Method
+	if methodStr := getStringFromMap(attemptData, "method"); methodStr != "" {
+		attempt.Method = model.SignInMethod(methodStr)
+	}
+
+	// Parse times
+	if createdAtStr := getStringFromMap(attemptData, "created_at"); createdAtStr != "" {
+		if parsedTime, err := time.Parse(time.RFC3339, createdAtStr); err == nil {
+			attempt.CreatedAt = parsedTime
+		}
+	}
+	if expiresAtStr := getStringFromMap(attemptData, "expires_at"); expiresAtStr != "" {
+		if parsedTime, err := time.Parse(time.RFC3339, expiresAtStr); err == nil {
+			attempt.ExpiresAt = parsedTime
+		}
+	}
+
+	// Parse current step
+	if stepStr := getStringFromMap(attemptData, "current_step"); stepStr != "" {
+		attempt.CurrentStep = model.SignInAttemptStep(stepStr)
+	}
+
+	// Parse boolean fields
+	attempt.Completed = getBoolFromMap(attemptData, "completed")
+	attempt.Errored = getBoolFromMap(attemptData, "errored")
+	attempt.RequiresCompletion = getBoolFromMap(attemptData, "requires_completion")
+	attempt.FirstMethodAuthenticated = getBoolFromMap(attemptData, "first_method_authenticated")
+	attempt.SecondMethodAuthenticated = getBoolFromMap(attemptData, "second_method_authenticated")
+	attempt.SecondMethodAuthenticationRequired = getBoolFromMap(attemptData, "second_method_authentication_required")
+
+	// Parse nullable fields
+	if userID, err := getUint64FromMap(attemptData, "user_id"); err == nil && userID != 0 {
+		attempt.UserID = &userID
+	}
+	if identifierID, err := getUint64FromMap(attemptData, "identifier_id"); err == nil && identifierID != 0 {
+		attempt.IdentifierID = &identifierID
+	}
+
+	return attempt, nil
+}
+
+func parseSignupAttemptFromMap(attemptData map[string]any) (*model.SignupAttempt, error) {
+	if attemptData == nil {
+		return nil, fmt.Errorf("signup attempt data is nil")
+	}
+
+	attempt := &model.SignupAttempt{}
+
+	// Parse basic fields
+	if id, err := getUint64FromMap(attemptData, "id"); err == nil {
+		attempt.ID = id
+	}
+	if sessionID, err := getUint64FromMap(attemptData, "session_id"); err == nil {
+		attempt.SessionID = sessionID
+	}
+	attempt.FirstName = getStringFromMap(attemptData, "first_name")
+	attempt.LastName = getStringFromMap(attemptData, "last_name")
+	attempt.Email = getStringFromMap(attemptData, "email")
+	attempt.Username = getStringFromMap(attemptData, "username")
+	attempt.PhoneNumber = getStringFromMap(attemptData, "phone_number")
+	attempt.PhoneCountryCode = getStringFromMap(attemptData, "phone_country_code")
+	
+	// Parse times
+	if createdAtStr := getStringFromMap(attemptData, "created_at"); createdAtStr != "" {
+		if parsedTime, err := time.Parse(time.RFC3339, createdAtStr); err == nil {
+			attempt.CreatedAt = parsedTime
+		}
+	}
+
+	// Parse current step
+	if stepStr := getStringFromMap(attemptData, "current_step"); stepStr != "" {
+		attempt.CurrentStep = model.SignupAttemptStep(stepStr)
+	}
+
+	// Parse boolean fields
+	attempt.Completed = getBoolFromMap(attemptData, "completed")
+	attempt.IsOAuthSignup = getBoolFromMap(attemptData, "is_oauth_signup")
+
+	return attempt, nil
+}
+
 func GetSessionByID(sessionID uint64) (*model.Session, error) {
 	// Check cache first
 	if cachedSession, found := GetCachedSession(sessionID); found {
@@ -612,6 +708,40 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			}
 			if orgMembershipID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveWorkspaceMembership__organization_membership_id"]); err == nil {
 				session.ActiveSignin.ActiveWorkspaceMembership.OrganizationMembershipID = orgMembershipID
+			}
+		}
+	}
+
+	// Parse signin attempts
+	if signinAttemptsJSON := getStringFromMap(rawResult, "signin_attempts"); signinAttemptsJSON != "" && signinAttemptsJSON != "[]" {
+		var signinAttemptsArray []map[string]any
+		if err := json.Unmarshal([]byte(signinAttemptsJSON), &signinAttemptsArray); err != nil {
+			log.Printf("Error: failed to unmarshal signin attempts JSON: %v", err)
+		} else {
+			session.SigninAttempts = make([]model.SignInAttempt, 0, len(signinAttemptsArray))
+			for _, attemptMap := range signinAttemptsArray {
+				if attempt, err := parseSigninAttemptFromMap(attemptMap); err != nil {
+					log.Printf("Warning: failed to parse signin attempt: %v", err)
+				} else {
+					session.SigninAttempts = append(session.SigninAttempts, *attempt)
+				}
+			}
+		}
+	}
+
+	// Parse signup attempts
+	if signupAttemptsJSON := getStringFromMap(rawResult, "signup_attempts"); signupAttemptsJSON != "" && signupAttemptsJSON != "[]" {
+		var signupAttemptsArray []map[string]any
+		if err := json.Unmarshal([]byte(signupAttemptsJSON), &signupAttemptsArray); err != nil {
+			log.Printf("Error: failed to unmarshal signup attempts JSON: %v", err)
+		} else {
+			session.SignupAttempts = make([]model.SignupAttempt, 0, len(signupAttemptsArray))
+			for _, attemptMap := range signupAttemptsArray {
+				if attempt, err := parseSignupAttemptFromMap(attemptMap); err != nil {
+					log.Printf("Warning: failed to parse signup attempt: %v", err)
+				} else {
+					session.SignupAttempts = append(session.SignupAttempts, *attempt)
+				}
 			}
 		}
 	}

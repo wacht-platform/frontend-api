@@ -279,19 +279,19 @@ func (s *AuthService) ValidateSignUpRequest(
 	b *SignUpRequest,
 	d model.Deployment,
 ) error {
-	if d.AuthSettings.FirstName.Required && b.FirstName == "" {
+	if d.AuthSettings.FirstName.Enabled && d.AuthSettings.FirstName.Required && b.FirstName == "" {
 		return handler.ErrRequiredField("First name")
 	}
-	if d.AuthSettings.LastName.Required && b.LastName == "" {
+	if d.AuthSettings.LastName.Enabled && d.AuthSettings.LastName.Required && b.LastName == "" {
 		return handler.ErrRequiredField("Last name")
 	}
-	if d.AuthSettings.EmailAddress.Required && b.Email == "" {
+	if d.AuthSettings.EmailAddress.Enabled && d.AuthSettings.EmailAddress.Required && b.Email == "" {
 		return handler.ErrRequiredField("Email address")
 	}
-	if d.AuthSettings.Username.Required && b.Username == "" {
+	if d.AuthSettings.Username.Enabled && d.AuthSettings.Username.Required && b.Username == "" {
 		return handler.ErrRequiredField("Username")
 	}
-	if d.AuthSettings.PhoneNumber.Required && b.PhoneNumber == "" {
+	if d.AuthSettings.PhoneNumber.Enabled && d.AuthSettings.PhoneNumber.Required && b.PhoneNumber == "" {
 		return handler.ErrRequiredField("Phone number")
 	}
 
@@ -348,9 +348,11 @@ func (s *AuthService) CreateUser(
 		u.UserPhoneNumbers = append(
 			u.UserPhoneNumbers,
 			model.UserPhoneNumber{
-				Model:       model.Model{ID: phoneNumberID},
-				PhoneNumber: b.PhoneNumber,
-				Verified:    false,
+				Model:        model.Model{ID: phoneNumberID},
+				PhoneNumber:  b.PhoneNumber,
+				CountryCode:  b.PhoneCountryCode,
+				Verified:     false,
+				DeploymentID: deploymentID,
 			},
 		)
 		u.PrimaryPhoneNumberID = &phoneNumberID
@@ -592,11 +594,19 @@ func (s *AuthService) SendEmailVerificationEmail(
 
 func (s *AuthService) SendSmsOTPVerificationAsync(
 	phoneNumber string,
+	countryCode string,
+	userID uint64,
 	deployment model.Deployment,
 ) error {
-	// SMS sending would need to be implemented in NATS service
-	// For now, we'll skip SMS as the worker only handles email tasks
-	return fmt.Errorf("SMS sending not implemented in NATS service")
+	return s.nats.SendOTPSMS(deployment.ID, userID, phoneNumber, countryCode)
+}
+
+func (s *AuthService) VerifyPhoneOTP(
+	deploymentID uint64,
+	phoneNumber string,
+	code string,
+) (bool, error) {
+	return utils.VerifyPhoneOTP(deploymentID, phoneNumber, code)
 }
 
 func (s *AuthService) GenerateMagicLink(
@@ -614,7 +624,7 @@ func (s *AuthService) GenerateMagicLink(
 		return "", err
 	}
 
-	magicLink := fmt.Sprintf("https://%s/verify-magic-link?token=%s&attempt=%d",
+	magicLink := fmt.Sprintf("https://%s/magic?token=%s&attempt=%d",
 		deployment.FrontendHost, token, attemptID)
 
 	// Add redirect_uri parameter if provided
@@ -660,19 +670,19 @@ func (s *AuthService) VerifyMagicLinkToken(
 
 func (s *AuthService) GetRequiredFields(authSettings model.DeploymentAuthSettings) []string {
 	var requiredFields []string
-	if authSettings.FirstName.Required {
+	if authSettings.FirstName.Enabled && authSettings.FirstName.Required {
 		requiredFields = append(requiredFields, "first_name")
 	}
-	if authSettings.LastName.Required {
+	if authSettings.LastName.Enabled && authSettings.LastName.Required {
 		requiredFields = append(requiredFields, "last_name")
 	}
-	if authSettings.EmailAddress.Required {
+	if authSettings.EmailAddress.Enabled && authSettings.EmailAddress.Required {
 		requiredFields = append(requiredFields, "email_address")
 	}
-	if authSettings.Username.Required {
+	if authSettings.Username.Enabled && authSettings.Username.Required {
 		requiredFields = append(requiredFields, "username")
 	}
-	if authSettings.PhoneNumber.Required {
+	if authSettings.PhoneNumber.Enabled && authSettings.PhoneNumber.Required {
 		requiredFields = append(requiredFields, "phone_number")
 	}
 	return requiredFields
@@ -681,16 +691,16 @@ func (s *AuthService) GetRequiredFields(authSettings model.DeploymentAuthSetting
 func (s *AuthService) CheckMissingRequiredFields(user *model.User, authSettings model.DeploymentAuthSettings) []string {
 	var missingFields []string
 
-	if authSettings.FirstName.Required && user.FirstName == "" {
+	if authSettings.FirstName.Enabled && authSettings.FirstName.Required && user.FirstName == "" {
 		missingFields = append(missingFields, "first_name")
 	}
-	if authSettings.LastName.Required && user.LastName == "" {
+	if authSettings.LastName.Enabled && authSettings.LastName.Required && user.LastName == "" {
 		missingFields = append(missingFields, "last_name")
 	}
-	if authSettings.Username.Required && user.Username == "" {
+	if authSettings.Username.Enabled && authSettings.Username.Required && user.Username == "" {
 		missingFields = append(missingFields, "username")
 	}
-	if authSettings.PhoneNumber.Required && user.PrimaryPhoneNumberID == nil {
+	if authSettings.PhoneNumber.Enabled && authSettings.PhoneNumber.Required && user.PrimaryPhoneNumberID == nil {
 		missingFields = append(missingFields, "phone_number")
 	}
 
@@ -700,19 +710,19 @@ func (s *AuthService) CheckMissingRequiredFields(user *model.User, authSettings 
 func (s *AuthService) CheckMissingFieldsFromData(data ProfileCompletionData, authSettings model.DeploymentAuthSettings) []string {
 	var missingFields []string
 
-	if authSettings.FirstName.Required && data.FirstName == "" {
+	if authSettings.FirstName.Enabled && authSettings.FirstName.Required && data.FirstName == "" {
 		missingFields = append(missingFields, "first_name")
 	}
-	if authSettings.LastName.Required && data.LastName == "" {
+	if authSettings.LastName.Enabled && authSettings.LastName.Required && data.LastName == "" {
 		missingFields = append(missingFields, "last_name")
 	}
-	if authSettings.EmailAddress.Required && data.Email == "" {
+	if authSettings.EmailAddress.Enabled && authSettings.EmailAddress.Required && data.Email == "" {
 		missingFields = append(missingFields, "email_address")
 	}
-	if authSettings.Username.Required && data.Username == "" {
+	if authSettings.Username.Enabled && authSettings.Username.Required && data.Username == "" {
 		missingFields = append(missingFields, "username")
 	}
-	if authSettings.PhoneNumber.Required && data.PhoneNumber == "" {
+	if authSettings.PhoneNumber.Enabled && authSettings.PhoneNumber.Required && data.PhoneNumber == "" {
 		missingFields = append(missingFields, "phone_number")
 	}
 
@@ -772,38 +782,48 @@ func (s *AuthService) CreateSignupAttempt(
 	requiredFields := s.GetRequiredFields(d.AuthSettings)
 
 	data := ProfileCompletionData{
-		FirstName:   b.FirstName,
-		LastName:    b.LastName,
-		Username:    b.Username,
-		Email:       b.Email,
-		PhoneNumber: b.PhoneNumber,
+		FirstName:        b.FirstName,
+		LastName:         b.LastName,
+		Username:         b.Username,
+		Email:            b.Email,
+		PhoneNumber:      b.PhoneNumber,
+		PhoneCountryCode: b.PhoneCountryCode,
 	}
 
 	missingFields := s.CheckMissingFieldsFromData(data, d.AuthSettings)
 
 	var steps []model.SignupAttemptStep
-	if d.AuthSettings.VerificationPolicy.Email && b.Email != "" {
+	
+	fmt.Printf("DEBUG CreateSignupAttempt - EmailAddress.VerifySignup: %v, Email provided: %v\n", 
+		d.AuthSettings.EmailAddress.VerifySignup, b.Email != "")
+	fmt.Printf("DEBUG CreateSignupAttempt - PhoneNumber.VerifySignup: %v, PhoneNumber provided: %v (value: %s)\n", 
+		d.AuthSettings.PhoneNumber.VerifySignup, b.PhoneNumber != "", b.PhoneNumber)
+	
+	if d.AuthSettings.EmailAddress.VerifySignup && b.Email != "" {
 		steps = append(steps, model.SignupAttemptStepVerifyEmail)
 	}
-	if d.AuthSettings.VerificationPolicy.PhoneNumber &&
+	if d.AuthSettings.PhoneNumber.VerifySignup &&
 		b.PhoneNumber != "" {
 		steps = append(steps, model.SignupAttemptStepVerifyPhone)
 	}
+	
+	fmt.Printf("DEBUG CreateSignupAttempt - Total verification steps added: %d\n", len(steps))
 
 	attempt := &model.SignupAttempt{
 		Model: model.Model{
 			ID: snowflake.ID(),
 		},
-		SessionID:      session.ID,
-		FirstName:      b.FirstName,
-		LastName:       b.LastName,
-		Email:          b.Email,
-		Username:       b.Username,
-		PhoneNumber:    b.PhoneNumber,
-		Password:       hashedPassword,
-		RequiredFields: datatypes.NewJSONSlice(requiredFields),
-		MissingFields:  datatypes.NewJSONSlice(missingFields),
-		RemainingSteps: datatypes.NewJSONSlice(steps),
+		SessionID:        session.ID,
+		FirstName:        b.FirstName,
+		LastName:         b.LastName,
+		Email:            b.Email,
+		Username:         b.Username,
+		PhoneNumber:      b.PhoneNumber,
+		PhoneCountryCode: b.PhoneCountryCode,
+		Password:         hashedPassword,
+		RequiredFields:   datatypes.NewJSONSlice(requiredFields),
+		MissingFields:    datatypes.NewJSONSlice(missingFields),
+		RemainingSteps:   datatypes.NewJSONSlice(steps),
 	}
 
 	if len(steps) > 0 {
@@ -841,7 +861,7 @@ func (s *AuthService) CreateOAuthSignupAttempt(
 	}
 
 	var steps []model.SignupAttemptStep
-	if d.AuthSettings.VerificationPolicy.Email && email != "" {
+	if d.AuthSettings.EmailAddress.VerifySignup && email != "" {
 		steps = append(steps, model.SignupAttemptStepVerifyEmail)
 	}
 
@@ -993,11 +1013,12 @@ func (s *AuthService) CreateVerifiedUser(
 	d model.Deployment,
 ) (*model.User, error) {
 	b := &SignUpRequest{
-		FirstName:   attempt.FirstName,
-		LastName:    attempt.LastName,
-		Username:    attempt.Username,
-		Email:       attempt.Email,
-		PhoneNumber: attempt.PhoneNumber,
+		FirstName:        attempt.FirstName,
+		LastName:         attempt.LastName,
+		Username:         attempt.Username,
+		Email:            attempt.Email,
+		PhoneNumber:      attempt.PhoneNumber,
+		PhoneCountryCode: attempt.PhoneCountryCode,
 	}
 
 	user := s.CreateUser(
@@ -1488,8 +1509,7 @@ func (s *AuthService) DetermineVerificationStepsForProfileCompletion(
 ) []string {
 	var steps []string
 
-	// Check if email verification is needed
-	if data.Email != "" && authSettings.VerificationPolicy.Email {
+	if data.Email != "" && authSettings.EmailAddress.VerifySignup {
 		needsEmailVerification := true
 
 		// If this is for an existing user (signin completion), check if email is already verified
@@ -1505,8 +1525,7 @@ func (s *AuthService) DetermineVerificationStepsForProfileCompletion(
 		}
 	}
 
-	// Check if phone verification is needed
-	if data.PhoneNumber != "" && authSettings.VerificationPolicy.PhoneNumber {
+	if data.PhoneNumber != "" && authSettings.PhoneNumber.VerifySignup {
 		needsPhoneVerification := true
 
 		// If this is for an existing user (signin completion), check if phone is already verified

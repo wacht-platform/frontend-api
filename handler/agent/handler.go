@@ -25,7 +25,7 @@ func (h *Handler) verifyAgentToken(c *fiber.Ctx) (string, *string, error) {
 	}
 
 	deployment := handler.GetDeployment(c)
-	
+
 	if deployment.KepPair == nil {
 		return "", nil, fiber.NewError(fiber.StatusInternalServerError, "Deployment keypair not configured")
 	}
@@ -45,7 +45,7 @@ func (h *Handler) verifyAgentToken(c *fiber.Ctx) (string, *string, error) {
 	if ok && len(audiences) > 0 && audiences[0] != "" {
 		contextGroup = &audiences[0]
 	}
-	
+
 	return userID, contextGroup, nil
 }
 
@@ -56,9 +56,9 @@ func (h *Handler) ListContexts(c *fiber.Ctx) error {
 	}
 
 	deployment := handler.GetDeployment(c)
-	
+
 	params := ListContextsRequest{
-		Limit:  c.QueryInt("limit", 50),
+		Limit:  c.QueryInt("limit", 10),
 		Offset: c.QueryInt("offset", 0),
 		Status: c.Query("status"),
 		Search: c.Query("search"),
@@ -82,7 +82,7 @@ func (h *Handler) CreateContext(c *fiber.Ctx) error {
 	if title == "" {
 		return handler.SendBadRequest(c, nil, "Title is required")
 	}
-	
+
 	var systemInstructions *string
 	if si := c.FormValue("system_instructions"); si != "" {
 		systemInstructions = &si

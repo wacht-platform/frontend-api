@@ -40,19 +40,21 @@ func (s SignupAttemptStatus) Value() (driver.Value, error) {
 
 type SignupAttempt struct {
 	Model
-	SessionID       uint64                                 `json:"session_id"`
-	FirstName       string                                 `json:"first_name"`
-	LastName        string                                 `json:"last_name"`
-	Email           string                                 `json:"email"`
-	Username        string                                 `json:"username"`
-	PhoneNumber     string                                 `json:"phone_number"`
-	Password        string                                 `json:"-"`
-	RequiredFields  datatypes.JSONSlice[string]            `json:"required_fields"`
-	MissingFields   datatypes.JSONSlice[string]            `json:"missing_fields"`
-	CurrentStep     SignupAttemptStep                      `json:"current_step"`
-	RemainingSteps  datatypes.JSONSlice[SignupAttemptStep] `json:"remaining_steps"`
-	SSOProvider     SocialConnectionProvider               `json:"sso_provider,omitempty"`
-	SSOAccessToken  string                                 `json:"-"`
-	SSORefreshToken string                                 `json:"-"`
-	IsOAuthSignup   bool                                   `json:"is_oauth_signup" gorm:"is_oauth_signup"`
+	SessionID        uint64                                 `json:"session_id"`
+	FirstName        string                                 `json:"first_name"`
+	LastName         string                                 `json:"last_name"`
+	Email            string                                 `json:"email"`
+	Username         string                                 `json:"username"`
+	PhoneNumber      string                                 `json:"phone_number"`
+	PhoneCountryCode string                                 `json:"phone_country_code"`
+	Password         string                                 `json:"-"`
+	RequiredFields   datatypes.JSONSlice[string]            `json:"required_fields"`
+	MissingFields    datatypes.JSONSlice[string]            `json:"missing_fields"`
+	CurrentStep      SignupAttemptStep                      `json:"current_step"`
+	RemainingSteps   datatypes.JSONSlice[SignupAttemptStep] `json:"remaining_steps"`
+	Completed        bool                                   `json:"completed" gorm:"not null;default:false"`
+	SSOProvider      SocialConnectionProvider               `json:"sso_provider,omitempty"`
+	SSOAccessToken   string                                 `json:"-"`
+	SSORefreshToken  string                                 `json:"-"`
+	IsOAuthSignup    bool                                   `json:"is_oauth_signup" gorm:"is_oauth_signup"`
 }
