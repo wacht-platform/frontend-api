@@ -185,12 +185,22 @@ func (s *Service) GetContextMessages(deploymentID uint64, contextGroup *string, 
 		}
 	}
 
-	// Convert to ConversationMessage format
 	messages := make([]ConversationMessage, len(conversations))
 	for i, conv := range conversations {
+		role := "system"
+		switch conv.MessageType {
+		case "user_message":
+			role = "user"
+		case "agent_response", "assistant_acknowledgment", "assistant_ideation",
+			"assistant_action_planning", "action_execution_result", "assistant_validation":
+			role = "assistant"
+		case "user_input_request", "system_decision", "context_results", "execution_summary":
+			role = "system"
+		}
+
 		messages[i] = ConversationMessage{
 			ID:        fmt.Sprintf("%d", conv.ID),
-			Role:      extractRole(conv.Content),
+			Role:      role,
 			Content:   conv.Content,
 			Timestamp: conv.Timestamp,
 			Metadata:  extractMetadata(conv.MessageType),
@@ -198,16 +208,6 @@ func (s *Service) GetContextMessages(deploymentID uint64, contextGroup *string, 
 	}
 
 	return messages, hasMore, nil
-}
-
-func extractRole(content json.RawMessage) string {
-	var data map[string]interface{}
-	if err := json.Unmarshal(content, &data); err == nil {
-		if role, ok := data["role"].(string); ok {
-			return role
-		}
-	}
-	return "system"
 }
 
 func extractMetadata(messageType string) json.RawMessage {
