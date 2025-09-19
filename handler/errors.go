@@ -45,6 +45,12 @@ const (
 	ErrorCodeInternal                   = "INTERNAL"
 	ErrorCodeBadSignInAttempt           = "BAD_SIGN_IN_ATTEMPT"
 	ErrorCodeUserAlreadySignedIn        = "USER_ALREADY_SIGNED_IN"
+	ErrCodeInvalidInvitationToken       = "INVALID_INVITATION_TOKEN"
+	ErrCodeInvitationExpired            = "INVITATION_EXPIRED"
+	ErrCodeInvitationEmailMismatch      = "INVITATION_EMAIL_MISMATCH"
+	ErrCodeInvitationRequiresSignup     = "INVITATION_REQUIRES_SIGNUP"
+	ErrCodeInvitationRequiresSignin     = "INVITATION_REQUIRES_SIGNIN"
+	ErrCodeAlreadyOrganizationMember    = "ALREADY_ORGANIZATION_MEMBER"
 )
 
 var (

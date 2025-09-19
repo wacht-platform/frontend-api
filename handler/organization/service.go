@@ -23,14 +23,22 @@ var (
 )
 
 type OrgService struct {
-	s3 *service.S3Service
-	db *gorm.DB
+	s3   *service.S3Service
+	db   *gorm.DB
+	nats *service.NatsService
 }
 
 func NewOrgService() *OrgService {
+	natsService, err := service.NewNatsService()
+	if err != nil {
+		// Log error and panic - NATS is required for invitations
+		panic(fmt.Sprintf("Failed to initialize NATS service: %v", err))
+	}
+
 	return &OrgService{
-		s3: service.NewS3Service(),
-		db: database.Connection,
+		s3:   service.NewS3Service(),
+		db:   database.Connection,
+		nats: natsService,
 	}
 }
 

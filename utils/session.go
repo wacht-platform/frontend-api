@@ -9,6 +9,7 @@ import (
 
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
+	"gorm.io/datatypes"
 	"gorm.io/plugin/dbresolver"
 )
 
@@ -134,6 +135,14 @@ func parseUserFromMap(userData map[string]any) *model.User {
 		user.PrimaryEmailAddress = parsePrimaryEmailFromMap(primaryEmailData)
 	}
 
+	// Parse primary phone number ID
+	user.PrimaryPhoneNumberID = getOptionalUint64FromMap(userData, "primary_phone_number_id")
+
+	// Parse primary phone number object
+	if primaryPhoneData, ok := userData["primary_phone_number"].(map[string]any); ok {
+		user.PrimaryPhoneNumber = parsePrimaryPhoneFromMap(primaryPhoneData)
+	}
+
 	return user
 }
 
@@ -163,6 +172,28 @@ func parsePrimaryEmailFromMap(emailData map[string]any) *model.UserEmailAddress 
 	}
 
 	return email
+}
+
+// Parse primary phone from map
+func parsePrimaryPhoneFromMap(phoneData map[string]any) *model.UserPhoneNumber {
+	if phoneData == nil {
+		return nil
+	}
+
+	phone := &model.UserPhoneNumber{}
+
+	// Parse ID
+	if id, err := getUint64FromMap(phoneData, "id"); err == nil {
+		phone.ID = id
+	}
+
+	// Parse string fields
+	phone.PhoneNumber = getStringFromMap(phoneData, "phone_number")
+
+	// Parse bool fields
+	phone.Verified = getBoolFromMap(phoneData, "verified")
+
+	return phone
 }
 
 // Parse signin from map
@@ -259,6 +290,63 @@ func parseSigninAttemptFromMap(attemptData map[string]any) (*model.SignInAttempt
 	}
 	if identifierID, err := getUint64FromMap(attemptData, "identifier_id"); err == nil && identifierID != 0 {
 		attempt.IdentifierID = &identifierID
+	}
+
+	// Parse JSON fields
+	if remainingSteps, ok := attemptData["remaining_steps"]; ok && remainingSteps != nil {
+		if stepsArray, ok := remainingSteps.([]interface{}); ok {
+			steps := make([]model.SignInAttemptStep, 0, len(stepsArray))
+			for _, step := range stepsArray {
+				if stepStr, ok := step.(string); ok {
+					steps = append(steps, model.SignInAttemptStep(stepStr))
+				}
+			}
+			if len(steps) > 0 {
+				attempt.RemainingSteps = datatypes.NewJSONSlice(steps)
+			}
+		}
+	}
+
+	if missingFields, ok := attemptData["missing_fields"]; ok && missingFields != nil {
+		if fieldsArray, ok := missingFields.([]interface{}); ok {
+			fields := make([]string, 0, len(fieldsArray))
+			for _, field := range fieldsArray {
+				if fieldStr, ok := field.(string); ok {
+					fields = append(fields, fieldStr)
+				}
+			}
+			if len(fields) > 0 {
+				attempt.MissingFields = datatypes.NewJSONSlice(fields)
+			}
+		}
+	}
+
+	if requiredFields, ok := attemptData["required_fields"]; ok && requiredFields != nil {
+		if fieldsArray, ok := requiredFields.([]interface{}); ok {
+			fields := make([]string, 0, len(fieldsArray))
+			for _, field := range fieldsArray {
+				if fieldStr, ok := field.(string); ok {
+					fields = append(fields, fieldStr)
+				}
+			}
+			if len(fields) > 0 {
+				attempt.RequiredFields = datatypes.NewJSONSlice(fields)
+			}
+		}
+	}
+
+	if available2FAMethods, ok := attemptData["available_2fa_methods"]; ok && available2FAMethods != nil {
+		if methodsArray, ok := available2FAMethods.([]interface{}); ok {
+			methods := make([]string, 0, len(methodsArray))
+			for _, method := range methodsArray {
+				if methodStr, ok := method.(string); ok {
+					methods = append(methods, methodStr)
+				}
+			}
+			if len(methods) > 0 {
+				attempt.Available2FAMethods = datatypes.NewJSONSlice(methods)
+			}
+		}
 	}
 
 	return attempt, nil
@@ -375,6 +463,20 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			ELSE NULL
 		END as "ActiveSignin__User__primary_email_address",
 
+		-- Primary Phone Number for Active User
+		CASE
+			WHEN au.primary_phone_number_id IS NOT NULL
+			THEN (SELECT json_build_object(
+				'id', pp.id,
+				'phone_number', pp.phone_number,
+				'verified', pp.verified,
+				'verified_at', pp.verified_at,
+				'created_at', pp.created_at,
+				'updated_at', pp.updated_at
+			) FROM user_phone_numbers pp WHERE pp.id = au.primary_phone_number_id)
+			ELSE NULL
+		END as "ActiveSignin__User__primary_phone_number",
+
 		-- Organization Membership
 		aom.id as "ActiveSignin__ActiveOrganizationMembership__id",
 		aom.organization_id as "ActiveSignin__ActiveOrganizationMembership__organization_id",
@@ -461,7 +563,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 					'second_method_authenticated', sia.second_method_authenticated,
 					'second_method_authentication_required', sia.second_method_authentication_required,
 					'available_2fa_methods', sia.available_2fa_methods
-				) ORDER BY sia.created_at DESC
+				) ORDER BY sia.created_at ASC
 			) FROM sign_in_attempts sia WHERE sia.session_id = s.id),
 			'[]'::json
 		) as signin_attempts,
@@ -485,7 +587,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 					'remaining_steps', sua.remaining_steps,
 					'sso_provider', sua.sso_provider,
 					'is_oauth_signup', sua.is_oauth_signup
-				) ORDER BY sua.created_at DESC
+				) ORDER BY sua.created_at ASC
 			) FROM signup_attempts sua WHERE sua.session_id = s.id),
 			'[]'::json
 		) as signup_attempts,
@@ -578,6 +680,16 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 								'verified_at', pe.verified_at,
 								'verification_strategy', pe.verification_strategy
 							) FROM user_email_addresses pe WHERE pe.id = u.primary_email_address_id)
+							ELSE NULL
+						END,
+						'primary_phone_number', CASE
+							WHEN u.primary_phone_number_id IS NOT NULL
+							THEN (SELECT json_build_object(
+								'id', pp.id::text,
+								'phone_number', pp.phone_number,
+								'verified', pp.verified,
+								'verified_at', pp.verified_at
+							) FROM user_phone_numbers pp WHERE pp.id = u.primary_phone_number_id)
 							ELSE NULL
 						END
 					)
@@ -678,6 +790,19 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 					session.ActiveSignin.User.PrimaryEmailAddress = parsePrimaryEmailFromMap(primaryEmailMap)
 				} else {
 					log.Printf("Warning: failed to parse primary email JSON: %v", err)
+				}
+			}
+
+			// Parse primary phone number ID
+			session.ActiveSignin.User.PrimaryPhoneNumberID = getOptionalUint64FromMap(rawResult, "ActiveSignin__User__primary_phone_number_id")
+
+			// Parse primary phone JSON
+			if primaryPhoneJSON := getStringFromMap(rawResult, "ActiveSignin__User__primary_phone_number"); primaryPhoneJSON != "" {
+				var primaryPhoneMap map[string]any
+				if err := json.Unmarshal([]byte(primaryPhoneJSON), &primaryPhoneMap); err == nil {
+					session.ActiveSignin.User.PrimaryPhoneNumber = parsePrimaryPhoneFromMap(primaryPhoneMap)
+				} else {
+					log.Printf("Warning: failed to parse primary phone JSON: %v", err)
 				}
 			}
 		}

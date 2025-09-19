@@ -39,7 +39,6 @@ type AuthService struct {
 func NewAuthService() *AuthService {
 	natsService, err := service.NewNatsService()
 	if err != nil {
-		// Log error and panic - NATS is required
 		panic(fmt.Sprintf("Failed to initialize NATS service: %v", err))
 	}
 
@@ -89,9 +88,14 @@ func (s *AuthService) FindUserByEmailID(
 
 func (s *AuthService) FindUserByPhoneNumber(
 	phoneNumber string,
+	countryCode string,
 ) (*model.UserPhoneNumber, error) {
 	var userPhone model.UserPhoneNumber
-	if res := s.db.Where(&model.UserPhoneNumber{PhoneNumber: phoneNumber}).Joins("User").First(&userPhone); res.RowsAffected == 0 {
+	if res := s.db.Where(&model.UserPhoneNumber{
+		PhoneNumber: phoneNumber,
+		CountryCode: countryCode,
+		Verified:    true,
+	}).Joins("User").First(&userPhone); res.RowsAffected == 0 {
 		return nil, handler.ErrUserNotFound
 	} else if res.Error != nil {
 		return nil, res.Error
@@ -154,62 +158,6 @@ func (s *AuthService) ValidateUsernameUserStatus(
 	return nil
 }
 
-func (s *AuthService) DetermineAuthenticationStep(
-	verified, authenticated, secondFactorEnforced bool,
-	authSettings model.DeploymentAuthSettings,
-) ([]model.SignInAttemptStep, bool) {
-	var steps []model.SignInAttemptStep
-	completed := false
-
-	if !verified && authenticated {
-		steps = append(steps, model.SignInAttemptStepVerifyEmail)
-	}
-
-	if !authenticated &&
-		authSettings.FirstFactor == model.FirstFactorEmailOTP {
-		steps = append(steps, model.SignInAttemptStepVerifyEmailOTP)
-	}
-
-	if secondFactorEnforced {
-		steps = append(
-			steps,
-			model.SignInAttemptStepVerifySecondFactor,
-		)
-	}
-
-	completed = len(steps) == 0
-
-	return steps, completed
-}
-
-func (s *AuthService) DeterminePhoneAuthenticationStep(
-	verified, authenticated, secondFactorEnforced bool,
-	authSettings model.DeploymentAuthSettings,
-) ([]model.SignInAttemptStep, bool) {
-	var steps []model.SignInAttemptStep
-	completed := false
-
-	if !verified && authenticated {
-		steps = append(steps, model.SignInAttemptStepVerifyPhone)
-	}
-
-	if !authenticated &&
-		authSettings.FirstFactor == model.FirstFactorPhoneOTP {
-		steps = append(steps, model.SignInAttemptStepVerifyPhoneOTP)
-	}
-
-	if secondFactorEnforced {
-		steps = append(
-			steps,
-			model.SignInAttemptStepVerifySecondFactor,
-		)
-	}
-
-	completed = len(steps) == 0
-
-	return steps, completed
-}
-
 func (s *AuthService) MaskPhoneNumber(phoneNumber string) string {
 	if len(phoneNumber) < 4 {
 		return phoneNumber
@@ -263,7 +211,9 @@ func (s *AuthService) CreateSignInAttempt(
 	attempt.Completed = completed
 	attempt.UserID = userID
 	attempt.SessionID = sessionID
-	attempt.FirstMethodAuthenticated = userID != nil
+	// For password-based methods, if completed is true, they're authenticated
+	// For OTP/magic link methods, completed is always false initially
+	attempt.FirstMethodAuthenticated = completed
 
 	if slices.Contains(steps, model.SignInAttemptStepVerifySecondFactor) {
 		attempt.SecondMethodAuthenticationRequired = true
@@ -409,15 +359,37 @@ func (s *AuthService) HandleExistingUser(
 		}
 	}
 
-	if email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced {
-		attempt.UserID = &email.User.ID
-		attempt.IdentifierID = &email.ID
-		attempt.FirstMethodAuthenticated = true
-		attempt.SecondMethodAuthenticationRequired = true
-		attempt.CurrentStep = model.SignInAttemptStepVerifySecondFactor
-		attempt.RemainingSteps = datatypes.NewJSONSlice([]model.SignInAttemptStep{
-			model.SignInAttemptStepVerifySecondFactor,
-		})
+	missingFields := s.CheckMissingRequiredFields(&email.User, deploymentSettings)
+	requiresCompletion := len(missingFields) > 0
+	secondFactorEnforced := email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced
+
+	var steps []model.SignInAttemptStep
+	if secondFactorEnforced {
+		steps = append(steps, model.SignInAttemptStepVerifySecondFactor)
+	}
+	if requiresCompletion {
+		steps = append(steps, model.SignInAttemptStepCompleteProfile)
+	}
+
+	attempt.UserID = &email.User.ID
+	attempt.IdentifierID = &email.ID
+	attempt.FirstMethodAuthenticated = true // OAuth is already authenticated
+
+	if len(steps) > 0 {
+		// Has remaining steps
+		attempt.RemainingSteps = datatypes.NewJSONSlice(steps)
+		attempt.CurrentStep = steps[0]
+
+		if secondFactorEnforced {
+			attempt.SecondMethodAuthenticationRequired = true
+		}
+
+		if requiresCompletion {
+			attempt.RequiresCompletion = true
+			attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
+			requiredFields := s.GetRequiredFields(deploymentSettings)
+			attempt.RequiredFields = datatypes.NewJSONSlice(requiredFields)
+		}
 		attempt.Available2FAMethods = datatypes.NewJSONSlice(s.GetAvailable2FAMethods(email.User.ID))
 		return nil, nil
 	}
@@ -460,10 +432,10 @@ func (s *AuthService) CheckUsernameExists(username string) bool {
 	return count > 0
 }
 
-func (s *AuthService) CheckUserphoneExists(phone string) bool {
+func (s *AuthService) CheckUserphoneExists(phone string, countryCode string) bool {
 	var count int64
 	s.db.Model(&model.UserPhoneNumber{}).
-		Where("phone_number = ?", phone).
+		Where("phone_number = ? AND country_code = ?", phone, countryCode).
 		Count(&count)
 	return count > 0
 }
@@ -793,12 +765,7 @@ func (s *AuthService) CreateSignupAttempt(
 	missingFields := s.CheckMissingFieldsFromData(data, d.AuthSettings)
 
 	var steps []model.SignupAttemptStep
-	
-	fmt.Printf("DEBUG CreateSignupAttempt - EmailAddress.VerifySignup: %v, Email provided: %v\n", 
-		d.AuthSettings.EmailAddress.VerifySignup, b.Email != "")
-	fmt.Printf("DEBUG CreateSignupAttempt - PhoneNumber.VerifySignup: %v, PhoneNumber provided: %v (value: %s)\n", 
-		d.AuthSettings.PhoneNumber.VerifySignup, b.PhoneNumber != "", b.PhoneNumber)
-	
+
 	if d.AuthSettings.EmailAddress.VerifySignup && b.Email != "" {
 		steps = append(steps, model.SignupAttemptStepVerifyEmail)
 	}
@@ -806,8 +773,6 @@ func (s *AuthService) CreateSignupAttempt(
 		b.PhoneNumber != "" {
 		steps = append(steps, model.SignupAttemptStepVerifyPhone)
 	}
-	
-	fmt.Printf("DEBUG CreateSignupAttempt - Total verification steps added: %d\n", len(steps))
 
 	attempt := &model.SignupAttempt{
 		Model: model.Model{

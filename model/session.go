@@ -15,6 +15,7 @@ const (
 	SignInAttemptStepVerifyPhoneOTP          SignInAttemptStep = "verify_phone_otp"
 	SignInAttemptStepPasswordResetInitiation SignInAttemptStep = "password_reset_initiation"
 	SignInAttemptStepPasswordResetCompletion SignInAttemptStep = "password_reset_completion"
+	SignInAttemptStepCompleteProfile         SignInAttemptStep = "complete_profile"
 )
 
 type Session struct {

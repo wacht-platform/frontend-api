@@ -41,3 +41,28 @@ type OrganizationMemberQueryResult struct {
 	RolesJSON string `gorm:"column:roles_json"`
 	UserJSON  string `gorm:"column:user_json"`
 }
+
+type AcceptInvitationRequest struct {
+	Token string `json:"token" validate:"required"`
+}
+
+type AcceptInvitationResponse struct {
+	Organization    OrganizationInfo `json:"organization,omitempty"`
+	Workspace       *WorkspaceInfo   `json:"workspace,omitempty"`
+	SigninID        string           `json:"signin_id,omitempty"`
+	AlreadyMember   bool             `json:"already_member,omitempty"`
+	Message         string           `json:"message,omitempty"`
+	RequiresSignin  bool             `json:"requires_signin,omitempty"`
+	InvitedEmail    string           `json:"invited_email,omitempty"`
+	ErrorCode       string           `json:"error_code,omitempty"`
+}
+
+type OrganizationInfo struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type WorkspaceInfo struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}

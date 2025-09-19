@@ -10,9 +10,12 @@ import (
 
 	"github.com/godruoyi/go-snowflake"
 	"github.com/gofiber/fiber/v2"
+	"time"
+
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/utils"
 	"gorm.io/gorm"
 	"gorm.io/plugin/dbresolver"
 )
@@ -376,6 +379,12 @@ func (h *Handler) InviteMember(
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
+	// Generate secure token for invitation
+	token, err := utils.GenerateSecureToken(32)
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to generate invitation token")
+	}
+
 	invitation := model.OrganizationInvitation{
 		Model: model.Model{
 			ID: snowflake.ID(),
@@ -383,6 +392,7 @@ func (h *Handler) InviteMember(
 		OrganizationID: getuint64(orgID),
 		InviterID:      membership.ID,
 		Email:          b.Email,
+		Token:          token,
 	}
 
 	if b.RoleID != nil {
@@ -399,6 +409,39 @@ func (h *Handler) InviteMember(
 
 	if err := database.Connection.Create(&invitation).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to invite member")
+	}
+
+	// Get deployment and organization details for email
+	deployment := handler.GetDeployment(c)
+	var organization model.Organization
+	database.Connection.First(&organization, getuint64(orgID))
+
+	// Get inviter details
+	var inviterUser model.User
+	if membership.UserID != 0 {
+		database.Connection.First(&inviterUser, membership.UserID)
+	}
+
+	// Build invitation link
+	inviteLink := fmt.Sprintf("https://%s/invite?token=%s", deployment.FrontendHost, token)
+
+	// Send invitation email via NATS
+	inviterName := fmt.Sprintf("%s %s", inviterUser.FirstName, inviterUser.LastName)
+	if inviterName == " " {
+		inviterName = inviterUser.Username
+	}
+
+	err = h.service.nats.SendOrganizationInviteEmail(
+		deployment.ID,
+		b.Email,
+		inviterName,
+		organization.Name,
+		inviteLink,
+	)
+
+	if err != nil {
+		// Log error but don't fail the invitation creation
+		log.Printf("Failed to send invitation email: %v", err)
 	}
 
 	return handler.SendSuccess(c, invitation)
@@ -435,6 +478,207 @@ func (h *Handler) DiscardInvitation(
 	return handler.SendSuccess(c, fiber.Map{
 		"success": true,
 	})
+}
+
+func (h *Handler) AcceptInvitation(
+	c *fiber.Ctx,
+) error {
+	b, validation := handler.Validate[AcceptInvitationRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Invalid request")
+	}
+
+	session := handler.GetSession(c)
+
+	// Find invitation by token
+	var invitation model.OrganizationInvitation
+	if err := database.Connection.
+		Where("token = ?", b.Token).
+		Preload("Organization").
+		Preload("Workspace").
+		Preload("InitialOrganizationRole").
+		Preload("InitialWorkspaceRole").
+		First(&invitation).Error; err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid or expired invitation", handler.Error{
+			Code:    handler.ErrCodeInvalidInvitationToken,
+			Message: "The invitation token is invalid or does not exist",
+		})
+	}
+
+	// Check if invitation is expired
+	if invitation.Expiry.Before(time.Now()) {
+		response := AcceptInvitationResponse{
+			Message:      "This invitation has expired. Please request a new invitation.",
+			InvitedEmail: invitation.Email,
+			ErrorCode:    handler.ErrCodeInvitationExpired,
+		}
+		return handler.SendSuccess(c, response)
+	}
+
+	// Check if user has any signed-in accounts
+	if session.ActiveSignin == nil || len(session.Signins) == 0 {
+		response := AcceptInvitationResponse{
+			Message:        "Please sign in to accept this invitation",
+			RequiresSignin: true,
+			InvitedEmail:   invitation.Email,
+			ErrorCode:      handler.ErrCodeInvitationRequiresSignin,
+		}
+		return handler.SendSuccess(c, response)
+	}
+
+	// Find the user with the invited email address
+	var emailAddress model.UserEmailAddress
+	if err := database.Connection.
+		Where("email = ?", invitation.Email).
+		Preload("User").
+		First(&emailAddress).Error; err != nil {
+		// Email not found - user needs to sign up first
+		response := AcceptInvitationResponse{
+			Message:        fmt.Sprintf("No account exists with email %s. Please sign up first.", invitation.Email),
+			RequiresSignin: true,
+			InvitedEmail:   invitation.Email,
+			ErrorCode:      handler.ErrCodeInvitationRequiresSignup,
+		}
+		return handler.SendSuccess(c, response)
+	}
+
+	// Check if this user has an active signin in the current session
+	var matchingSignin *model.Signin
+	for _, signin := range session.Signins {
+		if signin.UserID != nil && emailAddress.UserID != nil && *signin.UserID == *emailAddress.UserID {
+			matchingSignin = &signin
+			break
+		}
+	}
+
+	if matchingSignin == nil {
+		response := AcceptInvitationResponse{
+			Message:        fmt.Sprintf("Please sign in with %s to accept this invitation", invitation.Email),
+			RequiresSignin: true,
+			InvitedEmail:   invitation.Email,
+			ErrorCode:      handler.ErrCodeInvitationEmailMismatch,
+		}
+		return handler.SendSuccess(c, response)
+	}
+
+	// Check if user is already a member
+	var existingMembership model.OrganizationMembership
+	err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", invitation.OrganizationID, *emailAddress.UserID).
+		First(&existingMembership).Error
+
+	if err == nil {
+		// Already a member, delete invitation and return success
+		database.Connection.Delete(&invitation)
+
+		var org model.Organization
+		database.Connection.First(&org, invitation.OrganizationID)
+
+		response := AcceptInvitationResponse{
+			Organization: OrganizationInfo{
+				ID:   fmt.Sprintf("%d", org.ID),
+				Name: org.Name,
+			},
+			SigninID:      fmt.Sprintf("%d", matchingSignin.ID),
+			AlreadyMember: true,
+			Message:       "You are already a member of this organization",
+		}
+
+		return handler.SendSuccess(c, response)
+	}
+
+	// Create organization membership
+	membership := model.OrganizationMembership{
+		Model: model.Model{
+			ID: snowflake.ID(),
+		},
+		OrganizationID: invitation.OrganizationID,
+		UserID:         *emailAddress.UserID,
+	}
+
+	// Start transaction to create membership and assign roles
+	err = database.Connection.Transaction(func(tx *gorm.DB) error {
+		// Create membership
+		if err := tx.Create(&membership).Error; err != nil {
+			return err
+		}
+
+		// Assign organization role if specified
+		if invitation.InitialOrganizationRoleID != nil {
+			if err := tx.Exec(
+				"INSERT INTO organization_membership_roles (organization_membership_id, organization_role_id, organization_id) VALUES (?, ?, ?)",
+				membership.ID,
+				*invitation.InitialOrganizationRoleID,
+				invitation.OrganizationID,
+			).Error; err != nil {
+				return err
+			}
+		}
+
+		// If workspace is specified, create workspace membership
+		if invitation.WorkspaceID != nil {
+			workspaceMembership := model.WorkspaceMembership{
+				Model: model.Model{
+					ID: snowflake.ID(),
+				},
+				WorkspaceID:    *invitation.WorkspaceID,
+				UserID:         *emailAddress.UserID,
+				OrganizationID: invitation.OrganizationID,
+			}
+
+			if err := tx.Create(&workspaceMembership).Error; err != nil {
+				return err
+			}
+
+			// Assign workspace role if specified
+			if invitation.InitialWorkspaceRoleID != nil {
+				if err := tx.Exec(
+					"INSERT INTO workspace_membership_roles (workspace_membership_id, workspace_role_id, workspace_id) VALUES (?, ?, ?)",
+					workspaceMembership.ID,
+					*invitation.InitialWorkspaceRoleID,
+					*invitation.WorkspaceID,
+				).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		// Delete the invitation
+		if err := tx.Delete(&invitation).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to accept invitation")
+	}
+
+	// Get organization details for response
+	var org model.Organization
+	database.Connection.First(&org, invitation.OrganizationID)
+
+	response := AcceptInvitationResponse{
+		Organization: OrganizationInfo{
+			ID:   fmt.Sprintf("%d", org.ID),
+			Name: org.Name,
+		},
+		SigninID: fmt.Sprintf("%d", matchingSignin.ID),
+		Message:  "Successfully joined the organization",
+	}
+
+	// Add workspace info if applicable
+	if invitation.WorkspaceID != nil {
+		var workspace model.Workspace
+		database.Connection.First(&workspace, *invitation.WorkspaceID)
+		response.Workspace = &WorkspaceInfo{
+			ID:   fmt.Sprintf("%d", workspace.ID),
+			Name: workspace.Name,
+		}
+	}
+
+	return handler.SendSuccess(c, response)
 }
 
 func (h *Handler) RemoveMember(

@@ -6,6 +6,7 @@ type OrganizationInvitation struct {
 	Model
 	OrganizationID            uint64                 `json:"organization_id,string"`
 	Email                     string                 `json:"email"`
+	Token                     string                 `json:"token" gorm:"unique;not null"`
 	InitialOrganizationRoleID *uint64                `json:"initial_organization_role_id,string,omitempty"`
 	InitialOrganizationRole   OrganizationRole       `json:"initial_organization_role" gorm:"foreignKey:InitialOrganizationRoleID"`
 	InviterID                 uint64                 `json:"inviter_id,string"`

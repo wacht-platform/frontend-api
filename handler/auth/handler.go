@@ -108,12 +108,17 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 
 	secondFactorEnforced := user.SecondFactorPolicy == model.SecondFactorPolicyEnforced
 
-	steps, completed := h.service.DetermineAuthenticationStep(
-		true,
-		authenticated,
-		secondFactorEnforced,
-		d.AuthSettings,
-	)
+	var steps []model.SignInAttemptStep
+
+	if secondFactorEnforced {
+		steps = append(steps, model.SignInAttemptStepVerifySecondFactor)
+	}
+
+	if requiresCompletion {
+		steps = append(steps, model.SignInAttemptStepCompleteProfile)
+	}
+
+	completed := len(steps) == 0 && authenticated
 
 	attempt := h.service.CreateSignInAttempt(
 		&user.ID,
@@ -123,6 +128,8 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 		steps,
 		completed,
 	)
+
+	attempt.FirstMethodAuthenticated = authenticated
 
 	if requiresCompletion {
 		attempt.RequiresCompletion = true
@@ -240,12 +247,21 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 
 	secondFactorEnforced := email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced
 
-	steps, completed := h.service.DetermineAuthenticationStep(
-		email.Verified,
-		authenticated,
-		secondFactorEnforced,
-		d.AuthSettings,
-	)
+	var steps []model.SignInAttemptStep
+
+	if !email.Verified && authenticated {
+		steps = append(steps, model.SignInAttemptStepVerifyEmail)
+	}
+
+	if secondFactorEnforced {
+		steps = append(steps, model.SignInAttemptStepVerifySecondFactor)
+	}
+
+	if requiresCompletion {
+		steps = append(steps, model.SignInAttemptStepCompleteProfile)
+	}
+
+	completed := len(steps) == 0 && authenticated
 
 	attempt := h.service.CreateSignInAttempt(
 		email.UserID,
@@ -255,6 +271,8 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 		steps,
 		completed,
 	)
+
+	attempt.FirstMethodAuthenticated = authenticated
 
 	if requiresCompletion {
 		attempt.RequiresCompletion = true
@@ -315,48 +333,119 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 }
 
 func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.Session, method model.SignInMethod) error {
-	var userID uint64
-	var identifierID uint64
+	var userID *uint64
+	var identifierID *uint64
+	var attempt *model.SignInAttempt
+	deployment := handler.GetDeployment(c)
+	requiresCompletion := false
+	missingFields := []string{}
 
 	if method == model.SignInMethodEmailOTP {
 		email, err := h.service.FindUserByVerifiedEmail(b.Email)
 
 		if email != nil {
-			userID = *email.UserID
-			identifierID = email.ID
+			userID = email.UserID
+			identifierID = &email.ID
 
 			if err = h.service.ValidateUserStatus(email); err != nil {
 				return handler.SendForbidden(c, nil, err.Error(), handler.ErrUserDisabled)
 			}
+
+			missingFields = h.service.CheckMissingRequiredFields(&email.User, deployment.AuthSettings)
+			requiresCompletion = len(missingFields) > 0
+
+			secondFactorEnforced := email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced
+
+			steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyEmailOTP}
+			if secondFactorEnforced {
+				steps = append(steps, model.SignInAttemptStepVerifySecondFactor)
+			}
+			if requiresCompletion {
+				steps = append(steps, model.SignInAttemptStepCompleteProfile)
+			}
+
+			attempt = h.service.CreateSignInAttempt(
+				userID,
+				identifierID,
+				session.ID,
+				method,
+				steps,
+				false,
+			)
+		} else {
+			steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyEmailOTP}
+			attempt = h.service.CreateSignInAttempt(
+				nil,
+				nil,
+				session.ID,
+				method,
+				steps,
+				false,
+			)
 		}
 	} else if method == model.SignInMethodPhoneOTP {
-		phone, err := h.service.FindUserByPhoneNumber(b.Phone)
+		phone, err := h.service.FindUserByPhoneNumber(b.Phone, b.PhoneCountryCode)
 
 		if phone != nil {
-			userID = phone.User.ID
-			identifierID = phone.ID
+			userID = &phone.User.ID
+			identifierID = &phone.ID
 
 			if err = h.service.ValidatePhoneUserStatus(phone); err != nil {
 				return handler.SendForbidden(c, nil, err.Error(), handler.ErrUserDisabled)
 			}
+
+			missingFields = h.service.CheckMissingRequiredFields(&phone.User, deployment.AuthSettings)
+			requiresCompletion = len(missingFields) > 0
+
+
+			secondFactorEnforced := phone.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced
+
+			steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyPhoneOTP}
+			if secondFactorEnforced {
+				steps = append(steps, model.SignInAttemptStepVerifySecondFactor)
+			}
+			if requiresCompletion {
+				steps = append(steps, model.SignInAttemptStepCompleteProfile)
+			}
+
+			attempt = h.service.CreateSignInAttempt(
+				userID,
+				identifierID,
+				session.ID,
+				method,
+				steps,
+				false,
+			)
+		} else {
+			steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyPhoneOTP}
+			attempt = h.service.CreateSignInAttempt(
+				nil,
+				nil,
+				session.ID,
+				method,
+				steps,
+				false,
+			)
 		}
 	}
 
-	steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyEmailOTP}
-	if method == model.SignInMethodPhoneOTP {
-		steps = []model.SignInAttemptStep{model.SignInAttemptStepVerifyPhoneOTP}
+	// Set profile completion requirements if needed
+	// BUT don't set FirstMethodAuthenticated yet - that happens after OTP verification
+	if requiresCompletion {
+		attempt.RequiresCompletion = true
+		attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
+		requiredFields := h.service.GetRequiredFields(deployment.AuthSettings)
+		attempt.RequiredFields = datatypes.NewJSONSlice(requiredFields)
+		// DO NOT set FirstMethodAuthenticated here - OTP hasn't been verified yet
+		attempt.FirstMethodAuthenticated = false
 	}
 
-	attempt := h.service.CreateSignInAttempt(
-		&userID,
-		&identifierID,
-		session.ID,
-		method,
-		steps,
-		false,
-	)
-
 	err := database.Connection.Create(attempt).Error
+
+	if requiresCompletion {
+		var savedAttempt model.SignInAttempt
+		database.Connection.Where("id = ?", attempt.ID).First(&savedAttempt)
+	}
 
 	if err != nil &&
 		err.(*pgconn.PgError).ConstraintName == "idx_session_user_id" {
@@ -379,6 +468,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 
 func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
 	email, _ := h.service.FindUserByVerifiedEmail(b.Email)
+
 	steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyEmailLink}
 	requiresCompletion := false
 	missingFields := []string{}
@@ -403,15 +493,20 @@ func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.D
 			steps = append(steps, model.SignInAttemptStepVerifySecondFactor)
 		}
 
+		if requiresCompletion {
+			steps = append(steps, model.SignInAttemptStepCompleteProfile)
+		}
+
 		attempt = h.service.CreateSignInAttempt(
 			email.UserID,
 			&email.ID,
 			session.ID,
 			model.SignInMethodMagicLink,
 			steps,
-			false,
+			false, // Never complete immediately for magic link
 		)
 	} else {
+		// New user via magic link - no profile completion needed yet
 		attempt = h.service.CreateSignInAttempt(
 			nil,
 			nil,
@@ -421,6 +516,9 @@ func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.D
 			false,
 		)
 	}
+
+	// FirstMethodAuthenticated will be set after magic link is verified
+	attempt.FirstMethodAuthenticated = false
 
 	if requiresCompletion {
 		attempt.RequiresCompletion = true
@@ -496,6 +594,24 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 		)
 	}
 
+	inviteToken := c.Query("invite_token")
+	if inviteToken != "" && b.Email != "" {
+		var invitation model.DeploymentInvitation
+		err := database.Connection.
+			Where("token = ? AND deployment_id = ? AND expiry > ?",
+				inviteToken, d.ID, time.Now()).
+			First(&invitation).Error
+
+		if err == nil && invitation.EmailAddress != b.Email {
+			return handler.SendBadRequest(
+				c,
+				nil,
+				"You must sign up with the invited email address",
+				handler.ErrBadRequestBody,
+			)
+		}
+	}
+
 	var errors []handler.Error
 
 	if b.Email != "" && h.service.CheckEmailExists(b.Email) {
@@ -507,7 +623,7 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 	}
 
 	if b.PhoneNumber != "" &&
-		h.service.CheckUserphoneExists(b.PhoneNumber) {
+		h.service.CheckUserphoneExists(b.PhoneNumber, b.PhoneCountryCode) {
 		errors = append(errors, handler.ErrPhoneNumberExists)
 	}
 
@@ -747,7 +863,6 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 	// Get redirect_uri from the state data
 	customRedirectURI := stateData.RedirectURI
 
-	// Check if attempt is expired (more than 10 minutes old)
 	if time.Since(attempt.CreatedAt) > 10*time.Minute {
 		return handler.SendBadRequest(
 			c,
@@ -876,18 +991,41 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			return err
 		}
 
-		if u.SecondFactorPolicy == model.SecondFactorPolicyEnforced {
-			attempt.UserID = &u.ID
-			attempt.IdentifierID = &email.ID
-			attempt.FirstMethodAuthenticated = true
-			attempt.SecondMethodAuthenticationRequired = true
-			attempt.CurrentStep = model.SignInAttemptStepVerifySecondFactor
-			attempt.RemainingSteps = datatypes.NewJSONSlice([]model.SignInAttemptStep{
-				model.SignInAttemptStepVerifySecondFactor,
-			})
-			attempt.Available2FAMethods = datatypes.NewJSONSlice([]string{})
+		missingFields := h.service.CheckMissingRequiredFields(&u, deployment.AuthSettings)
+		requiresCompletion := len(missingFields) > 0
+		secondFactorEnforced := u.SecondFactorPolicy == model.SecondFactorPolicyEnforced
+
+		var steps []model.SignInAttemptStep
+		if secondFactorEnforced {
+			steps = append(steps, model.SignInAttemptStepVerifySecondFactor)
+		}
+		if requiresCompletion {
+			steps = append(steps, model.SignInAttemptStepCompleteProfile)
+		}
+
+		attempt.UserID = &u.ID
+		attempt.IdentifierID = &email.ID
+		attempt.FirstMethodAuthenticated = true // OAuth is already authenticated
+
+		if len(steps) > 0 {
+			// Has remaining steps
+			attempt.RemainingSteps = datatypes.NewJSONSlice(steps)
+			attempt.CurrentStep = steps[0]
 			attempt.Completed = false
+
+			if secondFactorEnforced {
+				attempt.SecondMethodAuthenticationRequired = true
+				attempt.Available2FAMethods = datatypes.NewJSONSlice([]string{})
+			}
+
+			if requiresCompletion {
+				attempt.RequiresCompletion = true
+				attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
+				requiredFields := h.service.GetRequiredFields(deployment.AuthSettings)
+				attempt.RequiredFields = datatypes.NewJSONSlice(requiredFields)
+			}
 		} else {
+			// No remaining steps - complete signin
 			signIn := h.service.CreateSignin(u.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 
 			if err := tx.Create(&signIn).Error; err != nil {
@@ -1083,12 +1221,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 		case model.SignInAttemptStepVerifyEmailLink:
-			fmt.Printf("DEBUG: PrepareVerification for magic link, attempt ID: %d, IdentifierID: %v\n", attempt.ID, attempt.IdentifierID)
-			if attempt.IdentifierID != nil {
-				fmt.Printf("DEBUG: IdentifierID value in PrepareVerification: %d\n", *attempt.IdentifierID)
-			}
 			if attempt.IdentifierID == nil {
-				fmt.Println("DEBUG: IdentifierID is nil, returning without sending magic link")
 				return handler.SendSuccess[any](c, nil)
 			}
 
@@ -1549,15 +1682,9 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 						"Error fetching user",
 					)
 				}
-				if attempt.CurrentStep == model.SignInAttemptStepVerifyPhoneOTP &&
-					phone.Verified {
-					return handler.SendBadRequest(
-						c,
-						nil,
-						"Phone number already verified",
-					)
-				}
 
+				// For sign-in, if phone is already verified, we should still validate the OTP
+				// The OTP serves as the authentication method for phone-based sign-in
 				isValid, err := h.service.VerifyPhoneOTP(
 					deployment.ID,
 					phone.PhoneNumber,
@@ -1579,16 +1706,27 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					)
 				}
 
-				if len(attempt.RemainingSteps) == 1 {
+				// OTP is valid - now set FirstMethodAuthenticated
+				attempt.FirstMethodAuthenticated = true
+
+				// Now advance through the remaining steps
+				if len(attempt.RemainingSteps) > 1 {
+					// Move to next step (could be 2FA or profile completion)
+					attempt.RemainingSteps = attempt.RemainingSteps[1:]
+					attempt.CurrentStep = attempt.RemainingSteps[0]
+
+					if attempt.CurrentStep == model.SignInAttemptStepVerifySecondFactor {
+						attempt.SecondMethodAuthenticationRequired = true
+					}
+					// If next step is profile completion, RequiresCompletion is already set
+				} else {
+					// No more steps - authentication is complete
 					attempt.Completed = true
 					attempt.RemainingSteps = nil
 					signin = h.service.CreateSignin(phone.User.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 
 					session.Signins = append(session.Signins, *signin)
 					session.ActiveSigninID = &signin.ID
-				} else {
-					attempt.RemainingSteps = attempt.RemainingSteps[1:]
-					attempt.CurrentStep = attempt.RemainingSteps[0]
 				}
 
 				if err := database.Connection.Transaction(func(tx *gorm.DB) error {
@@ -1908,6 +2046,21 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				session.ActiveSigninID = &signIn.ID
 				session.ActiveSignin = signIn
 
+				inviteToken := c.Query("invite_token")
+				if inviteToken != "" {
+					var invitation model.DeploymentInvitation
+					// First check if invitation exists and is valid
+					if err := tx.Where("token = ? AND deployment_id = ? AND expiry > ?",
+						inviteToken, d.ID, time.Now()).
+						First(&invitation).Error; err == nil {
+						// Verify the email matches the invitation
+						if invitation.EmailAddress == email.EmailAddress {
+							// Delete the invitation as it's been accepted
+							tx.Delete(&invitation)
+						}
+					}
+				}
+
 				return tx.Save(attempt).Error
 			}); err != nil {
 				return handler.SendInternalServerError(c, err, "Something went wrong")
@@ -1950,7 +2103,6 @@ func (h *Handler) CompleteProfile(c *fiber.Ctx) error {
 	signinErr := database.Connection.Where("id = ? AND session_id = ? AND requires_completion = true", attemptID, session.ID).First(&signinAttempt).Error
 
 	if signinErr == nil {
-		// Handle signin profile completion
 		return h.handleSigninProfileCompletion(c, &signinAttempt, b, session, deployment)
 	}
 
@@ -1959,7 +2111,6 @@ func (h *Handler) CompleteProfile(c *fiber.Ctx) error {
 	signupErr := database.Connection.Where("id = ? AND session_id = ? AND is_oauth_signup = true", attemptID, session.ID).First(&signupAttempt).Error
 
 	if signupErr == nil {
-		// Handle OAuth signup completion
 		return h.handleOAuthSignupCompletion(c, &signupAttempt, b, session, deployment)
 	}
 
@@ -2193,15 +2344,15 @@ func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
 		if err := tx.Save(&user).Error; err != nil {
 			return err
 		}
-		return tx.Save(&attempt).Error
+		return tx.Save(attempt).Error
 	}); err != nil {
 		return handler.SendInternalServerError(c, err, "Error saving attempt")
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"signin_attempt": attempt,
-		"session":        session,
-	})
+	// Follow the same pattern as AttemptVerification - append updated attempt to session
+	session.SigninAttempts = append(session.SigninAttempts, attempt)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+	return handler.SendSuccess(c, session)
 }
 
 func (h *Handler) ForgotPassword(c *fiber.Ctx) error {
@@ -2513,6 +2664,16 @@ func (h *Handler) handleSigninProfileCompletion(c *fiber.Ctx, attempt *model.Sig
 		attempt.RemainingSteps = datatypes.NewJSONSlice(steps)
 		if attempt.CurrentStep == "" && len(steps) > 0 {
 			attempt.CurrentStep = steps[0]
+		}
+	} else if attempt.CurrentStep == model.SignInAttemptStepCompleteProfile {
+		// Profile completion is done, advance to next step if any
+		if len(attempt.RemainingSteps) > 1 {
+			attempt.RemainingSteps = attempt.RemainingSteps[1:]
+			attempt.CurrentStep = attempt.RemainingSteps[0]
+		} else {
+			// No more steps, mark as complete
+			attempt.RemainingSteps = nil
+			attempt.CurrentStep = ""
 		}
 	}
 
