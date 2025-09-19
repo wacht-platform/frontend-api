@@ -967,6 +967,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 
 		email := model.UserEmailAddress{
 			Model:        model.Model{ID: primaryAddressID},
+			DeploymentID: deployment.ID,
 			EmailAddress: user.Email,
 			IsPrimary:    true,
 			UserID:       &u.ID,
