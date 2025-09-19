@@ -2057,7 +2057,7 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 				IsPrimary:            false,
 				Verified:             true,
 				VerifiedAt:           time.Now(),
-				VerificationStrategy: getVerificationStrategyForProvider(provider),
+				VerificationStrategy: utils.GetVerificationStrategyForProvider(provider),
 			}
 
 			if err := tx.Create(&userEmailAddress).Error; err != nil {
@@ -2115,23 +2115,3 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 	})
 }
 
-func getVerificationStrategyForProvider(provider string) model.VerificationStrategy {
-	switch provider {
-	case "google_oauth":
-		return model.OauthGoogle
-	case "github_oauth":
-		return model.OauthGithub
-	case "microsoft_oauth":
-		return model.OauthMicrosoft
-	case "facebook_oauth":
-		return model.OauthFacebook
-	case "linkedin_oauth":
-		return model.OauthLinkedIn
-	case "discord_oauth":
-		return model.OauthDiscord
-	case "apple_oauth":
-		return model.OauthApple
-	default:
-		return model.Otp
-	}
-}

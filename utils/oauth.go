@@ -656,3 +656,24 @@ func GenerateOAuthConnectURL(
 
 	return url, nil
 }
+
+func GetVerificationStrategyForProvider(provider string) model.VerificationStrategy {
+	switch provider {
+	case "google_oauth":
+		return model.OauthGoogle
+	case "github_oauth":
+		return model.OauthGithub
+	case "microsoft_oauth":
+		return model.OauthMicrosoft
+	case "facebook_oauth":
+		return model.OauthFacebook
+	case "linkedin_oauth":
+		return model.OauthLinkedIn
+	case "discord_oauth":
+		return model.OauthDiscord
+	case "apple_oauth":
+		return model.OauthApple
+	default:
+		return model.Otp
+	}
+}

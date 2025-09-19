@@ -397,7 +397,6 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 			missingFields = h.service.CheckMissingRequiredFields(&phone.User, deployment.AuthSettings)
 			requiresCompletion = len(missingFields) > 0
 
-
 			secondFactorEnforced := phone.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced
 
 			steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyPhoneOTP}
@@ -905,13 +904,11 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 	}
 
 	var email model.UserEmailAddress
-	exists := database.Connection.Joins(
-		"User",
-		database.Connection.Where(
-			&model.User{DeploymentID: deployment.ID},
-		),
-	).Preload("User.SocialConnections").
-		Where("email = ?", user.Email).First(&email).RowsAffected > 0
+	exists := database.Connection.
+		Where("email_address = ? AND deployment_id = ?", user.Email, deployment.ID).
+		Preload("User").
+		Preload("User.SocialConnections").
+		First(&email).RowsAffected > 0
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
 		if exists {
@@ -955,6 +952,8 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			Model: model.Model{
 				ID: snowflake.ID(),
 			},
+			FirstName:             user.FirstName,
+			LastName:              user.LastName,
 			SchemaVersion:         model.SchemaVersionV1,
 			SecondFactorPolicy:    deployment.AuthSettings.SecondFactorPolicy,
 			DeploymentID:          deployment.ID,
@@ -966,11 +965,14 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		}
 
 		email := model.UserEmailAddress{
-			Model:        model.Model{ID: primaryAddressID},
-			DeploymentID: deployment.ID,
-			EmailAddress: user.Email,
-			IsPrimary:    true,
-			UserID:       &u.ID,
+			Model:                model.Model{ID: primaryAddressID},
+			DeploymentID:         deployment.ID,
+			EmailAddress:         user.Email,
+			IsPrimary:            true,
+			Verified:             true,
+			VerifiedAt:           time.Now(),
+			VerificationStrategy: utils.GetVerificationStrategyForProvider(string(attempt.SSOProvider)),
+			UserID:               &u.ID,
 		}
 
 		if err := tx.Create(&email).Error; err != nil {
@@ -1071,6 +1073,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		)
 	}
 
+	session.SigninAttempts = append(session.SigninAttempts, attempt)
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	response := fiber.Map{
