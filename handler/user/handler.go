@@ -1867,8 +1867,8 @@ func (h *Handler) InitConnectSocial(c *fiber.Ctx) error {
 
 	finalRedirectURI := customRedirectURI
 	if finalRedirectURI == "" {
-		if deployment.UISettings != nil && deployment.UISettings.AfterSigninRedirectUrl != "" {
-			finalRedirectURI = deployment.UISettings.AfterSigninRedirectUrl
+		if deployment.UISettings.AfterSigninRedirectURL != "" {
+			finalRedirectURI = deployment.UISettings.AfterSigninRedirectURL
 		} else {
 			finalRedirectURI = fmt.Sprintf("https://%s", deployment.FrontendHost)
 		}
