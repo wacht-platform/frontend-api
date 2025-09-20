@@ -1865,9 +1865,13 @@ func (h *Handler) InitConnectSocial(c *fiber.Ctx) error {
 		)
 	}
 
-	fullRedirectURI := fmt.Sprintf("https://%s/sso-callback", deployment.FrontendHost)
-	if customRedirectURI != "" {
-		fullRedirectURI = fmt.Sprintf("%s?redirect_uri=%s", fullRedirectURI, customRedirectURI)
+	finalRedirectURI := customRedirectURI
+	if finalRedirectURI == "" {
+		if deployment.UISettings != nil && deployment.UISettings.AfterSigninRedirectUrl != "" {
+			finalRedirectURI = deployment.UISettings.AfterSigninRedirectUrl
+		} else {
+			finalRedirectURI = fmt.Sprintf("https://%s", deployment.FrontendHost)
+		}
 	}
 
 	secret := utils.GetOAuthStateSecret(deployment.ID, keypair.PrivateKey)
@@ -1876,7 +1880,7 @@ func (h *Handler) InitConnectSocial(c *fiber.Ctx) error {
 		UserID:      session.ActiveSignin.UserID,
 		SessionID:   &session.ID,
 		Provider:    provider,
-		RedirectURI: fullRedirectURI,
+		RedirectURI: finalRedirectURI,
 	}
 	stateToken, err := utils.GenerateOAuthState(stateData, secret)
 	if err != nil {

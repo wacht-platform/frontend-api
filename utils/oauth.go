@@ -38,16 +38,20 @@ func GenerateVerificationUrlForDeployment(
 		return "", err
 	}
 
-	fullRedirectURI := fmt.Sprintf("https://%s/sso-callback", deployment.FrontendHost)
-	if customRedirectURI != "" {
-		fullRedirectURI = fmt.Sprintf("%s?redirect_uri=%s", fullRedirectURI, customRedirectURI)
+	finalRedirectURI := customRedirectURI
+	if finalRedirectURI == "" {
+		if deployment.UISettings != nil && deployment.UISettings.AfterSigninRedirectUrl != "" {
+			finalRedirectURI = deployment.UISettings.AfterSigninRedirectUrl
+		} else {
+			finalRedirectURI = fmt.Sprintf("https://%s", deployment.FrontendHost)
+		}
 	}
 
 	secret := GetOAuthStateSecret(deployment.ID, keypair.PrivateKey)
 	stateData := OAuthStateData{
 		Action:      "sign_in",
 		AttemptID:   &attempt.ID,
-		RedirectURI: fullRedirectURI,
+		RedirectURI: finalRedirectURI,
 	}
 	state, err := GenerateOAuthState(stateData, secret)
 	if err != nil {
