@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -916,7 +917,6 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		)
 	}
 
-	// Get redirect_uri from the state data
 	customRedirectURI := stateData.RedirectURI
 
 	if time.Since(attempt.CreatedAt) > 10*time.Minute {
@@ -1065,10 +1065,9 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 
 		attempt.UserID = &u.ID
 		attempt.IdentifierID = &email.ID
-		attempt.FirstMethodAuthenticated = true // OAuth is already authenticated
+		attempt.FirstMethodAuthenticated = true
 
 		if len(steps) > 0 {
-			// Has remaining steps
 			attempt.RemainingSteps = datatypes.NewJSONSlice(steps)
 			attempt.CurrentStep = steps[0]
 			attempt.Completed = false
@@ -1129,7 +1128,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		)
 	}
 
-	if err := database.Connection.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]interface{}{
+	if err := database.Connection.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]any{
 		"active_signin_id": session.ActiveSigninID,
 	}).Error; err != nil {
 		return handler.SendInternalServerError(
@@ -1148,6 +1147,8 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 	if customRedirectURI != "" {
 		response["redirect_uri"] = customRedirectURI
 	}
+
+	log.Println("sending response", response)
 
 	return handler.SendSuccess(c, response)
 }
