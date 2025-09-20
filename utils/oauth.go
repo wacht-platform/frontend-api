@@ -33,7 +33,7 @@ func GenerateVerificationUrlForDeployment(
 ) (string, error) {
 	url := ""
 
-	conf, err := GetOAuthConfigForDeployment(ssoProvider, deployment, customRedirectURI)
+	conf, err := GetOAuthConfigForDeployment(ssoProvider, deployment)
 	if err != nil {
 		return "", err
 	}
@@ -49,9 +49,10 @@ func GenerateVerificationUrlForDeployment(
 
 	secret := GetOAuthStateSecret(deployment.ID, keypair.PrivateKey)
 	stateData := OAuthStateData{
-		Action:      "sign_in",
-		AttemptID:   &attempt.ID,
-		RedirectURI: finalRedirectURI,
+		Action:       "sign_in",
+		AttemptID:    &attempt.ID,
+		RedirectURI:  finalRedirectURI,
+		FrontendHost: deployment.FrontendHost,
 	}
 	state, err := GenerateOAuthState(stateData, secret)
 	if err != nil {
@@ -97,7 +98,6 @@ func GenerateVerificationUrlForDeployment(
 func GetOAuthConfigForDeployment(
 	provider model.SocialConnectionProvider,
 	deployment *model.Deployment,
-	customRedirectURI string,
 ) (*oauth2.Config, error) {
 	cred, err := config.GetDeploymentOAuthCredentials(deployment, provider)
 	if err != nil {
@@ -116,7 +116,6 @@ func GetOAuthConfigForDeployment(
 			deployment.FrontendHost,
 		)
 	} else {
-		// For staging, use the OAuth relay service (no trailing slash)
 		conf.RedirectURL = "https://ssocallback.wacht.services"
 	}
 
@@ -585,7 +584,6 @@ func ExchangeTokenForUser(
 func GenerateOAuthConnectURL(
 	provider string,
 	stateToken string,
-	customRedirectURI string,
 	deployment *model.Deployment,
 ) (string, error) {
 	var ssoProvider model.SocialConnectionProvider

@@ -12,13 +12,14 @@ import (
 )
 
 type OAuthStateData struct {
-	Action      string
-	Timestamp   int64
-	AttemptID   *uint64
-	UserID      *uint64
-	SessionID   *uint64
-	Provider    string
-	RedirectURI string
+	Action       string
+	Timestamp    int64
+	AttemptID    *uint64
+	UserID       *uint64
+	SessionID    *uint64
+	Provider     string
+	RedirectURI  string
+	FrontendHost string
 }
 
 func GenerateOAuthState(data OAuthStateData, secret []byte) (string, error) {
@@ -36,23 +37,25 @@ func GenerateOAuthState(data OAuthStateData, secret []byte) (string, error) {
 		if data.AttemptID == nil {
 			return "", errors.New("attempt_id is required for sign_in action")
 		}
-		dataStr = fmt.Sprintf("%s|%d|%s|%d",
+		dataStr = fmt.Sprintf("%s|%d|%s|%d|%s",
 			data.Action,
 			*data.AttemptID,
 			data.RedirectURI,
 			data.Timestamp,
+			data.FrontendHost,
 		)
 	case "connect_social":
 		if data.UserID == nil || data.SessionID == nil {
 			return "", errors.New("user_id and session_id are required for connect_social action")
 		}
-		dataStr = fmt.Sprintf("%s|%d|%d|%s|%s|%d",
+		dataStr = fmt.Sprintf("%s|%d|%d|%s|%s|%d|%s",
 			data.Action,
 			*data.UserID,
 			*data.SessionID,
 			data.Provider,
 			data.RedirectURI,
 			data.Timestamp,
+			data.FrontendHost,
 		)
 	default:
 		return "", fmt.Errorf("invalid action: %s", data.Action)
@@ -101,7 +104,7 @@ func ValidateOAuthState(state string, secret []byte, maxAge time.Duration) (*OAu
 
 	switch result.Action {
 	case "sign_in":
-		if len(dataParts) != 4 {
+		if len(dataParts) != 5 {
 			return nil, errors.New("invalid sign_in state format")
 		}
 		attemptID, err := strconv.ParseUint(dataParts[1], 10, 64)
@@ -114,9 +117,10 @@ func ValidateOAuthState(state string, secret []byte, maxAge time.Duration) (*OAu
 		if err != nil {
 			return nil, fmt.Errorf("invalid timestamp: %w", err)
 		}
+		result.FrontendHost = dataParts[4]
 
 	case "connect_social":
-		if len(dataParts) != 6 {
+		if len(dataParts) != 7 {
 			return nil, errors.New("invalid connect_social state format")
 		}
 		userID, err := strconv.ParseUint(dataParts[1], 10, 64)
@@ -135,6 +139,7 @@ func ValidateOAuthState(state string, secret []byte, maxAge time.Duration) (*OAu
 		if err != nil {
 			return nil, fmt.Errorf("invalid timestamp: %w", err)
 		}
+		result.FrontendHost = dataParts[6]
 
 	default:
 		return nil, fmt.Errorf("unknown action: %s", result.Action)

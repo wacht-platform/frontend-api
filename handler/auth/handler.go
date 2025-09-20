@@ -2,7 +2,6 @@ package auth
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"time"
 
@@ -928,7 +927,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		)
 	}
 
-	conf, err := utils.GetOAuthConfigForDeployment(attempt.SSOProvider, &deployment, customRedirectURI)
+	conf, err := utils.GetOAuthConfigForDeployment(attempt.SSOProvider, &deployment)
 	if err != nil {
 		return handler.SendBadRequest(
 			c,
@@ -1147,8 +1146,6 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 	if customRedirectURI != "" {
 		response["redirect_uri"] = customRedirectURI
 	}
-
-	log.Println("sending response", response)
 
 	return handler.SendSuccess(c, response)
 }

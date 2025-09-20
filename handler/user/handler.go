@@ -1876,11 +1876,12 @@ func (h *Handler) InitConnectSocial(c *fiber.Ctx) error {
 
 	secret := utils.GetOAuthStateSecret(deployment.ID, keypair.PrivateKey)
 	stateData := utils.OAuthStateData{
-		Action:      "connect_social",
-		UserID:      session.ActiveSignin.UserID,
-		SessionID:   &session.ID,
-		Provider:    provider,
-		RedirectURI: finalRedirectURI,
+		Action:       "connect_social",
+		UserID:       session.ActiveSignin.UserID,
+		SessionID:    &session.ID,
+		Provider:     provider,
+		RedirectURI:  finalRedirectURI,
+		FrontendHost: deployment.FrontendHost,
 	}
 	stateToken, err := utils.GenerateOAuthState(stateData, secret)
 	if err != nil {
@@ -1891,7 +1892,7 @@ func (h *Handler) InitConnectSocial(c *fiber.Ctx) error {
 		)
 	}
 
-	url, err := utils.GenerateOAuthConnectURL(provider, stateToken, customRedirectURI, &deployment)
+	url, err := utils.GenerateOAuthConnectURL(provider, stateToken, &deployment)
 	if err != nil {
 		return handler.SendBadRequest(
 			c,
@@ -2018,7 +2019,7 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Invalid provider")
 	}
 
-	conf, err := utils.GetOAuthConfigForDeployment(ssoProvider, &deployment, customRedirectURI)
+	conf, err := utils.GetOAuthConfigForDeployment(ssoProvider, &deployment)
 	if err != nil {
 		return handler.SendBadRequest(
 			c,
@@ -2100,7 +2101,6 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 	})
 
 	if err != nil {
-		// Return specific errors
 		if err == handler.ErrEmailExists {
 			return handler.SendBadRequest(c, nil, "This email address is already associated with another user")
 		}
@@ -2118,4 +2118,3 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 		"redirect_uri": customRedirectURI,
 	})
 }
-
