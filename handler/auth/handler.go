@@ -68,6 +68,17 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 		)
 	}
 
+	for _, signin := range session.Signins {
+		if signin.UserID != nil && *signin.UserID == user.ID {
+			return handler.SendBadRequest(
+				c,
+				nil,
+				"User already signed in",
+				handler.ErrUserAlreadySignedIn,
+			)
+		}
+	}
+
 	if err = h.service.ValidateUsernameUserStatus(user); err != nil {
 		return handler.SendForbidden(
 			c,
@@ -205,6 +216,17 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 			err,
 			"Something went wrong",
 		)
+	}
+
+	for _, signin := range session.Signins {
+		if signin.UserID != nil && email.User.ID != 0 && *signin.UserID == email.User.ID {
+			return handler.SendBadRequest(
+				c,
+				nil,
+				"User already signed in",
+				handler.ErrUserAlreadySignedIn,
+			)
+		}
 	}
 
 	if err = h.service.ValidateUserStatus(email); err != nil {
@@ -347,6 +369,17 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 			userID = email.UserID
 			identifierID = &email.ID
 
+			for _, signin := range session.Signins {
+				if signin.UserID != nil && *signin.UserID == *userID {
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"User already signed in",
+						handler.ErrUserAlreadySignedIn,
+					)
+				}
+			}
+
 			if err = h.service.ValidateUserStatus(email); err != nil {
 				return handler.SendForbidden(c, nil, err.Error(), handler.ErrUserDisabled)
 			}
@@ -389,6 +422,17 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 		if phone != nil {
 			userID = &phone.User.ID
 			identifierID = &phone.ID
+
+			for _, signin := range session.Signins {
+				if signin.UserID != nil && *signin.UserID == *userID {
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"User already signed in",
+						handler.ErrUserAlreadySignedIn,
+					)
+				}
+			}
 
 			if err = h.service.ValidatePhoneUserStatus(phone); err != nil {
 				return handler.SendForbidden(c, nil, err.Error(), handler.ErrUserDisabled)
@@ -474,6 +518,19 @@ func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.D
 	var attempt *model.SignInAttempt
 
 	if email != nil {
+		if email.UserID != nil {
+			for _, signin := range session.Signins {
+				if signin.UserID != nil && *signin.UserID == *email.UserID {
+					return handler.SendBadRequest(
+						c,
+						nil,
+						"User already signed in",
+						handler.ErrUserAlreadySignedIn,
+					)
+				}
+			}
+		}
+
 		if err := h.service.ValidateUserStatus(email); err != nil {
 			return handler.SendForbidden(
 				c,
@@ -1056,6 +1113,15 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		return nil
 	})
 	if err != nil {
+		pgErr, ok := err.(*pgconn.PgError)
+		if ok && pgErr.ConstraintName == "idx_session_user_id" {
+			return handler.SendBadRequest(
+				c,
+				nil,
+				"User already signed in",
+				handler.ErrUserAlreadySignedIn,
+			)
+		}
 		return handler.SendInternalServerError(
 			c,
 			err,
