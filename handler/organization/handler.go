@@ -379,11 +379,11 @@ func (h *Handler) InviteMember(
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	// Generate secure token for invitation
-	token, err := utils.GenerateSecureToken(32)
+	tokenBase, err := utils.GenerateSecureToken(32)
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to generate invitation token")
 	}
+	token := fmt.Sprintf("org.%s", tokenBase)
 
 	invitation := model.OrganizationInvitation{
 		Model: model.Model{
