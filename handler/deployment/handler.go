@@ -1,7 +1,6 @@
 package deployment
 
 import (
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -39,31 +38,6 @@ func ValidateInvitation(c *fiber.Ctx) error {
 
 	deployment := handler.GetDeployment(c)
 
-	if strings.HasPrefix(token, "org.") {
-		var orgInvitation model.OrganizationInvitation
-		err := database.Connection.
-			Where("token = ? AND expiry > ?", token, time.Now()).
-			First(&orgInvitation).Error
-
-		if err == gorm.ErrRecordNotFound {
-			response := ValidateInvitationResponse{
-				Valid:     false,
-				Message:   "Invalid or expired invitation",
-				ErrorCode: handler.ErrCodeInvalidInvitationToken,
-			}
-			return handler.SendSuccess(c, response)
-		} else if err != nil {
-			return handler.SendInternalServerError(c, err, "Failed to validate invitation")
-		}
-
-		response := ValidateInvitationResponse{
-			Valid:     true,
-			Email:     orgInvitation.Email,
-			Message:   "organization_invitation",
-		}
-		return handler.SendSuccess(c, response)
-	}
-
 	var invitation model.DeploymentInvitation
 	err := database.Connection.
 		Where("token = ? AND deployment_id = ? AND expiry > ?", token, deployment.ID, time.Now()).
@@ -85,7 +59,6 @@ func ValidateInvitation(c *fiber.Ctx) error {
 		FirstName: invitation.FirstName,
 		LastName:  invitation.LastName,
 		Email:     invitation.EmailAddress,
-		Message:   "deployment_invitation",
 	}
 	return handler.SendSuccess(c, response)
 }

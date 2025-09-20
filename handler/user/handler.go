@@ -1969,7 +1969,7 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 		return handler.SendBadRequest(
 			c,
 			nil,
-			"State token user mismatch",
+			"Please sign in with the correct account to add this connection",
 			handler.ErrInvalidState,
 		)
 	}

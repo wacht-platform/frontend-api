@@ -8,9 +8,10 @@ import (
 	"slices"
 	"strconv"
 
+	"time"
+
 	"github.com/godruoyi/go-snowflake"
 	"github.com/gofiber/fiber/v2"
-	"time"
 
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
@@ -494,10 +495,6 @@ func (h *Handler) AcceptInvitation(
 	var invitation model.OrganizationInvitation
 	if err := database.Connection.
 		Where("token = ?", b.Token).
-		Preload("Organization").
-		Preload("Workspace").
-		Preload("InitialOrganizationRole").
-		Preload("InitialWorkspaceRole").
 		First(&invitation).Error; err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid or expired invitation", handler.Error{
 			Code:    handler.ErrCodeInvalidInvitationToken,
@@ -886,7 +883,7 @@ func (h *Handler) GetOrganizationMembers(
 				'availability', users.availability,
 				'created_at', users.created_at,
 				'updated_at', users.updated_at,
-				'primary_email_address', CASE 
+				'primary_email_address', CASE
 					WHEN primary_email.id IS NOT NULL THEN json_build_object(
 						'id', primary_email.id::text,
 						'email', primary_email.email_address,
