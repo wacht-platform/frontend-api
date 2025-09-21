@@ -536,7 +536,6 @@ func (h *Handler) AcceptInvitation(
 
 	var matchingSignin *model.Signin
 	for _, signin := range session.Signins {
-		log.Println(*signin.UserID, *emailAddress.UserID)
 		if signin.UserID != nil && emailAddress.UserID != nil && *signin.UserID == *emailAddress.UserID {
 			matchingSignin = &signin
 			break
