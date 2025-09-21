@@ -491,7 +491,6 @@ func (h *Handler) AcceptInvitation(
 
 	session := handler.GetSession(c)
 
-	// Find invitation by token
 	var invitation model.OrganizationInvitation
 	if err := database.Connection.
 		Where("token = ?", b.Token).
@@ -502,7 +501,6 @@ func (h *Handler) AcceptInvitation(
 		})
 	}
 
-	// Check if invitation is expired
 	if invitation.Expiry.Before(time.Now()) {
 		response := AcceptInvitationResponse{
 			Message:      "This invitation has expired. Please request a new invitation.",
@@ -512,7 +510,6 @@ func (h *Handler) AcceptInvitation(
 		return handler.SendSuccess(c, response)
 	}
 
-	// Check if user has any signed-in accounts
 	if session.ActiveSignin == nil || len(session.Signins) == 0 {
 		response := AcceptInvitationResponse{
 			Message:        "Please sign in to accept this invitation",
@@ -523,13 +520,11 @@ func (h *Handler) AcceptInvitation(
 		return handler.SendSuccess(c, response)
 	}
 
-	// Find the user with the invited email address
 	var emailAddress model.UserEmailAddress
 	if err := database.Connection.
-		Where("email = ?", invitation.Email).
+		Where("email_address = ?", invitation.Email).
 		Preload("User").
 		First(&emailAddress).Error; err != nil {
-		// Email not found - user needs to sign up first
 		response := AcceptInvitationResponse{
 			Message:        fmt.Sprintf("No account exists with email %s. Please sign up first.", invitation.Email),
 			RequiresSignin: true,
@@ -539,7 +534,6 @@ func (h *Handler) AcceptInvitation(
 		return handler.SendSuccess(c, response)
 	}
 
-	// Check if this user has an active signin in the current session
 	var matchingSignin *model.Signin
 	for _, signin := range session.Signins {
 		if signin.UserID != nil && emailAddress.UserID != nil && *signin.UserID == *emailAddress.UserID {
@@ -558,14 +552,12 @@ func (h *Handler) AcceptInvitation(
 		return handler.SendSuccess(c, response)
 	}
 
-	// Check if user is already a member
 	var existingMembership model.OrganizationMembership
 	err := database.Connection.
 		Where("organization_id = ? AND user_id = ?", invitation.OrganizationID, *emailAddress.UserID).
 		First(&existingMembership).Error
 
 	if err == nil {
-		// Already a member, delete invitation and return success
 		database.Connection.Delete(&invitation)
 
 		var org model.Organization
@@ -584,7 +576,6 @@ func (h *Handler) AcceptInvitation(
 		return handler.SendSuccess(c, response)
 	}
 
-	// Create organization membership
 	membership := model.OrganizationMembership{
 		Model: model.Model{
 			ID: snowflake.ID(),
@@ -593,14 +584,11 @@ func (h *Handler) AcceptInvitation(
 		UserID:         *emailAddress.UserID,
 	}
 
-	// Start transaction to create membership and assign roles
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
-		// Create membership
 		if err := tx.Create(&membership).Error; err != nil {
 			return err
 		}
 
-		// Assign organization role if specified
 		if invitation.InitialOrganizationRoleID != nil {
 			if err := tx.Exec(
 				"INSERT INTO organization_membership_roles (organization_membership_id, organization_role_id, organization_id) VALUES (?, ?, ?)",
@@ -612,7 +600,6 @@ func (h *Handler) AcceptInvitation(
 			}
 		}
 
-		// If workspace is specified, create workspace membership
 		if invitation.WorkspaceID != nil {
 			workspaceMembership := model.WorkspaceMembership{
 				Model: model.Model{
@@ -627,7 +614,6 @@ func (h *Handler) AcceptInvitation(
 				return err
 			}
 
-			// Assign workspace role if specified
 			if invitation.InitialWorkspaceRoleID != nil {
 				if err := tx.Exec(
 					"INSERT INTO workspace_membership_roles (workspace_membership_id, workspace_role_id, workspace_id) VALUES (?, ?, ?)",
@@ -640,7 +626,6 @@ func (h *Handler) AcceptInvitation(
 			}
 		}
 
-		// Delete the invitation
 		if err := tx.Delete(&invitation).Error; err != nil {
 			return err
 		}
@@ -652,7 +637,6 @@ func (h *Handler) AcceptInvitation(
 		return handler.SendInternalServerError(c, err, "Failed to accept invitation")
 	}
 
-	// Get organization details for response
 	var org model.Organization
 	database.Connection.First(&org, invitation.OrganizationID)
 
@@ -665,7 +649,6 @@ func (h *Handler) AcceptInvitation(
 		Message:  "Successfully joined the organization",
 	}
 
-	// Add workspace info if applicable
 	if invitation.WorkspaceID != nil {
 		var workspace model.Workspace
 		database.Connection.First(&workspace, *invitation.WorkspaceID)
