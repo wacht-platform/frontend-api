@@ -253,7 +253,7 @@ func parseSigninAttemptFromMap(attemptData map[string]any) (*model.SignInAttempt
 	if sessionID, err := getUint64FromMap(attemptData, "session_id"); err == nil {
 		attempt.SessionID = sessionID
 	}
-	
+
 	// Parse Method
 	if methodStr := getStringFromMap(attemptData, "method"); methodStr != "" {
 		attempt.Method = model.SignInMethod(methodStr)
@@ -372,7 +372,7 @@ func parseSignupAttemptFromMap(attemptData map[string]any) (*model.SignupAttempt
 	attempt.Username = getStringFromMap(attemptData, "username")
 	attempt.PhoneNumber = getStringFromMap(attemptData, "phone_number")
 	attempt.PhoneCountryCode = getStringFromMap(attemptData, "phone_country_code")
-	
+
 	// Parse times
 	if createdAtStr := getStringFromMap(attemptData, "created_at"); createdAtStr != "" {
 		if parsedTime, err := time.Parse(time.RFC3339, createdAtStr); err == nil {
@@ -393,7 +393,6 @@ func parseSignupAttemptFromMap(attemptData map[string]any) (*model.SignupAttempt
 }
 
 func GetSessionByID(sessionID uint64) (*model.Session, error) {
-	// Check cache first
 	if cachedSession, found := GetCachedSession(sessionID); found {
 		return cachedSession, nil
 	}
