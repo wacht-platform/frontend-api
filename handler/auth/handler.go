@@ -1218,75 +1218,66 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 
 		switch attempt.CurrentStep {
 		case model.SignInAttemptStepVerifyEmailOTP:
-			if attempt.IdentifierID == nil {
-				return handler.SendSuccess[any](c, nil)
-			}
+			var emailAddress string
+			var userID uint64
 
-			email, err := h.service.FindUserByEmailID(
-				*attempt.IdentifierID,
-			)
-			if err != nil {
-				return handler.SendInternalServerError(
-					c,
-					err,
-					"Error fetching user",
-					handler.ErrInvalidSignInAttempt,
-				)
+			if attempt.IdentifierID == nil && attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.Email != "" {
+				emailAddress = attempt.ProfileCompletionData.Email
+				if attempt.UserID != nil {
+					userID = *attempt.UserID
+				}
+			} else if attempt.IdentifierID != nil {
+
+				email, err := h.service.FindUserByEmailID(*attempt.IdentifierID)
+				if err != nil {
+					return handler.SendInternalServerError(c, err, "Error fetching user", handler.ErrInvalidSignInAttempt)
+				}
+				emailAddress = email.EmailAddress
+				if email.UserID != nil {
+					userID = *email.UserID
+				}
+			} else {
+				return handler.SendSuccess[any](c, nil)
 			}
 
 			code, err := utils.GenerateOTP()
 			if err != nil {
-				return handler.SendInternalServerError(
-					c,
-					err,
-					"Error generating OTP",
-					handler.ErrInternal,
-				)
+				return handler.SendInternalServerError(c, err, "Error generating OTP", handler.ErrInternal)
 			}
 
 			if err := h.service.StoreOTPInCache(fmt.Sprintf("signin:%d", attempt.ID), code); err != nil {
-				return handler.SendInternalServerError(
-					c,
-					err,
-					"Error storing OTP",
-					handler.ErrInternal,
-				)
+				return handler.SendInternalServerError(c, err, "Error storing OTP", handler.ErrInternal)
 			}
 
-			if err := h.service.SendSigninVerificationEmail(*email.UserID, email.EmailAddress, code, deployment); err != nil {
-				return handler.SendInternalServerError(
-					c,
-					err,
-					"Error sending email OTP verification",
-				)
+			if err := h.service.SendSigninVerificationEmail(userID, emailAddress, code, deployment); err != nil {
+				return handler.SendInternalServerError(c, err, "Error sending email OTP verification")
 			}
 		case model.SignInAttemptStepVerifyPhoneOTP:
-			if attempt.IdentifierID == nil {
-				return handler.SendBadRequest(
-					c,
-					nil,
-					"Phone number not found. Please sign up first.",
-				)
+			var phoneNumber string
+			var countryCode string
+			var userID uint64
+
+			if attempt.IdentifierID == nil && attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.PhoneNumber != "" {
+				phoneNumber = attempt.ProfileCompletionData.PhoneNumber
+				countryCode = attempt.ProfileCompletionData.PhoneCountryCode
+				if attempt.UserID != nil {
+					userID = *attempt.UserID
+				}
+			} else if attempt.IdentifierID != nil {
+
+				phone, err := h.service.FindUserByPhoneNumberID(*attempt.IdentifierID)
+				if err != nil {
+					return handler.SendInternalServerError(c, err, "Error fetching user", handler.ErrInvalidSignInAttempt)
+				}
+				phoneNumber = phone.PhoneNumber
+				countryCode = phone.CountryCode
+				userID = phone.UserID
+			} else {
+				return handler.SendBadRequest(c, nil, "Phone number not found. Please sign up first.")
 			}
 
-			phone, err := h.service.FindUserByPhoneNumberID(
-				*attempt.IdentifierID,
-			)
-			if err != nil {
-				return handler.SendInternalServerError(
-					c,
-					err,
-					"Error fetching user",
-					handler.ErrInvalidSignInAttempt,
-				)
-			}
-
-			if err := h.service.SendSmsOTPVerificationAsync(phone.PhoneNumber, phone.CountryCode, phone.UserID, deployment); err != nil {
-				return handler.SendInternalServerError(
-					c,
-					err,
-					"Error sending SMS OTP verification",
-				)
+			if err := h.service.SendSmsOTPVerificationAsync(phoneNumber, countryCode, userID, deployment); err != nil {
+				return handler.SendInternalServerError(c, err, "Error sending SMS OTP verification")
 			}
 		case model.SignInAttemptStepVerifyEmailLink:
 			if attempt.IdentifierID == nil {
@@ -1637,49 +1628,50 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 		case model.SignInAttemptStepVerifyEmail,
 			model.SignInAttemptStepVerifyEmailOTP:
 			{
-				if attempt.IdentifierID == nil {
-					return handler.SendBadRequest(
-						c,
-						nil,
-						"Invalid or expired OTP",
-					)
-				}
 
-				email, err := h.service.FindUserByEmailID(
-					*attempt.IdentifierID,
-				)
+				storedOTP, err := h.service.GetOTPFromRedis(fmt.Sprintf("signin:%d", attempt.ID))
 				if err != nil {
-					return handler.SendInternalServerError(
-						c,
-						err,
-						"Error fetching user",
-					)
-				}
-
-				storedOTP, err := h.service.GetOTPFromRedis(
-					fmt.Sprintf("signin:%d", attempt.ID),
-				)
-				if err != nil {
-					return handler.SendBadRequest(
-						c,
-						nil,
-						"Invalid or expired OTP",
-					)
+					return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
 				}
 
 				if storedOTP != b.VerificationCode {
-					return handler.SendBadRequest(
-						c,
-						nil,
-						"Invalid OTP",
-					)
+					return handler.SendBadRequest(c, nil, "Invalid OTP")
+				}
+
+				var emailAddress string
+				var userID uint64
+				var user *model.User
+
+				if attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.Email != "" {
+
+					emailAddress = attempt.ProfileCompletionData.Email
+					if attempt.UserID != nil {
+						userID = *attempt.UserID
+
+						var u model.User
+						if err := database.Connection.Where("id = ?", userID).First(&u).Error; err != nil {
+							return handler.SendInternalServerError(c, err, "Error fetching user")
+						}
+						user = &u
+					}
+				} else if attempt.IdentifierID != nil {
+
+					email, err := h.service.FindUserByEmailID(*attempt.IdentifierID)
+					if err != nil {
+						return handler.SendInternalServerError(c, err, "Error fetching user")
+					}
+					emailAddress = email.EmailAddress
+					if email.UserID != nil {
+						userID = *email.UserID
+					}
+				} else {
+					return handler.SendBadRequest(c, nil, "Invalid verification attempt")
 				}
 
 				if len(attempt.RemainingSteps) == 1 {
 					attempt.Completed = true
 					attempt.RemainingSteps = nil
-					signin = h.service.CreateSignin(*email.UserID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
-
+					signin = h.service.CreateSignin(userID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 					session.Signins = append(session.Signins, *signin)
 					session.ActiveSigninID = &signin.ID
 				} else {
@@ -1688,17 +1680,38 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				}
 
 				if err := database.Connection.Transaction(func(tx *gorm.DB) error {
+
+					if attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.Email != "" && user != nil {
+						emailID := snowflake.ID()
+						emailRecord := model.UserEmailAddress{
+							Model:        model.Model{ID: emailID},
+							EmailAddress: emailAddress,
+							Verified:     true,
+							VerifiedAt:   time.Now().UTC(),
+							DeploymentID: deployment.ID,
+							UserID:       userID,
+						}
+						if err := tx.Create(&emailRecord).Error; err != nil {
+							return err
+						}
+
+						if user.PrimaryEmailAddressID == nil {
+							user.PrimaryEmailAddressID = &emailID
+							if err := tx.Save(user).Error; err != nil {
+								return err
+							}
+						}
+					}
+
 					if attempt.Completed {
 						d := handler.GetDeployment(c)
 						if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
 							return err
 						}
-
 						if err := tx.Create(signin).Error; err != nil {
 							return err
 						}
-
-						_ = h.service.nats.SendSignInNotificationEmail(d.ID, *email.UserID, signin.ID, email.EmailAddress)
+						_ = h.service.nats.SendSignInNotificationEmail(d.ID, userID, signin.ID, emailAddress)
 					}
 
 					if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]interface{}{
@@ -1708,7 +1721,6 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					}
 
 					handler.RemoveSessionFromCacheAndLocals(c, session.ID)
-
 					return tx.Save(attempt).Error
 				}); err != nil {
 					return handler.SendInternalServerError(
@@ -1732,76 +1744,92 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 		case model.SignInAttemptStepVerifyPhone,
 			model.SignInAttemptStepVerifyPhoneOTP:
 			{
-				if attempt.IdentifierID == nil {
-					return handler.SendBadRequest(
-						c,
-						nil,
-						"Invalid or expired OTP",
-					)
+				var phoneNumber string
+				var userID uint64
+				var user *model.User
+				var phone *model.UserPhoneNumber
+
+				if attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.PhoneNumber != "" {
+
+					phoneNumber = attempt.ProfileCompletionData.PhoneNumber
+					if attempt.UserID != nil {
+						userID = *attempt.UserID
+
+						var u model.User
+						if err := database.Connection.Where("id = ?", userID).First(&u).Error; err != nil {
+							return handler.SendInternalServerError(c, err, "Error fetching user")
+						}
+						user = &u
+					}
+				} else if attempt.IdentifierID != nil {
+
+					p, err := h.service.FindUserByPhoneNumberID(*attempt.IdentifierID)
+					if err != nil {
+						return handler.SendInternalServerError(c, err, "Error fetching user")
+					}
+					phone = p
+					phoneNumber = p.PhoneNumber
+					userID = p.User.ID
+				} else {
+					return handler.SendBadRequest(c, nil, "Invalid verification attempt")
 				}
 
-				phone, err := h.service.FindUserByPhoneNumberID(
-					*attempt.IdentifierID,
-				)
+				isValid, err := h.service.VerifyPhoneOTP(deployment.ID, phoneNumber, b.VerificationCode)
 				if err != nil {
-					return handler.SendInternalServerError(
-						c,
-						err,
-						"Error fetching user",
-					)
-				}
-
-				// For sign-in, if phone is already verified, we should still validate the OTP
-				// The OTP serves as the authentication method for phone-based sign-in
-				isValid, err := h.service.VerifyPhoneOTP(
-					deployment.ID,
-					phone.PhoneNumber,
-					b.VerificationCode,
-				)
-				if err != nil {
-					return handler.SendBadRequest(
-						c,
-						nil,
-						"Invalid or expired OTP",
-					)
+					return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
 				}
 
 				if !isValid {
-					return handler.SendBadRequest(
-						c,
-						nil,
-						"Invalid OTP",
-					)
+					return handler.SendBadRequest(c, nil, "Invalid OTP")
 				}
 
-				// OTP is valid - now set FirstMethodAuthenticated
 				attempt.FirstMethodAuthenticated = true
-
-				// Now advance through the remaining steps
 				if len(attempt.RemainingSteps) > 1 {
-					// Move to next step (could be 2FA or profile completion)
+
 					attempt.RemainingSteps = attempt.RemainingSteps[1:]
 					attempt.CurrentStep = attempt.RemainingSteps[0]
 
 					if attempt.CurrentStep == model.SignInAttemptStepVerifySecondFactor {
 						attempt.SecondMethodAuthenticationRequired = true
 					}
-					// If next step is profile completion, RequiresCompletion is already set
 				} else {
-					// No more steps - authentication is complete
 					attempt.Completed = true
 					attempt.RemainingSteps = nil
-					signin = h.service.CreateSignin(phone.User.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
-
+					signin = h.service.CreateSignin(userID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 					session.Signins = append(session.Signins, *signin)
 					session.ActiveSigninID = &signin.ID
 				}
 
 				if err := database.Connection.Transaction(func(tx *gorm.DB) error {
-					phone.Verified = true
-					phone.VerifiedAt = time.Now().UTC()
-					if err := tx.Save(phone).Error; err != nil {
-						return err
+
+					if attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.PhoneNumber != "" && user != nil {
+						phoneID := snowflake.ID()
+						phoneRecord := model.UserPhoneNumber{
+							Model:        model.Model{ID: phoneID},
+							PhoneNumber:  phoneNumber,
+							CountryCode:  attempt.ProfileCompletionData.PhoneCountryCode,
+							Verified:     true,
+							VerifiedAt:   time.Now().UTC(),
+							DeploymentID: deployment.ID,
+							UserID:       userID,
+						}
+						if err := tx.Create(&phoneRecord).Error; err != nil {
+							return err
+						}
+
+						if user.PrimaryPhoneNumberID == nil {
+							user.PrimaryPhoneNumberID = &phoneID
+							if err := tx.Save(user).Error; err != nil {
+								return err
+							}
+						}
+					} else if phone != nil {
+
+						phone.Verified = true
+						phone.VerifiedAt = time.Now().UTC()
+						if err := tx.Save(phone).Error; err != nil {
+							return err
+						}
 					}
 
 					if attempt.Completed {
@@ -1814,12 +1842,10 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 							return err
 						}
 
-						if phone.User.PrimaryEmailAddressID != nil {
-							for _, email := range phone.User.UserEmailAddresses {
-								if email.ID == *phone.User.PrimaryEmailAddressID {
-									_ = h.service.nats.SendSignInNotificationEmail(d.ID, phone.User.ID, signin.ID, email.EmailAddress)
-									break
-								}
+						if user != nil && user.PrimaryEmailAddressID != nil {
+							var email model.UserEmailAddress
+							if err := tx.Where("id = ?", *user.PrimaryEmailAddressID).First(&email).Error; err == nil {
+								_ = h.service.nats.SendSignInNotificationEmail(d.ID, userID, signin.ID, email.EmailAddress)
 							}
 						}
 					}
@@ -1831,7 +1857,6 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					}
 
 					handler.RemoveSessionFromCacheAndLocals(c, session.ID)
-
 					return tx.Save(attempt).Error
 				}); err != nil {
 					return handler.SendInternalServerError(
@@ -2223,7 +2248,7 @@ func (h *Handler) CompleteOAuthSignup(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, err.Error())
 	}
 
-	data := ProfileCompletionData{
+	data := model.ProfileCompletionData{
 		FirstName:        attempt.FirstName,
 		LastName:         attempt.LastName,
 		Username:         attempt.Username,
@@ -2573,7 +2598,7 @@ func (h *Handler) handleOAuthSignupCompletion(c *fiber.Ctx, attempt *model.Signu
 		return handler.SendBadRequest(c, nil, err.Error())
 	}
 
-	data := ProfileCompletionData{
+	data := model.ProfileCompletionData{
 		FirstName:        attempt.FirstName,
 		LastName:         attempt.LastName,
 		Username:         attempt.Username,
@@ -2592,7 +2617,6 @@ func (h *Handler) handleOAuthSignupCompletion(c *fiber.Ctx, attempt *model.Signu
 
 	attempt.MissingFields = datatypes.NewJSONSlice([]string{})
 
-	// Determine verification steps needed for the completed profile data
 	verificationSteps := h.service.DetermineVerificationStepsForProfileCompletion(data, nil, deployment.AuthSettings)
 
 	// Convert string steps to SignupAttemptStep and add to existing steps
@@ -2606,7 +2630,6 @@ func (h *Handler) handleOAuthSignupCompletion(c *fiber.Ctx, attempt *model.Signu
 		}
 	}
 
-	// Update remaining steps and current step
 	if len(steps) > len(attempt.RemainingSteps) {
 		attempt.RemainingSteps = datatypes.NewJSONSlice(steps)
 		if attempt.CurrentStep == "" && len(steps) > 0 {
@@ -2672,26 +2695,19 @@ func (h *Handler) handleSigninProfileCompletion(c *fiber.Ctx, attempt *model.Sig
 		user.Username = b.Username
 	}
 
+	attempt.ProfileCompletionData = &model.ProfileCompletionData{
+		FirstName:        b.FirstName,
+		LastName:         b.LastName,
+		Username:         b.Username,
+		Email:            b.Email,
+		PhoneNumber:      b.PhoneNumber,
+		PhoneCountryCode: b.PhoneCountryCode,
+	}
+
 	if b.PhoneNumber != "" {
 		if err := h.service.ValidatePhoneRestrictions(b.PhoneNumber, deployment.Restrictions); err != nil {
 			return handler.SendBadRequest(c, nil, err.Error())
 		}
-
-		phoneID := snowflake.ID()
-		phone := model.UserPhoneNumber{
-			Model:        model.Model{ID: phoneID},
-			PhoneNumber:  b.PhoneNumber,
-			CountryCode:  b.PhoneCountryCode,
-			Verified:     false,
-			DeploymentID: deployment.ID,
-			UserID:       user.ID,
-		}
-
-		if err := database.Connection.Create(&phone).Error; err != nil {
-			return handler.SendInternalServerError(c, err, "Error creating phone number")
-		}
-
-		user.PrimaryPhoneNumberID = &phoneID
 	}
 
 	missingFields := h.service.CheckMissingRequiredFields(&user, deployment.AuthSettings)
@@ -2704,42 +2720,30 @@ func (h *Handler) handleSigninProfileCompletion(c *fiber.Ctx, attempt *model.Sig
 	attempt.RequiresCompletion = false
 	attempt.MissingFields = datatypes.NewJSONSlice([]string{})
 
-	// Determine verification steps needed for the completed profile data
-	data := ProfileCompletionData{
-		FirstName:        b.FirstName,
-		LastName:         b.LastName,
-		Username:         b.Username,
-		Email:            b.Email,
-		PhoneNumber:      b.PhoneNumber,
-		PhoneCountryCode: b.PhoneCountryCode,
-	}
+	verificationSteps := h.service.DetermineVerificationStepsForProfileCompletion(*attempt.ProfileCompletionData, &user.ID, deployment.AuthSettings)
 
-	verificationSteps := h.service.DetermineVerificationStepsForProfileCompletion(data, &user.ID, deployment.AuthSettings)
-
-	// Convert string steps to SignInAttemptStep and add to existing steps
 	steps := []model.SignInAttemptStep(attempt.RemainingSteps)
 	for _, step := range verificationSteps {
 		switch step {
 		case "verify_email":
-			steps = append(steps, model.SignInAttemptStepVerifyEmail)
+			steps = append(steps, model.SignInAttemptStepVerifyEmailOTP)
 		case "verify_phone":
-			steps = append(steps, model.SignInAttemptStepVerifyPhone)
+			steps = append(steps, model.SignInAttemptStepVerifyPhoneOTP)
 		}
 	}
 
-	// Update remaining steps and current step
 	if len(steps) > len(attempt.RemainingSteps) {
 		attempt.RemainingSteps = datatypes.NewJSONSlice(steps)
 		if attempt.CurrentStep == "" && len(steps) > 0 {
 			attempt.CurrentStep = steps[0]
 		}
 	} else if attempt.CurrentStep == model.SignInAttemptStepCompleteProfile {
-		// Profile completion is done, advance to next step if any
+
 		if len(attempt.RemainingSteps) > 1 {
 			attempt.RemainingSteps = attempt.RemainingSteps[1:]
 			attempt.CurrentStep = attempt.RemainingSteps[0]
 		} else {
-			// No more steps, mark as complete
+
 			attempt.RemainingSteps = nil
 			attempt.CurrentStep = ""
 		}

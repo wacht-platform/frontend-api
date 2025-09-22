@@ -679,7 +679,7 @@ func (s *AuthService) CheckMissingRequiredFields(user *model.User, authSettings 
 	return missingFields
 }
 
-func (s *AuthService) CheckMissingFieldsFromData(data ProfileCompletionData, authSettings model.DeploymentAuthSettings) []string {
+func (s *AuthService) CheckMissingFieldsFromData(data model.ProfileCompletionData, authSettings model.DeploymentAuthSettings) []string {
 	var missingFields []string
 
 	if authSettings.FirstName.Enabled && authSettings.FirstName.Required && data.FirstName == "" {
@@ -701,7 +701,7 @@ func (s *AuthService) CheckMissingFieldsFromData(data ProfileCompletionData, aut
 	return missingFields
 }
 
-func (s *AuthService) ValidateProfileCompletionData(data ProfileCompletionData, requiredFields []string) error {
+func (s *AuthService) ValidateProfileCompletionData(data model.ProfileCompletionData, requiredFields []string) error {
 	for _, field := range requiredFields {
 		switch field {
 		case "first_name":
@@ -730,7 +730,7 @@ func (s *AuthService) ValidateProfileCompletionData(data ProfileCompletionData, 
 }
 
 func (s *AuthService) ProcessProfileCompletion(
-	data ProfileCompletionData,
+	data model.ProfileCompletionData,
 	authSettings model.DeploymentAuthSettings,
 ) (bool, []string, []string, error) {
 	requiredFields := s.GetRequiredFields(authSettings)
@@ -753,7 +753,7 @@ func (s *AuthService) CreateSignupAttempt(
 ) (*model.SignupAttempt, error) {
 	requiredFields := s.GetRequiredFields(d.AuthSettings)
 
-	data := ProfileCompletionData{
+	data := model.ProfileCompletionData{
 		FirstName:        b.FirstName,
 		LastName:         b.LastName,
 		Username:         b.Username,
@@ -811,7 +811,7 @@ func (s *AuthService) CreateOAuthSignupAttempt(
 ) (*model.SignupAttempt, error) {
 	requiredFields := s.GetRequiredFields(d.AuthSettings)
 
-	data := ProfileCompletionData{
+	data := model.ProfileCompletionData{
 		FirstName:   firstName,
 		LastName:    lastName,
 		Username:    username,
@@ -1468,7 +1468,7 @@ func (s *AuthService) validateEmailMXRecord(email string) error {
 }
 
 func (s *AuthService) DetermineVerificationStepsForProfileCompletion(
-	data ProfileCompletionData,
+	data model.ProfileCompletionData,
 	userID *uint64,
 	authSettings model.DeploymentAuthSettings,
 ) []string {

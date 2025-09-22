@@ -11,6 +11,15 @@ import (
 	"gorm.io/datatypes"
 )
 
+type ProfileCompletionData struct {
+	FirstName        string `json:"first_name,omitempty"`
+	LastName         string `json:"last_name,omitempty"`
+	Username         string `json:"username,omitempty"`
+	Email            string `json:"email,omitempty"`
+	PhoneNumber      string `json:"phone_number,omitempty"`
+	PhoneCountryCode string `json:"phone_country_code,omitempty"`
+}
+
 type SignInMethod string
 
 const (
@@ -83,6 +92,7 @@ type SignInAttempt struct {
 	SecondMethodAuthenticated          bool                                   `json:"second_method_authenticated"    gorm:"not null;default:false"`
 	SecondMethodAuthenticationRequired bool                                   `json:"second_method_authentication_required" gorm:"not null;default:false"`
 	Available2FAMethods                datatypes.JSONSlice[string]            `json:"available_2fa_methods" gorm:"available_2fa_methods"`
+	ProfileCompletionData              *ProfileCompletionData                 `json:"profile_completion_data,omitempty" gorm:"type:jsonb"`
 }
 
 func NewSignInAttempt(method SignInMethod) *SignInAttempt {

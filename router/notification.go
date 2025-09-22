@@ -16,7 +16,7 @@ func setupNotificationRoutes(app *fiber.App) {
 	// Single notification operations
 	router.Get("/:id", notification.Get)
 	router.Post("/:id/read", notification.MarkAsRead)
-	router.Delete("/:id", notification.Delete)
+	router.Post("/:id/delete", notification.Delete)
 	
 	// Bulk operations
 	router.Post("/mark-all-read", notification.MarkAllAsRead)

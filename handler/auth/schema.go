@@ -14,13 +14,13 @@ type SignInRequest struct {
 }
 
 type SignUpRequest struct {
-	FirstName         string `form:"first_name"`
-	LastName          string `form:"last_name"`
-	Username          string `form:"username"`
-	PhoneNumber       string `form:"phone_number"`
-	PhoneCountryCode  string `form:"phone_country_code"`
-	Email             string `form:"email"`
-	Password          string `form:"password"`
+	FirstName        string `form:"first_name"`
+	LastName         string `form:"last_name"`
+	Username         string `form:"username"`
+	PhoneNumber      string `form:"phone_number"`
+	PhoneCountryCode string `form:"phone_country_code"`
+	Email            string `form:"email"`
+	Password         string `form:"password"`
 }
 
 type SSOCallbackResponse struct {
@@ -52,15 +52,6 @@ type ResetPasswordRequest struct {
 
 type SetupAuthenticatorRequest struct {
 	Email string `form:"email"`
-}
-
-type ProfileCompletionData struct {
-	FirstName        string `form:"first_name"`
-	LastName         string `form:"last_name"`
-	Username         string `form:"username"`
-	Email            string `form:"email"`
-	PhoneNumber      string `form:"phone_number"`
-	PhoneCountryCode string `form:"phone_country_code"`
 }
 
 type IPLocation struct {
