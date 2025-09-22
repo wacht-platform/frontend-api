@@ -1689,7 +1689,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 							Verified:     true,
 							VerifiedAt:   time.Now().UTC(),
 							DeploymentID: deployment.ID,
-							UserID:       userID,
+							UserID:       &userID,
 						}
 						if err := tx.Create(&emailRecord).Error; err != nil {
 							return err
