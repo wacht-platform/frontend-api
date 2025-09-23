@@ -91,7 +91,7 @@ type SignInAttempt struct {
 	FirstMethodAuthenticated           bool                                   `json:"first_method_authenticated"     gorm:"not null;default:false"`
 	SecondMethodAuthenticated          bool                                   `json:"second_method_authenticated"    gorm:"not null;default:false"`
 	SecondMethodAuthenticationRequired bool                                   `json:"second_method_authentication_required" gorm:"not null;default:false"`
-	Available2FAMethods                datatypes.JSONSlice[string]            `json:"available_2fa_methods" gorm:"available_2fa_methods"`
+	Available2FAMethods                datatypes.JSONSlice[string]            `json:"available_2fa_methods" gorm:"column:available_2fa_methods"`
 	ProfileCompletionData              *ProfileCompletionData                 `json:"profile_completion_data,omitempty" gorm:"type:jsonb"`
 }
 
