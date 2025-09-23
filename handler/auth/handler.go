@@ -1919,7 +1919,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					return handler.SendInternalServerError(c, err, "Error fetching user")
 				}
 
-				isValid, err := h.service.VerifyPhoneOTP(deployment.ID, fmt.Sprintf("%s%s", p.CountryCode, p.PhoneNumber), b.VerificationCode)
+				isValid, err := h.service.VerifyPhoneOTP(deployment.ID, p.PhoneNumber, b.VerificationCode)
 				if err != nil {
 					return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
 				}
