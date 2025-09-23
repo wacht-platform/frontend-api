@@ -1359,7 +1359,9 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 					return handler.SendBadRequest(c, nil, "Phone number verification failed")
 				}
 
-				if err := database.Connection.Model(&model.SignInAttempt{}).Update("identifier_id", *user.PrimaryPhoneNumberID).Where("id = ?", attempt.ID).Error; err != nil {
+				if err := database.Connection.Model(&model.SignInAttempt{}).Where("id = ?", attempt.ID).
+					Update("identifier_id", *user.PrimaryPhoneNumberID).
+					Error; err != nil {
 					return handler.SendInternalServerError(
 						c,
 						nil,
