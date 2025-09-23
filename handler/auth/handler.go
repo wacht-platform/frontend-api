@@ -1359,6 +1359,14 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 					return handler.SendBadRequest(c, nil, "Phone number verification failed")
 				}
 
+				if err := database.Connection.Model(&model.SignInAttempt{}).Update("identifier_id", *user.PrimaryPhoneNumberID).Where("id = ?", attempt.ID).Error; err != nil {
+					return handler.SendInternalServerError(
+						c,
+						nil,
+						"Something went wrong",
+					)
+				}
+
 				if err := h.service.SendSmsOTPVerificationAsync(user.PrimaryPhoneNumber.PhoneNumber, user.PrimaryPhoneNumber.CountryCode, user.ID, deployment); err != nil {
 					return handler.SendInternalServerError(
 						c,
@@ -2423,7 +2431,6 @@ func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Error saving attempt")
 	}
 
-	// Follow the same pattern as AttemptVerification - append updated attempt to session
 	session.SigninAttempts = append(session.SigninAttempts, attempt)
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 	return handler.SendSuccess(c, session)
