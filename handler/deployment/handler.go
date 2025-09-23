@@ -29,7 +29,6 @@ func GetJwk(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, deployment.KepPair)
 }
 
-// ValidateInvitation validates a deployment invitation token and returns the invitation details
 func ValidateInvitation(c *fiber.Ctx) error {
 	token := c.Query("token")
 	if token == "" {
@@ -63,23 +62,19 @@ func ValidateInvitation(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, response)
 }
 
-// AcceptInvitation accepts a deployment invitation after user signs up
 func AcceptInvitation(c *fiber.Ctx) error {
 	var req AcceptInvitationRequest
 	if err := c.BodyParser(&req); err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid request body")
 	}
 
-	// Validate request
 	if req.Token == "" || req.Email == "" {
 		return handler.SendBadRequest(c, nil, "Token and email are required")
 	}
 
 	deployment := handler.GetDeployment(c)
 
-	// Use transaction to ensure atomicity
 	err := database.Connection.Transaction(func(tx *gorm.DB) error {
-		// Find and validate the invitation
 		var invitation model.DeploymentInvitation
 		err := tx.Where("token = ? AND email_address = ? AND deployment_id = ? AND expiry > ?",
 			req.Token, req.Email, deployment.ID, time.Now()).
@@ -91,7 +86,6 @@ func AcceptInvitation(c *fiber.Ctx) error {
 			return err
 		}
 
-		// Delete the invitation (it's been accepted)
 		if err := tx.Delete(&invitation).Error; err != nil {
 			return err
 		}

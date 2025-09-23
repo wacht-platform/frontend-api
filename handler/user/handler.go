@@ -2050,8 +2050,8 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
 		var userEmailAddress model.UserEmailAddress
-		err := tx.Where("deployment_id = ? AND user_id = ? AND email_address = ?",
-			deployment.ID, session.ActiveSignin.UserID, oauthUser.Email).
+		err := tx.Where("deployment_id = ? AND email_address = ?",
+			deployment.ID, oauthUser.Email).
 			First(&userEmailAddress).Error
 
 		if err == gorm.ErrRecordNotFound {
@@ -2075,6 +2075,10 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 			}
 		} else if err != nil {
 			return err
+		} else {
+			if *userEmailAddress.UserID != *session.ActiveSignin.UserID {
+				return handler.ErrEmailExists
+			}
 		}
 
 		socialConnection := model.SocialConnection{
