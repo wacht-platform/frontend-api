@@ -1584,7 +1584,7 @@ func (s *AuthService) GetAvailable2FAMethods(userID uint64) []string {
 
 	var authenticatorCount int64
 	s.db.Model(&model.UserAuthenticator{}).
-		Where("user_id = ? AND verified = true", userID).
+		Where("user_id = ?", userID).
 		Count(&authenticatorCount)
 	if authenticatorCount > 0 {
 		methods = append(methods, "authenticator")

@@ -1083,7 +1083,6 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 				attempt.RequiredFields = datatypes.NewJSONSlice(requiredFields)
 			}
 		} else {
-			// No remaining steps - complete signin
 			signIn := h.service.CreateSignin(u.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 
 			if err := tx.Create(&signIn).Error; err != nil {
