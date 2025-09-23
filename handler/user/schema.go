@@ -12,7 +12,7 @@ type UpdateUserSchema struct {
 	Username              string                   `form:"username"`
 	PrimaryEmailAddressID string                   `form:"primary_email_address_id"`
 	PrimaryPhoneNumberID  string                   `form:"primary_phone_number_id"`
-	SecondFactorPolicy    model.SecondFactorPolicy `form:"second_factor_policy" validate:"omitempty,oneof=none optional enforced"`
+	SecondFactorPolicy    model.SecondFactorPolicy `form:"second_factor_policy" validate:"omitempty,oneof=none enforced"`
 	RemoveProfilePicture  bool                     `form:"remove_profile_picture"`
 }
 

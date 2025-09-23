@@ -1073,7 +1073,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 
 			if secondFactorEnforced {
 				attempt.SecondMethodAuthenticationRequired = true
-				attempt.Available2FAMethods = datatypes.NewJSONSlice([]string{})
+				attempt.Available2FAMethods = datatypes.NewJSONSlice(h.service.GetAvailable2FAMethods(u.ID))
 			}
 
 			if requiresCompletion {
@@ -1264,7 +1264,6 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 					userID = *attempt.UserID
 				}
 			} else if attempt.IdentifierID != nil {
-
 				phone, err := h.service.FindUserByPhoneNumberID(*attempt.IdentifierID)
 				if err != nil {
 					return handler.SendInternalServerError(c, err, "Error fetching user", handler.ErrInvalidSignInAttempt)
@@ -1273,7 +1272,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				countryCode = phone.CountryCode
 				userID = phone.UserID
 			} else {
-				return handler.SendBadRequest(c, nil, "Phone number not found. Please sign up first.")
+				return handler.SendSuccess[any](c, nil)
 			}
 
 			if err := h.service.SendSmsOTPVerificationAsync(phoneNumber, countryCode, userID, deployment); err != nil {
