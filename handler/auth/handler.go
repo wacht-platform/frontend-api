@@ -1325,8 +1325,8 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				if err := h.service.Store2FAMethodInCache(fmt.Sprintf("2fa_method:%d", attempt.ID), "phone_otp"); err != nil {
 					return handler.SendInternalServerError(
 						c,
-						err,
-						"Error storing 2FA method",
+						nil,
+						"Something went wrong ",
 					)
 				}
 
@@ -1350,21 +1350,8 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				lastDigits := c.Query("last_digits")
 				phoneNumber := user.PrimaryPhoneNumber.PhoneNumber
 
-				if lastDigits == "" {
-					maskedPhone := h.service.MaskPhoneNumber(phoneNumber)
-					return handler.SendSuccess(c, fiber.Map{
-						"masked_phone":                maskedPhone,
-						"method":                      "phone_otp",
-						"requires_phone_verification": true,
-					})
-				}
-
 				if len(lastDigits) != 4 {
 					return handler.SendBadRequest(c, nil, "Last digits must be 4 characters")
-				}
-
-				if len(phoneNumber) < 4 {
-					return handler.SendBadRequest(c, nil, "Invalid phone number")
 				}
 
 				actualLastDigits := phoneNumber[len(phoneNumber)-4:]
@@ -1380,7 +1367,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 					)
 				}
 
-				maskedPhone := h.service.MaskPhoneNumber(phoneNumber)
+				maskedPhone := h.service.MaskPhoneNumber(user.PrimaryPhoneNumber.CountryCode, phoneNumber)
 				return handler.SendSuccess(c, fiber.Map{
 					"masked_phone": maskedPhone,
 					"method":       "phone_otp",
@@ -1760,7 +1747,6 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 						user = &u
 					}
 				} else if attempt.IdentifierID != nil {
-
 					p, err := h.service.FindUserByPhoneNumberID(*attempt.IdentifierID)
 					if err != nil {
 						return handler.SendInternalServerError(c, err, "Error fetching user")
@@ -1848,7 +1834,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 						}
 					}
 
-					if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]interface{}{
+					if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]any{
 						"active_signin_id": session.ActiveSigninID,
 					}).Error; err != nil {
 						return err
@@ -1918,24 +1904,20 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				}
 
 			case "phone_otp":
-				storedOTP, err := h.service.GetOTPFromRedis(fmt.Sprintf("2fa_phone:%d", attempt.ID))
+				p, err := h.service.FindUserByPhoneNumberID(*attempt.IdentifierID)
 				if err != nil {
-					return handler.SendBadRequest(
-						c,
-						nil,
-						"Invalid or expired OTP",
-					)
+					return handler.SendInternalServerError(c, err, "Error fetching user")
 				}
 
-				if storedOTP != b.VerificationCode {
-					return handler.SendBadRequest(
-						c,
-						nil,
-						"Invalid OTP",
-					)
+				isValid, err := h.service.VerifyPhoneOTP(deployment.ID, fmt.Sprintf("%s%s", p.CountryCode, p.PhoneNumber), b.VerificationCode)
+				if err != nil {
+					return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
 				}
-				verified = true
-				h.service.DeleteOTPFromRedis(fmt.Sprintf("2fa_phone:%d", attempt.ID))
+
+				if !isValid {
+					return handler.SendBadRequest(c, nil, "Invalid OTP")
+				}
+
 				h.service.Delete2FAMethodFromCache(fmt.Sprintf("2fa_method:%d", attempt.ID))
 
 			case "backup_code":
@@ -1988,12 +1970,14 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 			}
 
 			attempt.SecondMethodAuthenticated = true
+			attempt.SecondMethodAuthenticationRequired = false
 
 			if len(attempt.RemainingSteps) == 1 {
 				attempt.Completed = true
 				attempt.RemainingSteps = nil
+				attempt.RemainingSteps = attempt.RemainingSteps[1:]
+				attempt.CurrentStep = attempt.RemainingSteps[0]
 				signin = h.service.CreateSignin(user.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
-
 				session.Signins = append(session.Signins, *signin)
 				session.ActiveSigninID = &signin.ID
 			} else {
@@ -2001,7 +1985,6 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				attempt.CurrentStep = attempt.RemainingSteps[0]
 			}
 
-			// Save the attempt and create signin if completed
 			if err := database.Connection.Transaction(func(tx *gorm.DB) error {
 				if attempt.Completed {
 					d := handler.GetDeployment(c)
@@ -2013,7 +1996,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 						return err
 					}
 
-					if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]interface{}{
+					if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]any{
 						"active_signin_id": session.ActiveSigninID,
 					}).Error; err != nil {
 						return err

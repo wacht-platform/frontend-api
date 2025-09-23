@@ -158,11 +158,11 @@ func (s *AuthService) ValidateUsernameUserStatus(
 	return nil
 }
 
-func (s *AuthService) MaskPhoneNumber(phoneNumber string) string {
+func (s *AuthService) MaskPhoneNumber(countryCode, phoneNumber string) string {
 	if len(phoneNumber) < 4 {
 		return phoneNumber
 	}
-	masked := strings.Repeat("*", len(phoneNumber)-4) + phoneNumber[len(phoneNumber)-4:]
+	masked := countryCode + strings.Repeat("*", len(phoneNumber)-4) + phoneNumber[len(phoneNumber)-4:]
 	return masked
 }
 
