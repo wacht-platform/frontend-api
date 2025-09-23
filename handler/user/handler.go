@@ -2054,6 +2054,8 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 			deployment.ID, oauthUser.Email).
 			First(&userEmailAddress).Error
 
+		log.Println("test", *userEmailAddress.UserID, *session.ActiveSignin.UserID)
+
 		if err == gorm.ErrRecordNotFound {
 			userEmailAddress = model.UserEmailAddress{
 				DeploymentID:         deployment.ID,
