@@ -1919,13 +1919,9 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					return handler.SendInternalServerError(c, err, "Error fetching user")
 				}
 
-				isValid, err := h.service.VerifyPhoneOTP(deployment.ID, p.PhoneNumber, b.VerificationCode)
+				verified, err = h.service.VerifyPhoneOTP(deployment.ID, p.PhoneNumber, b.VerificationCode)
 				if err != nil {
 					return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
-				}
-
-				if !isValid {
-					return handler.SendBadRequest(c, nil, "Invalid OTP")
 				}
 
 				h.service.Delete2FAMethodFromCache(fmt.Sprintf("2fa_method:%d", attempt.ID))
@@ -1985,8 +1981,8 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 			if len(attempt.RemainingSteps) == 1 {
 				attempt.Completed = true
 				attempt.RemainingSteps = nil
-				attempt.RemainingSteps = attempt.RemainingSteps[1:]
-				attempt.CurrentStep = attempt.RemainingSteps[0]
+				attempt.RemainingSteps = datatypes.JSONSlice[model.SignInAttemptStep]{}
+				attempt.CurrentStep = ""
 				signin = h.service.CreateSignin(user.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 				session.Signins = append(session.Signins, *signin)
 				session.ActiveSigninID = &signin.ID
