@@ -56,7 +56,7 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 }
 
 func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
-	user, err := h.service.FindUserByUsername(b.Username)
+	user, err := h.service.FindUserByUsername(b.Username, d.ID)
 	if err != nil {
 		if err == handler.ErrUserNotFound {
 			return handler.SendUnauthorized(c, nil, "Invalid credentials", handler.ErrInvalidCredentials)
@@ -207,7 +207,7 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 }
 
 func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
-	email, err := h.service.FindUserByEmail(b.Email)
+	email, err := h.service.FindUserByEmail(b.Email, d.ID)
 	if err != nil {
 		if err == handler.ErrUserNotFound {
 			return handler.SendUnauthorized(c, nil, "Invalid credentials", handler.ErrInvalidCredentials)
@@ -365,7 +365,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 	missingFields := []string{}
 
 	if method == model.SignInMethodEmailOTP {
-		email, err := h.service.FindUserByVerifiedEmail(b.Email)
+		email, err := h.service.FindUserByVerifiedEmail(b.Email, deployment.ID)
 
 		if email != nil {
 			userID = email.UserID
@@ -421,7 +421,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 			)
 		}
 	} else if method == model.SignInMethodPhoneOTP {
-		phone, err := h.service.FindUserByPhoneNumber(b.Phone, b.PhoneCountryCode)
+		phone, err := h.service.FindUserByPhoneNumber(b.Phone, b.PhoneCountryCode, deployment.ID)
 
 		if phone != nil {
 			userID = &phone.User.ID
@@ -516,7 +516,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 }
 
 func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
-	email, _ := h.service.FindUserByVerifiedEmail(b.Email)
+	email, _ := h.service.FindUserByVerifiedEmail(b.Email, d.ID)
 
 	steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyEmailLink}
 	requiresCompletion := false
@@ -1234,7 +1234,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				}
 			} else if attempt.IdentifierID != nil {
 
-				email, err := h.service.FindUserByEmailID(*attempt.IdentifierID)
+				email, err := h.service.FindUserByEmailID(*attempt.IdentifierID, deployment.ID)
 				if err != nil {
 					return handler.SendInternalServerError(c, err, "Error fetching user", handler.ErrInvalidSignInAttempt)
 				}
@@ -1270,7 +1270,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 					userID = *attempt.UserID
 				}
 			} else if attempt.IdentifierID != nil {
-				phone, err := h.service.FindUserByPhoneNumberID(*attempt.IdentifierID)
+				phone, err := h.service.FindUserByPhoneNumberID(*attempt.IdentifierID, deployment.ID)
 				if err != nil {
 					return handler.SendInternalServerError(c, err, "Error fetching user", handler.ErrInvalidSignInAttempt)
 				}
@@ -1291,6 +1291,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 
 			email, err := h.service.FindUserByEmailID(
 				*attempt.IdentifierID,
+				deployment.ID,
 			)
 			if err != nil {
 				return handler.SendInternalServerError(
@@ -1531,7 +1532,7 @@ func (h *Handler) VerifyMagicLink(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Invalid or expired magic link")
 	}
 
-	email, err := h.service.FindUserByEmailID(*attempt.IdentifierID)
+	email, err := h.service.FindUserByEmailID(*attempt.IdentifierID, deployment.ID)
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Error fetching user")
 	}
@@ -1658,7 +1659,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					}
 				} else if attempt.IdentifierID != nil {
 
-					email, err := h.service.FindUserByEmailID(*attempt.IdentifierID)
+					email, err := h.service.FindUserByEmailID(*attempt.IdentifierID, deployment.ID)
 					if err != nil {
 						return handler.SendInternalServerError(c, err, "Error fetching user")
 					}
@@ -1764,7 +1765,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 						user = &u
 					}
 				} else if attempt.IdentifierID != nil {
-					p, err := h.service.FindUserByPhoneNumberID(*attempt.IdentifierID)
+					p, err := h.service.FindUserByPhoneNumberID(*attempt.IdentifierID, deployment.ID)
 					if err != nil {
 						return handler.SendInternalServerError(c, err, "Error fetching user")
 					}
@@ -1921,7 +1922,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				}
 
 			case "phone_otp":
-				p, err := h.service.FindUserByPhoneNumberID(*attempt.IdentifierID)
+				p, err := h.service.FindUserByPhoneNumberID(*attempt.IdentifierID, deployment.ID)
 				if err != nil {
 					return handler.SendInternalServerError(c, err, "Error fetching user")
 				}
@@ -2449,7 +2450,7 @@ func (h *Handler) ForgotPassword(c *fiber.Ctx) error {
 
 	d := handler.GetDeployment(c)
 
-	email, err := h.service.FindUserByEmail(b.Email)
+	email, err := h.service.FindUserByEmail(b.Email, d.ID)
 	if err != nil {
 		if err == handler.ErrUserNotFound {
 			return handler.SendNotFound(
@@ -2507,6 +2508,7 @@ func (h *Handler) ForgotPassword(c *fiber.Ctx) error {
 
 func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 	b, validation := handler.Validate[ResetPasswordRequest](c)
+	deployment := handler.GetDeployment(c)
 	if validation != nil {
 		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
@@ -2515,7 +2517,7 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, err.Error())
 	}
 
-	email, err := h.service.FindUserByEmail(b.Email)
+	email, err := h.service.FindUserByEmail(b.Email, deployment.ID)
 	if err != nil {
 		if err == handler.ErrUserNotFound {
 			return handler.SendNotFound(

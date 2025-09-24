@@ -50,9 +50,10 @@ func NewAuthService() *AuthService {
 
 func (s *AuthService) FindUserByEmail(
 	email string,
+	deploymentID uint64,
 ) (*model.UserEmailAddress, error) {
 	var userEmail model.UserEmailAddress
-	if res := s.db.Where(&model.UserEmailAddress{EmailAddress: email}).Joins("User").First(&userEmail); res.RowsAffected == 0 {
+	if res := s.db.Where(&model.UserEmailAddress{EmailAddress: email, DeploymentID: deploymentID}).Joins("User").First(&userEmail); res.RowsAffected == 0 {
 		return nil, handler.ErrUserNotFound
 	} else if res.Error != nil {
 		return nil, res.Error
@@ -63,9 +64,10 @@ func (s *AuthService) FindUserByEmail(
 
 func (s *AuthService) FindUserByVerifiedEmail(
 	email string,
+	deploymentID uint64,
 ) (*model.UserEmailAddress, error) {
 	var userEmail model.UserEmailAddress
-	if res := s.db.Where(&model.UserEmailAddress{EmailAddress: email, Verified: true}).Joins("User").First(&userEmail); res.RowsAffected == 0 {
+	if res := s.db.Where(&model.UserEmailAddress{EmailAddress: email, Verified: true, DeploymentID: deploymentID}).Joins("User").First(&userEmail); res.RowsAffected == 0 {
 		return nil, handler.ErrUserNotFound
 	} else if res.Error != nil {
 		return nil, res.Error
@@ -75,10 +77,10 @@ func (s *AuthService) FindUserByVerifiedEmail(
 }
 
 func (s *AuthService) FindUserByEmailID(
-	emailId uint64,
+	emailId uint64, deploymentID uint64,
 ) (*model.UserEmailAddress, error) {
 	var userEmail model.UserEmailAddress
-	if res := s.db.Where(&model.UserEmailAddress{Model: model.Model{ID: emailId}}).Joins("User").First(&userEmail); res.RowsAffected == 0 {
+	if res := s.db.Where(&model.UserEmailAddress{Model: model.Model{ID: emailId}, DeploymentID: deploymentID}).Joins("User").First(&userEmail); res.RowsAffected == 0 {
 		return nil, handler.ErrUserNotFound
 	} else if res.Error != nil {
 		return nil, res.Error
@@ -89,12 +91,14 @@ func (s *AuthService) FindUserByEmailID(
 func (s *AuthService) FindUserByPhoneNumber(
 	phoneNumber string,
 	countryCode string,
+	deploymentID uint64,
 ) (*model.UserPhoneNumber, error) {
 	var userPhone model.UserPhoneNumber
 	if res := s.db.Where(&model.UserPhoneNumber{
-		PhoneNumber: phoneNumber,
-		CountryCode: countryCode,
-		Verified:    true,
+		PhoneNumber:  phoneNumber,
+		CountryCode:  countryCode,
+		Verified:     true,
+		DeploymentID: deploymentID,
 	}).Joins("User").First(&userPhone); res.RowsAffected == 0 {
 		return nil, handler.ErrUserNotFound
 	} else if res.Error != nil {
@@ -106,9 +110,10 @@ func (s *AuthService) FindUserByPhoneNumber(
 
 func (s *AuthService) FindUserByPhoneNumberID(
 	phoneId uint64,
+	deploymentID uint64,
 ) (*model.UserPhoneNumber, error) {
 	var userPhone model.UserPhoneNumber
-	if res := s.db.Where(&model.UserPhoneNumber{Model: model.Model{ID: phoneId}}).
+	if res := s.db.Where(&model.UserPhoneNumber{Model: model.Model{ID: phoneId}, DeploymentID: deploymentID}).
 		Joins("User").
 		Preload("User.UserEmailAddresses").
 		First(&userPhone); res.RowsAffected == 0 {
@@ -121,9 +126,10 @@ func (s *AuthService) FindUserByPhoneNumberID(
 
 func (s *AuthService) FindUserByUsername(
 	username string,
+	deploymentID uint64,
 ) (*model.User, error) {
 	var user model.User
-	if res := s.db.Where(&model.User{Username: username}).First(&user); res.RowsAffected == 0 {
+	if res := s.db.Where(&model.User{Username: username, DeploymentID: deploymentID}).First(&user); res.RowsAffected == 0 {
 		return nil, handler.ErrUserNotFound
 	} else if res.Error != nil {
 		return nil, res.Error
@@ -613,7 +619,7 @@ func (s *AuthService) SendMagicLinkAsync(
 	deployment model.Deployment,
 ) error {
 	// Get user ID for the email
-	userEmail, err := s.FindUserByEmail(email)
+	userEmail, err := s.FindUserByEmail(email, deployment.ID)
 	if err != nil {
 		// For new signups or non-existent users, use 0 as user ID
 		return s.nats.SendMagicLinkEmail(deployment.ID, 0, email, magicLink)
