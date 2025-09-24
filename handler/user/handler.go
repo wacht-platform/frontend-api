@@ -838,10 +838,9 @@ func (h *Handler) AddPhoneNumber(c *fiber.Ctx) error {
 		Model: model.Model{
 			ID: snowflake.ID(),
 		},
-		PhoneNumber:           b.PhoneNumber,
-		CountryCode:           b.CountryCode,
-		CanUseForSecondFactor: true,
-		DeploymentID:          deployment.ID,
+		PhoneNumber:  b.PhoneNumber,
+		CountryCode:  b.CountryCode,
+		DeploymentID: deployment.ID,
 	}
 
 	phoneNumber.UserID = *session.ActiveSignin.UserID

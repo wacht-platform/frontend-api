@@ -201,6 +201,7 @@ func (s *AuthService) CreateSignInAttempt(
 	method model.SignInMethod,
 	steps []model.SignInAttemptStep,
 	completed bool,
+	deployment *model.Deployment,
 ) *model.SignInAttempt {
 	attempt := model.NewSignInAttempt(method)
 	if len(steps) > 0 {
@@ -211,14 +212,12 @@ func (s *AuthService) CreateSignInAttempt(
 	attempt.Completed = completed
 	attempt.UserID = userID
 	attempt.SessionID = sessionID
-	// For password-based methods, if completed is true, they're authenticated
-	// For OTP/magic link methods, completed is always false initially
 	attempt.FirstMethodAuthenticated = completed
 
 	if slices.Contains(steps, model.SignInAttemptStepVerifySecondFactor) {
 		attempt.SecondMethodAuthenticationRequired = true
 		if userID != nil {
-			attempt.Available2FAMethods = datatypes.NewJSONSlice(s.GetAvailable2FAMethods(*userID))
+			attempt.Available2FAMethods = datatypes.NewJSONSlice(s.GetAvailable2FAMethods(*userID, deployment))
 		}
 	}
 
@@ -334,8 +333,9 @@ func (s *AuthService) HandleExistingUser(
 	email *model.UserEmailAddress,
 	token *oauth2.Token,
 	attempt *model.SignInAttempt,
-	deploymentSettings model.DeploymentAuthSettings,
+	deployment *model.Deployment,
 ) (*model.Signin, error) {
+	deploymentSettings := deployment.AuthSettings
 	var connection model.SocialConnection
 	for _, sc := range email.User.SocialConnections {
 		if sc.Provider == attempt.SSOProvider &&
@@ -390,7 +390,7 @@ func (s *AuthService) HandleExistingUser(
 			requiredFields := s.GetRequiredFields(deploymentSettings)
 			attempt.RequiredFields = datatypes.NewJSONSlice(requiredFields)
 		}
-		attempt.Available2FAMethods = datatypes.NewJSONSlice(s.GetAvailable2FAMethods(email.User.ID))
+		attempt.Available2FAMethods = datatypes.NewJSONSlice(s.GetAvailable2FAMethods(email.User.ID, deployment))
 		return nil, nil
 	}
 
@@ -1433,10 +1433,8 @@ func (s *AuthService) isDisposableEmail(email string) bool {
 		"zetmail.com", "zippymail.info", "zoaxe.com", "zoemail.org", "zomg.info",
 	}
 
-	for _, disposableDomain := range disposableDomains {
-		if domain == disposableDomain {
-			return true
-		}
+	if slices.Contains(disposableDomains, domain) {
+		return true
 	}
 
 	disposablePatterns := []string{
@@ -1571,7 +1569,7 @@ func (s *AuthService) extractCountryCodeFromPhone(phoneNumber string) string {
 	return "1"
 }
 
-func (s *AuthService) GetAvailable2FAMethods(userID uint64) []string {
+func (s *AuthService) GetAvailable2FAMethods(userID uint64, deployment *model.Deployment) []string {
 	var methods []string
 
 	var phoneCount int64
@@ -1582,12 +1580,14 @@ func (s *AuthService) GetAvailable2FAMethods(userID uint64) []string {
 		methods = append(methods, "phone_otp")
 	}
 
-	var authenticatorCount int64
-	s.db.Model(&model.UserAuthenticator{}).
-		Where("user_id = ?", userID).
-		Count(&authenticatorCount)
-	if authenticatorCount > 0 {
-		methods = append(methods, "authenticator")
+	if deployment.AuthSettings.AuthFactorsEnabled.Authenticator {
+		var authenticatorCount int64
+		s.db.Model(&model.UserAuthenticator{}).
+			Where("user_id = ?", userID).
+			Count(&authenticatorCount)
+		if authenticatorCount > 0 {
+			methods = append(methods, "authenticator")
+		}
 	}
 
 	var user model.User

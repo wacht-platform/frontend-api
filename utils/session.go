@@ -512,7 +512,6 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 					'phone_number', up.phone_number,
 					'verified', up.verified,
 					'verified_at', up.verified_at,
-					'can_use_for_second_factor', up.can_use_for_second_factor,
 					'created_at', up.created_at,
 					'updated_at', up.updated_at
 				) ORDER BY up.created_at

@@ -138,6 +138,7 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 		model.SignInMethodPlainUsername,
 		steps,
 		completed,
+		&d,
 	)
 
 	attempt.FirstMethodAuthenticated = authenticated
@@ -292,6 +293,7 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 		model.SignInMethodPlainEmail,
 		steps,
 		completed,
+		&d,
 	)
 
 	attempt.FirstMethodAuthenticated = authenticated
@@ -404,6 +406,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 				method,
 				steps,
 				false,
+				&deployment,
 			)
 		} else {
 			steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyEmailOTP}
@@ -414,6 +417,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 				method,
 				steps,
 				false,
+				&deployment,
 			)
 		}
 	} else if method == model.SignInMethodPhoneOTP {
@@ -458,6 +462,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 				method,
 				steps,
 				false,
+				&deployment,
 			)
 		} else {
 			steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyPhoneOTP}
@@ -468,6 +473,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 				method,
 				steps,
 				false,
+				&deployment,
 			)
 		}
 	}
@@ -559,10 +565,10 @@ func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.D
 			session.ID,
 			model.SignInMethodMagicLink,
 			steps,
-			false, // Never complete immediately for magic link
+			false,
+			&d,
 		)
 	} else {
-		// New user via magic link - no profile completion needed yet
 		attempt = h.service.CreateSignInAttempt(
 			nil,
 			nil,
@@ -570,6 +576,7 @@ func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.D
 			model.SignInMethodMagicLink,
 			steps,
 			false,
+			&d,
 		)
 	}
 
@@ -977,7 +984,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 				&email,
 				token,
 				&attempt,
-				deployment.AuthSettings,
+				&deployment,
 			)
 			if err != nil {
 				return err
@@ -1073,7 +1080,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 
 			if secondFactorEnforced {
 				attempt.SecondMethodAuthenticationRequired = true
-				attempt.Available2FAMethods = datatypes.NewJSONSlice(h.service.GetAvailable2FAMethods(u.ID))
+				attempt.Available2FAMethods = datatypes.NewJSONSlice(h.service.GetAvailable2FAMethods(u.ID, &deployment))
 			}
 
 			if requiresCompletion {
