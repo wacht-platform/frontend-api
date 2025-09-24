@@ -53,6 +53,7 @@ type userPhoneNumberJSON struct {
 	PhoneNumber string `json:"phone_number"`
 	Verified    bool   `json:"verified"`
 	VerifiedAt  string `json:"verified_at"`
+	CountryCode string `json:"country_code"`
 }
 
 type socialConnectionJSON struct {
@@ -119,10 +120,7 @@ func parseUserEmailAddressesJSON(jsonStr string) []model.UserEmailAddress {
 	return emailAddresses
 }
 
-// parseUserPhoneNumbersJSON parses the JSON string into a slice of UserPhoneNumber
-// Handles JSON parsing errors gracefully without breaking the response
 func parseUserPhoneNumbersJSON(jsonStr string) []model.UserPhoneNumber {
-	// Handle empty, null, or empty array cases
 	if jsonStr == "" || jsonStr == "[]" || jsonStr == "null" {
 		return []model.UserPhoneNumber{}
 	}
@@ -130,7 +128,6 @@ func parseUserPhoneNumbersJSON(jsonStr string) []model.UserPhoneNumber {
 	var jsonPhones []userPhoneNumberJSON
 	if err := json.Unmarshal([]byte(jsonStr), &jsonPhones); err != nil {
 		log.Printf("Error parsing user phone numbers JSON: %v, JSON: %s", err, jsonStr)
-		// Return empty slice to maintain backward compatibility and prevent response failure
 		return []model.UserPhoneNumber{}
 	}
 
@@ -155,6 +152,7 @@ func parseUserPhoneNumbersJSON(jsonStr string) []model.UserPhoneNumber {
 			},
 			PhoneNumber: jsonPhone.PhoneNumber,
 			Verified:    jsonPhone.Verified,
+			CountryCode: jsonPhone.CountryCode,
 			VerifiedAt:  verifiedAt,
 		})
 	}
@@ -375,7 +373,6 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 		)
 	}
 
-	// Check if we got a result - this handles the case where no active sign-in is found
 	if queryResult.UserID == 0 {
 		return handler.SendBadRequest(
 			c,
@@ -384,7 +381,6 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 		)
 	}
 
-	// Parse JSON fields and construct User model with error handling
 	user := model.User{
 		Model: model.Model{
 			ID:        queryResult.UserID,
@@ -409,19 +405,14 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 		BackupCodesGenerated:           queryResult.BackupCodesGenerated,
 	}
 
-	// Parse JSON fields using helper functions - these functions handle JSON parsing errors gracefully
-	// by logging errors and returning empty collections to maintain backward compatibility
 	user.UserEmailAddresses = parseUserEmailAddressesJSON(queryResult.UserEmailAddressesJSON)
 	user.UserPhoneNumbers = parseUserPhoneNumbersJSON(queryResult.UserPhoneNumbersJSON)
 	user.SocialConnections = parseSocialConnectionsJSON(queryResult.SocialConnectionsJSON)
 	user.UserAuthenticator = parseUserAuthenticatorJSON(queryResult.UserAuthenticatorJSON)
 
-	// Parse PublicMetadata JSON with error handling
 	if queryResult.PublicMetadata != "" && queryResult.PublicMetadata != "null" {
 		var metadata datatypes.JSONMap
 		if err := json.Unmarshal([]byte(queryResult.PublicMetadata), &metadata); err != nil {
-			log.Printf("Error parsing PublicMetadata JSON in GetUser: %v, JSON: %s", err, queryResult.PublicMetadata)
-			// Continue with empty metadata to maintain backward compatibility
 			user.PublicMetadata = make(datatypes.JSONMap)
 		} else {
 			user.PublicMetadata = metadata
