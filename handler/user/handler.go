@@ -2034,7 +2034,7 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 		return handler.SendBadRequest(
 			c,
 			nil,
-			"Failed to exchange code for token",
+			"Authentication state not correct. Please try connecting again",
 			handler.ErrCodeRequired,
 		)
 	}

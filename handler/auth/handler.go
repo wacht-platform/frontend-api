@@ -942,7 +942,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		return handler.SendBadRequest(
 			c,
 			nil,
-			"Failed to exchange code for token",
+			"Authentication state not correct. Please try logging in again",
 			handler.ErrInvalidCode,
 		)
 	}
