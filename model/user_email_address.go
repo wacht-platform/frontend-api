@@ -9,8 +9,8 @@ type VerificationStrategy string
 
 const (
 	Otp            VerificationStrategy = "otp"
-	OauthGoogle    VerificationStrategy = "oath_google"
-	OauthGithub    VerificationStrategy = "oath_github"
+	OauthGoogle    VerificationStrategy = "oauth_google"
+	OauthGithub    VerificationStrategy = "oauth_github"
 	OauthMicrosoft VerificationStrategy = "oauth_microsoft"
 	OauthFacebook  VerificationStrategy = "oauth_facebook"
 	OauthLinkedIn  VerificationStrategy = "oauth_linkedin"

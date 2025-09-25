@@ -2048,6 +2048,9 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 
 		if err == gorm.ErrRecordNotFound {
 			userEmailAddress = model.UserEmailAddress{
+				Model: model.Model{
+					ID: snowflake.ID(),
+				},
 				DeploymentID:         deployment.ID,
 				UserID:               session.ActiveSignin.UserID,
 				EmailAddress:         oauthUser.Email,
