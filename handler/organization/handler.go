@@ -247,7 +247,7 @@ func (h *Handler) UpdateOrganization(
 	}
 
 	if b.AutoAssignedWorkspaceID != nil {
-		// org.AutoAssignedWorkspaceID = b.AutoAssignedWorkspaceID
+		org.AutoAssignedWorkspaceID = b.AutoAssignedWorkspaceID
 	}
 
 	if img != nil {
@@ -298,6 +298,38 @@ func (h *Handler) DeleteOrganization(
 	hasPermission := h.service.hasPermission(membership, orgOwnerPermissions)
 	if !hasPermission {
 		return handler.SendForbidden(c, nil, "Only organization owner can delete the organization")
+	}
+
+	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.OrgMembershipRoleAssoc{}).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to delete organization membership role associations")
+	}
+
+	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.OrganizationMembership{}).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to delete organization memberships")
+	}
+
+	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.OrganizationInvitation{}).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to delete organization invitations")
+	}
+
+	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.WorkspaceMembershipRoleAssoc{}).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to delete organization")
+	}
+
+	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.WorkspaceMembership{}).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to delete organization workspace memberships")
+	}
+
+	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.WorkspaceRole{}).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to delete organization workspace invitations")
+	}
+
+	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.Workspace{}).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to delete organization workspace invitations")
+	}
+
+	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.OrganizationRole{}).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to delete organization workspace roles")
 	}
 
 	if err := database.Connection.Delete(&model.Organization{}, orgID).Error; err != nil {

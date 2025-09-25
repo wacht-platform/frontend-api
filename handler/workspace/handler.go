@@ -409,7 +409,6 @@ func (h *Handler) DeleteWorkspaceRole(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "No active sign-in")
 	}
 
-	// Check workspace membership
 	var membership model.WorkspaceMembership
 	if err := database.Connection.
 		Where("workspace_id = ? AND user_id = ?", workspaceID, session.ActiveSignin.UserID).
@@ -418,7 +417,6 @@ func (h *Handler) DeleteWorkspaceRole(c *fiber.Ctx) error {
 		return handler.SendForbidden(c, nil, "Insufficient permissions (not a member of the workspace).")
 	}
 
-	// Check if user has permission to manage workspace
 	hasPermission := false
 	for _, role := range membership.Roles {
 		for _, perm := range role.Permissions {
@@ -436,7 +434,6 @@ func (h *Handler) DeleteWorkspaceRole(c *fiber.Ctx) error {
 		return handler.SendForbidden(c, nil, "Insufficient permissions to manage workspace roles.")
 	}
 
-	// Check if role exists and belongs to this workspace
 	var roleToDelete model.WorkspaceRole
 	if err := database.Connection.
 		Where("id = ? AND workspace_id = ?", roleID, workspaceID).
@@ -447,7 +444,6 @@ func (h *Handler) DeleteWorkspaceRole(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to find role")
 	}
 
-	// Check if any members have this role
 	var memberCount int64
 	database.Connection.Model(&model.WorkspaceMembershipRoleAssoc{}).
 		Where("workspace_role_id = ?", roleID).
@@ -457,7 +453,6 @@ func (h *Handler) DeleteWorkspaceRole(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, fmt.Sprintf("Cannot delete role - %d members still have this role assigned", memberCount))
 	}
 
-	// Delete the role
 	if err := database.Connection.Delete(&roleToDelete).Error; err != nil {
 		log.Printf("Failed to delete workspace role %d: %v", roleID, err)
 		return handler.SendInternalServerError(c, err, "Failed to delete role")
