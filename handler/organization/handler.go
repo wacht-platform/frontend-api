@@ -108,7 +108,7 @@ func (h *Handler) CreateOrganization(
 				return err
 			}
 			session.ActiveSignin.ActiveOrganizationMembershipID = &membership.ID
-			database.Connection.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).Updates(map[string]interface{}{
+			database.Connection.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).Updates(map[string]any{
 				"active_organization_membership_id": membership.ID,
 			})
 			return nil
@@ -180,7 +180,7 @@ func (h *Handler) LeaveOrganization(
 				*session.ActiveSignin.ActiveOrganizationMembershipID == membership.ID {
 				session.ActiveSignin.ActiveOrganizationMembershipID = nil
 				session.ActiveSignin.ActiveWorkspaceMembershipID = nil
-				if errDb := database.Connection.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).Updates(map[string]interface{}{
+				if errDb := database.Connection.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).Updates(map[string]any{
 					"active_organization_membership_id": nil,
 					"active_workspace_membership_id":    nil,
 				}).Error; errDb != nil {

@@ -709,6 +709,18 @@ func (h *Handler) DeleteWorkspace(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to verify workspace status before deletion.")
 	}
 
+	if err := database.Connection.Where("workspace_id = ?", workspaceID).Delete(&model.WorkspaceMembershipRoleAssoc{}).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to delete organization")
+	}
+
+	if err := database.Connection.Where("workspace_id = ?", workspaceID).Delete(&model.WorkspaceMembership{}).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to delete workspace memberships")
+	}
+
+	if err := database.Connection.Where("workspace_id = ?", workspaceID).Delete(&model.WorkspaceRole{}).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to delete workspace roles")
+	}
+
 	if err := database.Connection.Delete(&model.Workspace{}, workspaceID).Error; err != nil {
 		log.Printf("Failed to delete workspace %d: %v", workspaceID, err)
 		return handler.SendInternalServerError(
