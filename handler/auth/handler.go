@@ -1015,10 +1015,6 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			return nil
 		}
 
-		if err != nil {
-			return err
-		}
-
 		primaryAddressID := snowflake.ID()
 
 		u := model.User{
