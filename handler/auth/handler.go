@@ -1000,6 +1000,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 				token,
 				&attempt,
 				&deployment,
+				session,
 			)
 			if err != nil {
 				return err
