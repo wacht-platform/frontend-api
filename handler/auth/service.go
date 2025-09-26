@@ -340,6 +340,7 @@ func (s *AuthService) HandleExistingUser(
 	token *oauth2.Token,
 	attempt *model.SignInAttempt,
 	deployment *model.Deployment,
+	session *model.Session,
 ) (*model.Signin, error) {
 	deploymentSettings := deployment.AuthSettings
 	var connection model.SocialConnection
@@ -398,6 +399,12 @@ func (s *AuthService) HandleExistingUser(
 		}
 		attempt.Available2FAMethods = datatypes.NewJSONSlice(s.GetAvailable2FAMethods(email.User.ID, deployment))
 		return nil, nil
+	}
+
+	for _, signin := range session.Signins {
+		if *signin.UserID == email.User.ID {
+			return &signin, nil
+		}
 	}
 
 	signIn := model.NewSignIn(
