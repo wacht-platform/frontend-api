@@ -3,6 +3,7 @@ package auth
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"slices"
@@ -964,6 +965,10 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			err,
 			"Failed to get user info",
 		)
+	}
+
+	if user.Email != "" {
+		user.Email = strings.ToLower(user.Email)
 	}
 
 	var email model.UserEmailAddress
