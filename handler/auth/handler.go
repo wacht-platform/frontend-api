@@ -967,11 +967,21 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 	}
 
 	var email model.UserEmailAddress
-	exists := database.Connection.
+	err = database.Connection.
 		Where("email_address = ? AND deployment_id = ?", user.Email, deployment.ID).
 		Preload("User").
 		Preload("User.SocialConnections").
-		First(&email).Error == gorm.ErrRecordNotFound
+		First(&email).Error
+
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return handler.SendInternalServerError(
+			c,
+			nil,
+			"Something went wrong",
+		)
+	}
+
+	exists := err != gorm.ErrRecordNotFound
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
 		if exists {
