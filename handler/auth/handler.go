@@ -971,7 +971,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		Where("email_address = ? AND deployment_id = ?", user.Email, deployment.ID).
 		Preload("User").
 		Preload("User.SocialConnections").
-		First(&email).RowsAffected > 0
+		First(&email).Error == gorm.ErrRecordNotFound
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
 		if exists {
