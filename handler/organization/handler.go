@@ -292,6 +292,7 @@ func (h *Handler) DeleteOrganization(
 		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
 		Preload("Roles").First(&membership).
 		Error; err != nil {
+		log.Println(err)
 		return handler.SendForbidden(c, nil, "Only organization owner can delete the organization")
 	}
 
