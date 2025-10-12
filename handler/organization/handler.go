@@ -296,6 +296,7 @@ func (h *Handler) DeleteOrganization(
 		return handler.SendForbidden(c, nil, "Only organization owner can delete the organization")
 	}
 
+	log.Println(membership.Roles)
 	hasPermission := h.service.hasPermission(membership, orgOwnerPermissions)
 	if !hasPermission {
 		return handler.SendForbidden(c, nil, "Only organization owner can delete the organization")
