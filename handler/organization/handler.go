@@ -318,12 +318,12 @@ func (h *Handler) DeleteOrganization(
 		return handler.SendInternalServerError(c, err, "Failed to delete organization workspace invitations")
 	}
 
-	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.OrganizationMembership{}).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to delete organization memberships")
-	}
-
 	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.OrgMembershipRoleAssoc{}).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to delete organization membership role associations")
+	}
+
+	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.OrganizationMembership{}).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to delete organization memberships")
 	}
 
 	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.OrganizationInvitation{}).Error; err != nil {

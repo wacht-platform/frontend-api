@@ -132,7 +132,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 	var finalWorkspace model.Workspace
 	if err := database.Connection.
 		Preload("Members", "user_id = ?", session.ActiveSignin.UserID).
-		Preload("Members.Role").
+		Preload("Members.Roles").
 		First(&finalWorkspace, workspace.ID).Error; err != nil {
 		log.Printf("Failed to fetch created workspace for response: %v", err)
 		return handler.SendSuccess(c, fiber.Map{"workspace": workspace})
