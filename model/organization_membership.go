@@ -19,3 +19,4 @@ type OrganizationMembership struct {
 	Roles            []*OrganizationRole      `json:"roles" gorm:"many2many:organization_membership_roles;joinForeignKey:OrganizationMembershipID;JoinReferences:OrganizationRoleID;References:ID;foreignKey:ID"`
 	RoleAssociations []OrgMembershipRoleAssoc `json:"-" gorm:"foreignKey:OrganizationMembershipID;references:ID"`
 }
+

@@ -485,6 +485,9 @@ func (h *Handler) UpdateUser(c *fiber.Ctx) error {
 		)
 	}
 
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "user.updated", *session.ActiveSignin.UserID, "user")
+
 	utils.RemoveCachedSession(session.ID)
 
 	return handler.SendSuccess(c, "Profile updated successfully")
@@ -560,6 +563,10 @@ func (h *Handler) DeleteUserEmailAddress(c *fiber.Ctx) error {
 		)
 	}
 
+	emailIDUint, _ := strconv.ParseUint(emailID, 10, 64)
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "user.email.removed", emailIDUint, "user_email")
+
 	query := database.Connection.Where("id = ? AND user_id = ? AND is_primary = ?", emailID, session.ActiveSignin.UserID, false).
 		Delete(&model.UserEmailAddress{})
 	if query.Error != nil {
@@ -620,6 +627,8 @@ func (h *Handler) CreateUserEmailAddress(c *fiber.Ctx) error {
 			handler.ErrInternal,
 		)
 	}
+
+	utils.PublishWebhookEvent(deployment.ID, "user.email.added", newEmail.ID, "user_email")
 
 	return handler.SendSuccess(c, newEmail)
 }
@@ -682,6 +691,9 @@ func (h *Handler) AttemptEmailVerification(c *fiber.Ctx) error {
 			handler.ErrInternal,
 		)
 	}
+
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "user.email.verified", emailAddress.ID, "user_email")
 
 	return handler.SendSuccess(c, "Email verified successfully")
 }
@@ -845,6 +857,8 @@ func (h *Handler) AddPhoneNumber(c *fiber.Ctx) error {
 		)
 	}
 
+	utils.PublishWebhookEvent(deployment.ID, "user.phone.added", phoneNumber.ID, "user_phone")
+
 	return handler.SendSuccess(c, phoneNumber)
 }
 
@@ -957,6 +971,8 @@ func (h *Handler) AttemptPhoneVerification(c *fiber.Ctx) error {
 		)
 	}
 
+	utils.PublishWebhookEvent(deployment.ID, "user.phone.verified", phoneNumber.ID, "user_phone")
+
 	return handler.SendSuccess(c, "Phone number verified successfully")
 }
 
@@ -974,6 +990,10 @@ func (h *Handler) DeletePhoneNumber(c *fiber.Ctx) error {
 			"Phone number ID is required",
 		)
 	}
+
+	phoneIDUint, _ := strconv.ParseUint(phoneID, 10, 64)
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "user.phone.removed", phoneIDUint, "user_phone")
 
 	query := database.Connection.Where("id = ? AND user_id = ?", phoneID, session.ActiveSignin.UserID).
 		Delete(&model.UserPhoneNumber{})
@@ -1142,6 +1162,9 @@ func (h *Handler) VerifyAuthenticator(c *fiber.Ctx) error {
 		)
 	}
 
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "user.mfa.enabled", *session.ActiveSignin.UserID, "user_authenticator")
+
 	return handler.SendSuccess(c, authenticator)
 }
 
@@ -1159,6 +1182,9 @@ func (h *Handler) DeleteAuthenticator(c *fiber.Ctx) error {
 			"Authenticator ID is required",
 		)
 	}
+
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "user.mfa.disabled", *session.ActiveSignin.UserID, "user_authenticator")
 
 	query := database.Connection.Where("id = ? AND user_id = ?", authenticatorID, session.ActiveSignin.UserID).
 		Delete(&model.UserAuthenticator{})
@@ -1236,6 +1262,9 @@ func (h *Handler) GenerateBackupCodes(c *fiber.Ctx) error {
 		)
 	}
 
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "user.backup_codes.generated", *session.ActiveSignin.UserID, "user")
+
 	return handler.SendSuccess(c, backupCodes)
 }
 
@@ -1300,6 +1329,9 @@ func (h *Handler) RegenerateBackupCodes(c *fiber.Ctx) error {
 			handler.ErrInternal,
 		)
 	}
+
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "user.backup_codes.regenerated", *session.ActiveSignin.UserID, "user")
 
 	return handler.SendSuccess(c, backupCodes)
 }
@@ -1624,6 +1656,8 @@ func (h *Handler) MakeEmailPrimary(c *fiber.Ctx) error {
 		_ = h.service.nats.SendPrimaryEmailChangeEmail(deployment.ID, user.ID, emailAddress.EmailAddress, oldPrimaryEmail, emailAddress.EmailAddress)
 	}
 
+	utils.PublishWebhookEvent(deployment.ID, "user.email.primary.changed", user.ID, "user")
+
 	utils.RemoveCachedSession(session.ID)
 
 	return handler.SendSuccess(c, "Primary email updated successfully")
@@ -1645,9 +1679,18 @@ func (h *Handler) MakePhonePrimary(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Phone number not found or not verified")
 	}
 
+	var user model.User
+	if err := database.Connection.First(&user, session.ActiveSignin.UserID).Error; err != nil {
+		return handler.SendInternalServerError(c, nil, "Failed to load user")
+	}
+
 	if err := database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Update("primary_phone_number_id", phoneID).Error; err != nil {
 		return handler.SendInternalServerError(c, nil, "Failed to update primary phone", handler.ErrInternal)
 	}
+
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "user.phone.primary.changed", user.ID, "user")
+
 	utils.RemoveCachedSession(session.ID)
 
 	return handler.SendSuccess(c, "Primary phone updated successfully")
@@ -1699,6 +1742,8 @@ func (h *Handler) UpdatePassword(c *fiber.Ctx) error {
 			}
 		}
 	}
+
+	utils.PublishWebhookEvent(deployment.ID, "user.password.updated", user.ID, "user")
 
 	utils.RemoveCachedSession(session.ID)
 
@@ -1792,6 +1837,9 @@ func (h *Handler) DeleteAccount(c *fiber.Ctx) error {
 		tx.Rollback()
 		return handler.SendInternalServerError(c, nil, "Failed to delete account")
 	}
+
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "user.deleted", user.ID, "user")
 
 	if err := tx.Commit().Error; err != nil {
 		return handler.SendInternalServerError(c, nil, "Failed to complete account deletion")

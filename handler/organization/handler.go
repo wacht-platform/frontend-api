@@ -118,6 +118,8 @@ func (h *Handler) CreateOrganization(
 		return handler.SendInternalServerError(c, err, "Failed to create organization")
 	}
 
+	utils.PublishWebhookEvent(d.ID, "organization.created", org.ID, "organization")
+
 	return handler.SendSuccess(c, fiber.Map{
 		"organization": org,
 		"membership":   membership,
@@ -272,6 +274,9 @@ func (h *Handler) UpdateOrganization(
 		return handler.SendInternalServerError(c, err, "Failed to update organization")
 	}
 
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "organization.updated", org.ID, "organization")
+
 	return handler.SendSuccess(c, org)
 }
 
@@ -333,6 +338,10 @@ func (h *Handler) DeleteOrganization(
 	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.OrganizationRole{}).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to delete organization workspace roles")
 	}
+
+	orgIDUint, _ := strconv.ParseUint(orgID, 10, 64)
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "organization.deleted", orgIDUint, "organization")
 
 	if err := database.Connection.Delete(&model.Organization{}, orgID).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to delete organization")
@@ -475,9 +484,10 @@ func (h *Handler) InviteMember(
 	)
 
 	if err != nil {
-		// Log error but don't fail the invitation creation
 		log.Printf("Failed to send invitation email: %v", err)
 	}
+
+	utils.PublishWebhookEvent(deployment.ID, "organization.invitation.created", invitation.ID, "organization_invitation")
 
 	return handler.SendSuccess(c, invitation)
 }
@@ -501,9 +511,13 @@ func (h *Handler) DiscardInvitation(
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
+	invitationIDUint := getuint64(invitationID)
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "organization.invitation.revoked", invitationIDUint, "organization_invitation")
+
 	if err := database.Connection.Delete(&model.OrganizationInvitation{
 		Model: model.Model{
-			ID: getuint64(invitationID),
+			ID: invitationIDUint,
 		},
 		OrganizationID: getuint64(orgID),
 	}).Error; err != nil {
@@ -692,6 +706,10 @@ func (h *Handler) AcceptInvitation(
 		}
 	}
 
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "organization.invitation.accepted", invitation.ID, "organization_invitation")
+	utils.PublishWebhookEvent(deployment.ID, "organization.member.added", membership.ID, "organization_membership")
+
 	return handler.SendSuccess(c, response)
 }
 
@@ -718,7 +736,15 @@ func (h *Handler) RemoveMember(
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, memberID).Delete(&model.OrganizationMembership{}).Error; err != nil {
+	var membershipToRemove model.OrganizationMembership
+	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, memberID).First(&membershipToRemove).Error; err != nil {
+		return handler.SendNotFound(c, nil, "Member not found")
+	}
+
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "organization.member.removed", membershipToRemove.ID, "organization_membership")
+
+	if err := database.Connection.Delete(&membershipToRemove).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to remove member")
 	}
 
@@ -781,6 +807,9 @@ func (h *Handler) AddMemberRole(
 		log.Println(err)
 		return handler.SendInternalServerError(c, err, "Failed to add role")
 	}
+
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "organization.member.role.updated", assignedMember.ID, "organization_membership")
 
 	return handler.SendSuccess(c, fiber.Map{
 		"success": true,
@@ -854,6 +883,8 @@ func (h *Handler) RemoveMemberRole(
 		log.Println("Failed to delete role from organization_membership_roles:", err)
 		return handler.SendInternalServerError(c, err, "Failed to remove role.")
 	}
+
+	utils.PublishWebhookEvent(d.ID, "organization.member.role.updated", targetMembershipIDuint64, "organization_membership")
 
 	return handler.SendSuccess(c, fiber.Map{
 		"success": true,

@@ -112,6 +112,9 @@ func (h *Handler) SignOut(
 			)
 		}
 
+		deployment := handler.GetDeployment(c)
+		utils.PublishWebhookEvent(deployment.ID, "session.deleted", session.ID, "session")
+
 		err = database.Connection.Transaction(
 			func(tx *gorm.DB) error {
 				tx.Delete(signIn)
@@ -136,6 +139,11 @@ func (h *Handler) SignOut(
 			session,
 		)
 	} else {
+		deployment := handler.GetDeployment(c)
+		if session.ActiveSignin != nil {
+			utils.PublishWebhookEvent(deployment.ID, "session.deleted", session.ID, "session")
+		}
+
 		err := database.Connection.Transaction(func(tx *gorm.DB) error {
 			tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", nil)
 			tx.Where("session_id = ?", session.ID).Delete(&model.Signin{})

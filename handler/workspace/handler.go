@@ -11,6 +11,7 @@ import (
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/utils"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/plugin/dbresolver"
@@ -137,6 +138,8 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 		log.Printf("Failed to fetch created workspace for response: %v", err)
 		return handler.SendSuccess(c, fiber.Map{"workspace": workspace})
 	}
+
+	utils.PublishWebhookEvent(deployment.ID, "workspace.created", workspace.ID, "workspace")
 
 	return handler.SendSuccess(c, fiber.Map{
 		"workspace": finalWorkspace,
@@ -526,6 +529,9 @@ func (h *Handler) AddWorkspaceMemberRole(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to add role to member.")
 	}
 
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "workspace.member.role.updated", targetMembershipID, "workspace_membership")
+
 	return handler.SendSuccess(c, fiber.Map{"success": true})
 }
 
@@ -599,6 +605,8 @@ func (h *Handler) RemoveWorkspaceMemberRole(c *fiber.Ctx) error {
 		return handler.SendNotFound(c, nil, "Role association not found or already removed.")
 	}
 
+	utils.PublishWebhookEvent(d.ID, "workspace.member.role.updated", targetMembershipID, "workspace_membership")
+
 	return handler.SendSuccess(c, fiber.Map{"success": true})
 }
 
@@ -663,6 +671,9 @@ func (h *Handler) UpdateWorkspace(c *fiber.Ctx) error {
 		)
 	}
 
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "workspace.updated", workspace.ID, "workspace")
+
 	return handler.SendSuccess(c, fiber.Map{
 		"workspace": workspace,
 	})
@@ -720,6 +731,9 @@ func (h *Handler) DeleteWorkspace(c *fiber.Ctx) error {
 	if err := database.Connection.Where("workspace_id = ?", workspaceID).Delete(&model.WorkspaceRole{}).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to delete workspace roles")
 	}
+
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "workspace.deleted", workspaceID, "workspace")
 
 	if err := database.Connection.Delete(&model.Workspace{}, workspaceID).Error; err != nil {
 		log.Printf("Failed to delete workspace %d: %v", workspaceID, err)
@@ -839,6 +853,9 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 
 	database.Connection.Preload("User").Preload("Roles").First(&newWorkspaceMembership, newWorkspaceMembership.ID)
 
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "workspace.member.added", newWorkspaceMembership.ID, "workspace_membership")
+
 	return handler.SendSuccess(c, fiber.Map{"membership": newWorkspaceMembership})
 }
 
@@ -901,6 +918,9 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 	if isTargetLastOwner && targetMembership.UserID != *session.ActiveSignin.UserID {
 		return handler.SendForbidden(c, nil, "Cannot remove this member as they are the sole owner. Assign ownership to another member first or delete the workspace.")
 	}
+
+	deployment := handler.GetDeployment(c)
+	utils.PublishWebhookEvent(deployment.ID, "workspace.member.removed", targetMembership.ID, "workspace_membership")
 
 	txErr := database.Connection.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("workspace_membership_id = ?", targetMembership.ID).Delete(&model.WorkspaceMembershipRoleAssoc{}).Error; err != nil {

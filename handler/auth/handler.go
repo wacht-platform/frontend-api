@@ -726,6 +726,7 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 		)
 	}
 
+	var createdUserID uint64
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(attempt).Error; err != nil {
 			return err
@@ -753,6 +754,8 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 				return err
 			}
 
+			createdUserID = u.ID
+
 			if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
 				return err
 			}
@@ -778,6 +781,10 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 			err,
 			"Something went wrong",
 		)
+	}
+
+	if createdUserID != 0 {
+		utils.PublishWebhookEvent(d.ID, "user.created", createdUserID, "user")
 	}
 
 	return handler.SendSuccess(c, session)
@@ -1010,6 +1017,8 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 				session.Signins = append(session.Signins, *signIn)
 				session.ActiveSigninID = &signIn.ID
 				attempt.Completed = true
+
+				utils.PublishWebhookEvent(deployment.ID, "session.created", session.ID, "session")
 			} else {
 				attempt.Completed = false
 			}
@@ -1110,6 +1119,8 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 
 			session.Signins = append(session.Signins, *signIn)
 			session.ActiveSigninID = &signIn.ID
+
+			utils.PublishWebhookEvent(deployment.ID, "session.created", session.ID, "session")
 			attempt.Completed = true
 
 			if u.PrimaryEmailAddressID != nil {
@@ -1689,6 +1700,8 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					signin = h.service.CreateSignin(userID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 					session.Signins = append(session.Signins, *signin)
 					session.ActiveSigninID = &signin.ID
+
+					utils.PublishWebhookEvent(deployment.ID, "session.created", session.ID, "session")
 				} else {
 					attempt.RemainingSteps = attempt.RemainingSteps[1:]
 					attempt.CurrentStep = attempt.RemainingSteps[0]
@@ -1812,6 +1825,8 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					signin = h.service.CreateSignin(userID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 					session.Signins = append(session.Signins, *signin)
 					session.ActiveSigninID = &signin.ID
+
+					utils.PublishWebhookEvent(deployment.ID, "session.created", session.ID, "session")
 				}
 
 				if err := database.Connection.Transaction(func(tx *gorm.DB) error {
@@ -2006,6 +2021,8 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				signin = h.service.CreateSignin(user.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
 				session.Signins = append(session.Signins, *signin)
 				session.ActiveSigninID = &signin.ID
+
+				utils.PublishWebhookEvent(deployment.ID, "session.created", session.ID, "session")
 			} else {
 				attempt.RemainingSteps = attempt.RemainingSteps[1:]
 				attempt.CurrentStep = attempt.RemainingSteps[0]
@@ -2581,6 +2598,8 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 	}
 
 	h.service.DeleteOTPFromRedis(fmt.Sprintf("password-reset:%d", email.UserID))
+
+	utils.PublishWebhookEvent(deployment.ID, "user.password.reset", *email.UserID, "user")
 
 	return handler.SendSuccess[any](c, nil)
 }

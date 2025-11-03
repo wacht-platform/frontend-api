@@ -28,3 +28,4 @@ type Organization struct {
 	PublicMetadata          datatypes.JSONMap             `json:"public_metadata" gorm:"not null"`
 	PrivateMetadata         datatypes.JSONMap             `json:"-"               gorm:"not null"`
 }
+

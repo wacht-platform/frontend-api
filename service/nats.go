@@ -142,6 +142,13 @@ type SMSOTPTask struct {
 	CountryCode  string `json:"country_code"`
 }
 
+type WebhookEventTask struct {
+	DeploymentID uint64                 `json:"deployment_id"`
+	EventType    string                 `json:"event_type"`
+	EventPayload map[string]interface{} `json:"event_payload"`
+	TriggeredAt  time.Time              `json:"triggered_at"`
+}
+
 var natsService *NatsService
 
 func NewNatsService() (*NatsService, error) {
@@ -342,7 +349,7 @@ func (s *NatsService) ScheduleTokenCleanup(rotatingTokenID, sessionID uint64, de
 		RotatingTokenID: rotatingTokenID,
 		SessionID:       sessionID,
 	}
-	// TODO: Add delay support if needed
+
 	return s.publishTask(context.Background(), string(TokenCleanup), task)
 }
 
@@ -354,6 +361,16 @@ func (s *NatsService) SendOTPSMS(deploymentID, userID uint64, phoneNumber, count
 		CountryCode:  countryCode,
 	}
 	return s.publishTask(context.Background(), string(SMSOTPVerification), task)
+}
+
+func (s *NatsService) PublishWebhookEvent(deploymentID uint64, eventType string, payload map[string]interface{}) error {
+	task := WebhookEventTask{
+		DeploymentID: deploymentID,
+		EventType:    eventType,
+		EventPayload: payload,
+		TriggeredAt:  time.Now(),
+	}
+	return s.publishTask(context.Background(), "webhook.event", task)
 }
 
 func (s *NatsService) Close() {
