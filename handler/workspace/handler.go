@@ -141,6 +141,8 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 
 	utils.PublishWebhookEvent(deployment.ID, "workspace.created", workspace.ID, "workspace")
 
+	utils.RemoveCachedSession(session.ID)
+
 	return handler.SendSuccess(c, fiber.Map{
 		"workspace": finalWorkspace,
 	})
@@ -743,6 +745,8 @@ func (h *Handler) DeleteWorkspace(c *fiber.Ctx) error {
 			"Failed to delete workspace",
 		)
 	}
+
+	utils.RemoveCachedSession(session.ID)
 
 	return handler.SendSuccess(c, fiber.Map{
 		"success": true,
