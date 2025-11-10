@@ -8,7 +8,7 @@ import (
 	"github.com/ilabs/wacht-fe/service"
 )
 
-func PublishSignInEvent(deploymentID uint64, user *model.User, authMethod string, c *fiber.Ctx) {
+func PublishSignInEvent(deploymentID uint64, user *model.User, authMethod string, identifier *string, c *fiber.Ctx) {
 	natsService, err := service.NewNatsService()
 	if err != nil {
 		log.Printf("[ANALYTICS ERROR] Failed to create NATS service for signin event: %v", err)
@@ -26,16 +26,6 @@ func PublishSignInEvent(deploymentID uint64, user *model.User, authMethod string
 			userName = &user.LastName
 		}
 
-		var userEmail *string
-		if user.PrimaryEmailAddressID != nil {
-			for _, email := range user.UserEmailAddresses {
-				if email.ID == *user.PrimaryEmailAddressID {
-					userEmail = &email.EmailAddress
-					break
-				}
-			}
-		}
-
 		ipAddress := c.IP()
 
 		userID := user.ID
@@ -44,7 +34,7 @@ func PublishSignInEvent(deploymentID uint64, user *model.User, authMethod string
 			&userID,
 			"signin",
 			userName,
-			userEmail,
+			identifier,
 			&authMethod,
 			&ipAddress,
 		); err != nil {
@@ -56,7 +46,7 @@ func PublishSignInEvent(deploymentID uint64, user *model.User, authMethod string
 	}()
 }
 
-func PublishSignUpEvent(deploymentID uint64, user *model.User, authMethod string, c *fiber.Ctx) {
+func PublishSignUpEvent(deploymentID uint64, user *model.User, authMethod string, identifier *string, c *fiber.Ctx) {
 	natsService, err := service.NewNatsService()
 	if err != nil {
 		log.Printf("[ANALYTICS ERROR] Failed to create NATS service for signup event: %v", err)
@@ -74,16 +64,6 @@ func PublishSignUpEvent(deploymentID uint64, user *model.User, authMethod string
 			userName = &user.LastName
 		}
 
-		var userEmail *string
-		if user.PrimaryEmailAddressID != nil {
-			for _, email := range user.UserEmailAddresses {
-				if email.ID == *user.PrimaryEmailAddressID {
-					userEmail = &email.EmailAddress
-					break
-				}
-			}
-		}
-
 		ipAddress := c.IP()
 
 		userID := user.ID
@@ -92,7 +72,7 @@ func PublishSignUpEvent(deploymentID uint64, user *model.User, authMethod string
 			&userID,
 			"signup",
 			userName,
-			userEmail,
+			identifier,
 			&authMethod,
 			&ipAddress,
 		); err != nil {

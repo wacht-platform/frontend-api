@@ -180,7 +180,7 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 				}
 			}
 
-			utils.PublishSignInEvent(d.ID, user, string(b.Strategy), c)
+			utils.PublishSignInEvent(d.ID, user, string(b.Strategy), &user.Username, c)
 		}
 
 		return nil
@@ -332,7 +332,7 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 				_ = h.service.nats.SendSignInNotificationEmail(d.ID, email.User.ID, signIn.ID, email.EmailAddress)
 			}
 
-			utils.PublishSignInEvent(d.ID, &email.User, string(b.Strategy), c)
+			utils.PublishSignInEvent(d.ID, &email.User, string(b.Strategy), &email.EmailAddress, c)
 		}
 
 		return nil
@@ -774,8 +774,8 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 				return err
 			}
 
-			utils.PublishSignUpEvent(d.ID, &u, "email_password", c)
-			utils.PublishSignInEvent(d.ID, &u, "email_password", c)
+			utils.PublishSignUpEvent(d.ID, &u, "email_password", &b.Email, c)
+			utils.PublishSignInEvent(d.ID, &u, "email_password", &b.Email, c)
 		}
 
 		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
@@ -1130,16 +1130,18 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			utils.PublishWebhookEvent(deployment.ID, "session.created", session.ID, "session")
 			attempt.Completed = true
 
-			utils.PublishSignInEvent(deployment.ID, &u, "oauth", c)
-
+			var primaryEmail *string
 			if u.PrimaryEmailAddressID != nil {
 				for _, email := range u.UserEmailAddresses {
 					if email.ID == *u.PrimaryEmailAddressID {
+						primaryEmail = &email.EmailAddress
 						_ = h.service.nats.SendSignInNotificationEmail(deployment.ID, u.ID, signIn.ID, email.EmailAddress)
 						break
 					}
 				}
 			}
+
+			utils.PublishSignInEvent(deployment.ID, &u, "oauth", primaryEmail, c)
 		}
 
 		if err := tx.Save(&attempt).Error; err != nil {
@@ -1594,7 +1596,7 @@ func (h *Handler) VerifyMagicLink(c *fiber.Ctx) error {
 		})
 
 		if err == nil {
-			utils.PublishSignInEvent(deployment.ID, &email.User, "magic_link", c)
+			utils.PublishSignInEvent(deployment.ID, &email.User, "magic_link", &email.EmailAddress, c)
 		}
 
 		if err != nil {
@@ -2037,7 +2039,17 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 
 				utils.PublishWebhookEvent(deployment.ID, "session.created", session.ID, "session")
 
-				utils.PublishSignInEvent(deployment.ID, &user, "otp", c)
+				var primaryEmail *string
+				if user.PrimaryEmailAddressID != nil {
+					for _, email := range user.UserEmailAddresses {
+						if email.ID == *user.PrimaryEmailAddressID {
+							primaryEmail = &email.EmailAddress
+							break
+						}
+					}
+				}
+
+				utils.PublishSignInEvent(deployment.ID, &user, "otp", primaryEmail, c)
 			} else {
 				attempt.RemainingSteps = attempt.RemainingSteps[1:]
 				attempt.CurrentStep = attempt.RemainingSteps[0]
