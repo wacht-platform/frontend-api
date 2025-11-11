@@ -2095,6 +2095,13 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				)
 			}
 		}
+
+		for i, sa := range session.SigninAttempts {
+			if sa.ID == attempt.ID {
+				session.SigninAttempts[i] = attempt
+				break
+			}
+		}
 	} else {
 		attempt, err := h.service.GetSignupAttempt(uint64(attemptIdentifier))
 		if err != nil {
