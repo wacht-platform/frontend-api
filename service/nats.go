@@ -45,6 +45,12 @@ const (
 	TokenCleanup TaskType = "token.clean"
 )
 
+type BillingTaskType string
+
+const (
+	BillingEvent BillingTaskType = "billing.event"
+)
+
 type NatsTaskMessage struct {
 	TaskType string          `json:"task_type"`
 	TaskID   string          `json:"task_id"`
@@ -158,6 +164,12 @@ type AnalyticsEventTask struct {
 	AuthMethod    *string   `json:"auth_method"`
 	Timestamp     time.Time `json:"timestamp"`
 	IPAddress     *string   `json:"ip_address"`
+}
+
+type BillingEventTask struct {
+	DeploymentID uint64 `json:"deployment_id"`
+	EventType    string `json:"event_type"`
+	ResourceID   uint64 `json:"resource_id"`
 }
 
 var natsService *NatsService
@@ -396,6 +408,15 @@ func (s *NatsService) PublishAnalyticsEvent(deploymentID uint64, userID *uint64,
 		IPAddress:    ipAddress,
 	}
 	return s.publishTask(context.Background(), "analytics.event", task)
+}
+
+func (s *NatsService) PublishBillingEvent(deploymentID, resourceID uint64, eventType string) error {
+	task := BillingEventTask{
+		DeploymentID: deploymentID,
+		EventType:    eventType,
+		ResourceID:   resourceID,
+	}
+	return s.publishTask(context.Background(), string(BillingEvent), task)
 }
 
 func (s *NatsService) Close() {

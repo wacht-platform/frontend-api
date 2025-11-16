@@ -1042,6 +1042,10 @@ func (s *AuthService) CreateSignin(
 	return signIn
 }
 
+func (s *AuthService) TrackMAU(deploymentID, userID uint64) {
+	go s.nats.PublishBillingEvent(deploymentID, userID, "mau")
+}
+
 func (s *AuthService) getIPLocation(ip string) IPLocation {
 	defaultLocation := IPLocation{
 		Status:      "fail",
