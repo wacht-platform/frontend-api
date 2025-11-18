@@ -7,25 +7,40 @@ import (
 
 type Organization struct {
 	Model
-	DeploymentID            uint64                        `json:"-"               gorm:"not null;index"`
-	Deployment              Deployment                    `json:"-" gorm:"foreignkey:DeploymentID"`
-	Name                    string                        `json:"name"            gorm:"not null"`
-	ImageUrl                string                        `json:"image_url"       gorm:"not null"`
-	Description             string                        `json:"description"`
-	MemberCount             uint32                        `json:"member_count"    gorm:"not null"`
-	Roles                   []*OrganizationRole           `json:"roles"`
-	Members                 []*OrganizationMembership     `json:"members"`
-	Workspaces              []*Workspace                  `json:"workspaces"`
-	WorkspaceRoles          []*WorkspaceRole              `json:"workspace_roles"`
-	WorkspaceMembers        []*WorkspaceMembership        `json:"workspace_members"`
-	Domains                 []*OrganizationDomain         `json:"domains"`
-	Invitations             []*OrganizationInvitation     `json:"invitations"`
-	EnforceMFASetup         bool                          `json:"enforce_mfa" gorm:"not null;default:false"`
-	EnableIPRestriction     bool                          `json:"enable_ip_restriction" gorm:"not null;default:false"`
-	WhitelistedIPs          pq.StringArray                `json:"whitelisted_ips" gorm:"type:text[]"`
-	AutoAssignedWorkspaceID *uint64                       `json:"auto_assigned_workspace_id,string"`
-	AutoAssignedWorkspace   *Workspace                    `json:"auto_assigned_workspace" gorm:"-:migration;foreignKey:AutoAssignedWorkspaceID;references:ID"`
-	PublicMetadata          datatypes.JSONMap             `json:"public_metadata" gorm:"not null"`
-	PrivateMetadata         datatypes.JSONMap             `json:"-"               gorm:"not null"`
+	DeploymentID            uint64                    `json:"-"               gorm:"not null;index"`
+	Deployment              Deployment                `json:"-" gorm:"foreignkey:DeploymentID"`
+	Name                    string                    `json:"name"            gorm:"not null"`
+	ImageUrl                string                    `json:"image_url"       gorm:"not null"`
+	Description             string                    `json:"description"`
+	MemberCount             uint32                    `json:"member_count"    gorm:"not null"`
+	Roles                   []*OrganizationRole       `json:"roles"`
+	Members                 []*OrganizationMembership `json:"members"`
+	Workspaces              []*Workspace              `json:"workspaces"`
+	WorkspaceRoles          []*WorkspaceRole          `json:"workspace_roles"`
+	WorkspaceMembers        []*WorkspaceMembership    `json:"workspace_members"`
+	Domains                 []*OrganizationDomain     `json:"domains"`
+	Invitations             []*OrganizationInvitation `json:"invitations"`
+	EnforceMFASetup         bool                      `json:"enforce_mfa" gorm:"not null;default:false"`
+	EnableIPRestriction     bool                      `json:"enable_ip_restriction" gorm:"not null;default:false"`
+	WhitelistedIPs          pq.StringArray            `json:"whitelisted_ips" gorm:"type:text[]"`
+	AutoAssignedWorkspaceID *uint64                   `json:"auto_assigned_workspace_id,string"`
+	AutoAssignedWorkspace   *Workspace                `json:"auto_assigned_workspace" gorm:"-:migration;foreignKey:AutoAssignedWorkspaceID;references:ID"`
+	PublicMetadata          datatypes.JSONMap         `json:"public_metadata" gorm:"not null"`
+	PrivateMetadata         datatypes.JSONMap         `json:"-"               gorm:"not null"`
 }
 
+type PublicOrganizationData struct {
+	Model
+	Name                    string         `json:"name"`
+	ImageUrl                string         `json:"image_url"`
+	Description             string         `json:"description"`
+	MemberCount             uint32         `json:"member_count"`
+	WhitelistedIPs          pq.StringArray `json:"whitelisted_ips" gorm:"type:text[]"`
+	AutoAssignedWorkspaceID *uint64        `json:"auto_assigned_workspace_id,string"`
+	EnforceMFASetup         bool           `json:"enforce_mfa" gorm:"not null;default:false"`
+	EnableIPRestriction     bool           `json:"enable_ip_restriction" gorm:"not null;default:false"`
+}
+
+func (PublicOrganizationData) TableName() string {
+	return "organizations"
+}

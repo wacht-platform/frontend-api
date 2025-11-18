@@ -1497,7 +1497,7 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 	memberships := make([]model.OrganizationMembership, len(queryResults))
 	for i, result := range queryResults {
 		memberships[i] = result.OrganizationMembership
-		memberships[i].Organization = model.Organization{
+		memberships[i].Organization = model.PublicOrganizationData{
 			Model: model.Model{
 				ID:        result.OrganizationID,
 				CreatedAt: result.CreatedAt,
