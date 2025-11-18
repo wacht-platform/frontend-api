@@ -18,6 +18,7 @@ import (
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/service"
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwt"
@@ -226,6 +227,11 @@ func (h *Handler) SwitchOrganization(
 	tx.Commit()
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
+	deployment := handler.GetDeployment(c)
+	if natsService, err := service.NewNatsService(); err == nil {
+		go natsService.PublishBillingEvent(deployment.ID, orgIDuint64, "organization_accessed")
+	}
+
 	return handler.SendSuccess(c, session)
 }
 
@@ -300,6 +306,11 @@ func (h *Handler) SwitchWorkspace(
 	}
 	tx.Commit()
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+
+	deployment := handler.GetDeployment(c)
+	if natsService, err := service.NewNatsService(); err == nil {
+		go natsService.PublishBillingEvent(deployment.ID, workspaceIDuint64, "workspace_accessed")
+	}
 
 	return handler.SendSuccess(c, session)
 }

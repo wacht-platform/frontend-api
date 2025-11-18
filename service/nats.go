@@ -45,6 +45,12 @@ const (
 	TokenCleanup TaskType = "token.clean"
 )
 
+type BillingTaskType string
+
+const (
+	BillingEvent BillingTaskType = "billing.event"
+)
+
 type NatsTaskMessage struct {
 	TaskType string          `json:"task_type"`
 	TaskID   string          `json:"task_id"`
@@ -147,6 +153,23 @@ type WebhookEventTask struct {
 	EventType    string                 `json:"event_type"`
 	EventPayload map[string]interface{} `json:"event_payload"`
 	TriggeredAt  time.Time              `json:"triggered_at"`
+}
+
+type AnalyticsEventTask struct {
+	DeploymentID  uint64    `json:"deployment_id"`
+	UserID        *uint64   `json:"user_id"`
+	EventType     string    `json:"event_type"`
+	UserName      *string   `json:"user_name"`
+	UserEmail     *string   `json:"user_email"`
+	AuthMethod    *string   `json:"auth_method"`
+	Timestamp     time.Time `json:"timestamp"`
+	IPAddress     *string   `json:"ip_address"`
+}
+
+type BillingEventTask struct {
+	DeploymentID uint64 `json:"deployment_id"`
+	EventType    string `json:"event_type"`
+	ResourceID   uint64 `json:"resource_id"`
 }
 
 var natsService *NatsService
@@ -371,6 +394,29 @@ func (s *NatsService) PublishWebhookEvent(deploymentID uint64, eventType string,
 		TriggeredAt:  time.Now(),
 	}
 	return s.publishTask(context.Background(), "webhook.event", task)
+}
+
+func (s *NatsService) PublishAnalyticsEvent(deploymentID uint64, userID *uint64, eventType string, userName, userEmail, authMethod, ipAddress *string) error {
+	task := AnalyticsEventTask{
+		DeploymentID: deploymentID,
+		UserID:       userID,
+		EventType:    eventType,
+		UserName:     userName,
+		UserEmail:    userEmail,
+		AuthMethod:   authMethod,
+		Timestamp:    time.Now(),
+		IPAddress:    ipAddress,
+	}
+	return s.publishTask(context.Background(), "analytics.event", task)
+}
+
+func (s *NatsService) PublishBillingEvent(deploymentID, resourceID uint64, eventType string) error {
+	task := BillingEventTask{
+		DeploymentID: deploymentID,
+		EventType:    eventType,
+		ResourceID:   resourceID,
+	}
+	return s.publishTask(context.Background(), string(BillingEvent), task)
 }
 
 func (s *NatsService) Close() {

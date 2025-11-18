@@ -179,10 +179,16 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 					}
 				}
 			}
+
+			utils.PublishSignInEvent(d.ID, user, string(b.Strategy), &user.Username, c)
 		}
 
 		return nil
 	})
+
+	if err == nil && completed {
+		h.service.TrackMAU(d.ID, user.ID)
+	}
 
 	if err != nil &&
 		err.(*pgconn.PgError).ConstraintName == "idx_session_user_id" {
@@ -329,10 +335,16 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 			if email.User.PrimaryEmailAddressID != nil && email.ID == *email.User.PrimaryEmailAddressID {
 				_ = h.service.nats.SendSignInNotificationEmail(d.ID, email.User.ID, signIn.ID, email.EmailAddress)
 			}
+
+			utils.PublishSignInEvent(d.ID, &email.User, string(b.Strategy), &email.EmailAddress, c)
 		}
 
 		return nil
 	})
+
+	if err == nil && completed {
+		h.service.TrackMAU(d.ID, email.User.ID)
+	}
 
 	if err != nil &&
 		err.(*pgconn.PgError).ConstraintName == "idx_session_user_id" {
@@ -769,6 +781,9 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 			if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error; err != nil {
 				return err
 			}
+
+			utils.PublishSignUpEvent(d.ID, &u, "email_password", &b.Email, c)
+			utils.PublishSignInEvent(d.ID, &u, "email_password", &b.Email, c)
 		}
 
 		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
@@ -785,6 +800,7 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 
 	if createdUserID != 0 {
 		utils.PublishWebhookEvent(d.ID, "user.created", createdUserID, "user")
+		h.service.TrackMAU(d.ID, createdUserID)
 	}
 
 	return handler.SendSuccess(c, session)
@@ -1123,14 +1139,18 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 			utils.PublishWebhookEvent(deployment.ID, "session.created", session.ID, "session")
 			attempt.Completed = true
 
+			var primaryEmail *string
 			if u.PrimaryEmailAddressID != nil {
 				for _, email := range u.UserEmailAddresses {
 					if email.ID == *u.PrimaryEmailAddressID {
+						primaryEmail = &email.EmailAddress
 						_ = h.service.nats.SendSignInNotificationEmail(deployment.ID, u.ID, signIn.ID, email.EmailAddress)
 						break
 					}
 				}
 			}
+
+			utils.PublishSignInEvent(deployment.ID, &u, "oauth", primaryEmail, c)
 		}
 
 		if err := tx.Save(&attempt).Error; err != nil {
@@ -1139,6 +1159,11 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 
 		return nil
 	})
+
+	if err == nil && attempt.Completed && attempt.UserID != nil {
+		h.service.TrackMAU(deployment.ID, *attempt.UserID)
+	}
+
 	if err != nil {
 		pgErr, ok := err.(*pgconn.PgError)
 		if ok && pgErr.ConstraintName == "idx_session_user_id" {
@@ -1584,6 +1609,11 @@ func (h *Handler) VerifyMagicLink(c *fiber.Ctx) error {
 			return tx.Save(&attempt).Error
 		})
 
+		if err == nil {
+			utils.PublishSignInEvent(deployment.ID, &email.User, "magic_link", &email.EmailAddress, c)
+			h.service.TrackMAU(deployment.ID, email.User.ID)
+		}
+
 		if err != nil {
 			pgErr, ok := err.(*pgconn.PgError)
 			if ok && pgErr.ConstraintName == "idx_session_user_id" {
@@ -1758,6 +1788,10 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					)
 				}
 
+				if attempt.Completed {
+					h.service.TrackMAU(deployment.ID, userID)
+				}
+
 				h.service.DeleteOTPFromRedis(
 					fmt.Sprintf("signin:%d", attempt.ID),
 				)
@@ -1895,6 +1929,10 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					)
 				}
 
+				if attempt.Completed {
+					h.service.TrackMAU(deployment.ID, userID)
+				}
+
 				h.service.DeleteOTPFromRedis(
 					fmt.Sprintf("signin:%d", attempt.ID),
 				)
@@ -2023,6 +2061,18 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				session.ActiveSigninID = &signin.ID
 
 				utils.PublishWebhookEvent(deployment.ID, "session.created", session.ID, "session")
+
+				var primaryEmail *string
+				if user.PrimaryEmailAddressID != nil {
+					for _, email := range user.UserEmailAddresses {
+						if email.ID == *user.PrimaryEmailAddressID {
+							primaryEmail = &email.EmailAddress
+							break
+						}
+					}
+				}
+
+				utils.PublishSignInEvent(deployment.ID, &user, "otp", primaryEmail, c)
 			} else {
 				attempt.RemainingSteps = attempt.RemainingSteps[1:]
 				attempt.CurrentStep = attempt.RemainingSteps[0]
@@ -2066,6 +2116,17 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					err,
 					"Error completing 2FA verification",
 				)
+			}
+
+			if attempt.Completed {
+				h.service.TrackMAU(deployment.ID, user.ID)
+			}
+		}
+
+		for i, sa := range session.SigninAttempts {
+			if sa.ID == attempt.ID {
+				session.SigninAttempts[i] = attempt
+				break
 			}
 		}
 	} else {
@@ -2182,6 +2243,8 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 			}); err != nil {
 				return handler.SendInternalServerError(c, err, "Something went wrong")
 			}
+
+			h.service.TrackMAU(d.ID, user.ID)
 
 			handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
@@ -2328,6 +2391,8 @@ func (h *Handler) CompleteOAuthSignup(c *fiber.Ctx) error {
 			return handler.SendInternalServerError(c, err, "Error completing signup")
 		}
 
+		h.service.TrackMAU(deployment.ID, user.ID)
+
 		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 		return handler.SendSuccess(c, session)
 	}
@@ -2452,6 +2517,8 @@ func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
 		if err != nil {
 			return handler.SendInternalServerError(c, err, "Error completing signin")
 		}
+
+		h.service.TrackMAU(deployment.ID, user.ID)
 
 		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 		return handler.SendSuccess(c, session)
@@ -2810,6 +2877,8 @@ func (h *Handler) handleSigninProfileCompletion(c *fiber.Ctx, attempt *model.Sig
 		if err != nil {
 			return handler.SendInternalServerError(c, err, "Error completing signin")
 		}
+
+		h.service.TrackMAU(deployment.ID, user.ID)
 
 		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 		return handler.SendSuccess(c, session)

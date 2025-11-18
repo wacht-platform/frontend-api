@@ -120,6 +120,8 @@ func (h *Handler) CreateOrganization(
 
 	utils.PublishWebhookEvent(d.ID, "organization.created", org.ID, "organization")
 
+	utils.RemoveCachedSession(session.ID)
+
 	return handler.SendSuccess(c, fiber.Map{
 		"organization": org,
 		"membership":   membership,
@@ -346,6 +348,8 @@ func (h *Handler) DeleteOrganization(
 	if err := database.Connection.Delete(&model.Organization{}, orgID).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to delete organization")
 	}
+
+	utils.RemoveCachedSession(session.ID)
 
 	return handler.SendSuccess(c, fiber.Map{
 		"success": true,
