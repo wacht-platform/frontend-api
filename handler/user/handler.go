@@ -1468,11 +1468,11 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 			COALESCE(
 				(SELECT json_agg(
 					json_build_object(
-						'id', organization_roles.id,
-						'organization_id', organization_roles.organization_id,
+						'id', organization_roles.id::text,
+						'organization_id', organization_roles.organization_id::text,
 						'name', organization_roles.name,
 						'permissions', organization_roles.permissions,
-						'deployment_id', organization_roles.deployment_id,
+						'deployment_id', organization_roles.deployment_id::text,
 						'created_at', organization_roles.created_at,
 						'updated_at', organization_roles.updated_at
 					) ORDER BY organization_roles.name
