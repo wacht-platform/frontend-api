@@ -1,5 +1,7 @@
 package model
 
+import "gorm.io/datatypes"
+
 type OrgMembershipRoleAssoc struct {
 	OrganizationMembershipID uint64 `gorm:"primaryKey;index"`
 	OrganizationRoleID       uint64 `gorm:"primaryKey"`
@@ -18,4 +20,5 @@ type OrganizationMembership struct {
 	User             *PublicUserData          `json:"user,omitempty" gorm:"foreignKey:UserID"`
 	Roles            []*OrganizationRole      `json:"roles" gorm:"many2many:organization_membership_roles;joinForeignKey:OrganizationMembershipID;JoinReferences:OrganizationRoleID;References:ID;foreignKey:ID"`
 	RoleAssociations []OrgMembershipRoleAssoc `json:"-" gorm:"foreignKey:OrganizationMembershipID;references:ID"`
+	PublicMetadata   datatypes.JSONMap        `json:"public_metadata" gorm:"not null"`
 }

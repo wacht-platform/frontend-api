@@ -73,20 +73,35 @@ type UserQueryResult struct {
 
 type OrganizationMembershipQueryResult struct {
 	model.OrganizationMembership
-	OrganizationName        string `gorm:"column:organization_name"`
-	OrganizationImageUrl    string `gorm:"column:organization_image_url"`
-	OrganizationDescription string `gorm:"column:organization_description"`
-	OrganizationMemberCount uint32 `gorm:"column:organization_member_count"`
-	RolesJSON               string `gorm:"column:roles_json"`
+	OrganizationName                string `gorm:"column:organization_name"`
+	OrganizationImageUrl            string `gorm:"column:organization_image_url"`
+	OrganizationDescription         string `gorm:"column:organization_description"`
+	OrganizationMemberCount         uint32 `gorm:"column:organization_member_count"`
+	OrganizationWhitelistedIPs      string `gorm:"column:organization_whitelisted_ips"`
+	OrganizationAutoAssignedWorkspaceID *uint64 `gorm:"column:organization_auto_assigned_workspace_id"`
+	OrganizationEnforceMFASetup     bool   `gorm:"column:organization_enforce_mfa"`
+	OrganizationEnableIPRestriction bool   `gorm:"column:organization_enable_ip_restriction"`
+	MembershipPublicMetadata        string `gorm:"column:membership_public_metadata"`
+	RolesJSON                       string `gorm:"column:roles_json"`
 }
 
 type WorkspaceMembershipQueryResult struct {
 	model.WorkspaceMembership
-	WorkspaceName        string `gorm:"column:workspace_name"`
-	WorkspaceImageUrl    string `gorm:"column:workspace_image_url"`
-	WorkspaceDescription string `gorm:"column:workspace_description"`
-	WorkspaceMemberCount uint64 `gorm:"column:workspace_member_count"`
-	OrganizationName     string `gorm:"column:organization_name"`
-	OrganizationImageUrl string `gorm:"column:organization_image_url"`
-	RolesJSON            string `gorm:"column:roles_json"`
+	WorkspaceName                string  `gorm:"column:workspace_name"`
+	WorkspaceImageUrl            string  `gorm:"column:workspace_image_url"`
+	WorkspaceDescription         string  `gorm:"column:workspace_description"`
+	WorkspaceMemberCount         uint64  `gorm:"column:workspace_member_count"`
+	WorkspaceWhitelistedIPs      string  `gorm:"column:workspace_whitelisted_ips"`
+	WorkspaceEnforceMFASetup     bool    `gorm:"column:workspace_enforce_mfa"`
+	WorkspaceEnableIPRestriction bool    `gorm:"column:workspace_enable_ip_restriction"`
+	OrganizationName             string  `gorm:"column:organization_name"`
+	OrganizationImageUrl         string  `gorm:"column:organization_image_url"`
+	OrganizationDescription      string  `gorm:"column:organization_description"`
+	OrganizationMemberCount      uint32  `gorm:"column:organization_member_count"`
+	OrganizationWhitelistedIPs   string  `gorm:"column:organization_whitelisted_ips"`
+	OrganizationAutoAssignedWorkspaceID *uint64 `gorm:"column:organization_auto_assigned_workspace_id"`
+	OrganizationEnforceMFASetup  bool    `gorm:"column:organization_enforce_mfa"`
+	OrganizationEnableIPRestriction bool `gorm:"column:organization_enable_ip_restriction"`
+	MembershipPublicMetadata     string  `gorm:"column:membership_public_metadata"`
+	RolesJSON                    string  `gorm:"column:roles_json"`
 }

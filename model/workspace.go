@@ -23,3 +23,18 @@ type Workspace struct {
 	PublicMetadata      datatypes.JSONMap      `json:"public_metadata" gorm:"not null"`
 	PrivateMetadata     datatypes.JSONMap      `json:"-"               gorm:"not null"`
 }
+
+type PublicWorkspaceData struct {
+	Model
+	Name                string         `json:"name"`
+	ImageUrl            string         `json:"image_url"`
+	Description         string         `json:"description"`
+	MemberCount         uint64         `json:"member_count"`
+	WhitelistedIPs      pq.StringArray `json:"whitelisted_ips" gorm:"type:text[]"`
+	EnforceMFASetup     bool           `json:"enforce_2fa" gorm:"not null;default:false"`
+	EnableIPRestriction bool           `json:"enable_ip_restriction" gorm:"not null;default:false"`
+}
+
+func (PublicWorkspaceData) TableName() string {
+	return "workspaces"
+}

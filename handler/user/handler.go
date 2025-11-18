@@ -1461,10 +1461,15 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 			organization_memberships.updated_at,
 			organization_memberships.organization_id,
 			organization_memberships.user_id,
+			organization_memberships.public_metadata as membership_public_metadata,
 			organizations.name as organization_name,
 			organizations.image_url as organization_image_url,
 			organizations.description as organization_description,
 			organizations.member_count as organization_member_count,
+			organizations.whitelisted_ips as organization_whitelisted_ips,
+			organizations.auto_assigned_workspace_id as organization_auto_assigned_workspace_id,
+			organizations.enforce_mfa_setup as organization_enforce_mfa,
+			organizations.enable_ip_restriction as organization_enable_ip_restriction,
 			COALESCE(
 				(SELECT json_agg(
 					json_build_object(
@@ -1497,16 +1502,43 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 	memberships := make([]model.OrganizationMembership, len(queryResults))
 	for i, result := range queryResults {
 		memberships[i] = result.OrganizationMembership
+		
+		// Parse whitelisted IPs
+		var whitelistedIPs []string
+		if result.OrganizationWhitelistedIPs != "" && result.OrganizationWhitelistedIPs != "{}" {
+			// PostgreSQL array format: {ip1,ip2,ip3}
+			trimmed := strings.Trim(result.OrganizationWhitelistedIPs, "{}")
+			if trimmed != "" {
+				whitelistedIPs = strings.Split(trimmed, ",")
+			}
+		}
+		
 		memberships[i].Organization = model.PublicOrganizationData{
 			Model: model.Model{
 				ID:        result.OrganizationID,
 				CreatedAt: result.CreatedAt,
 				UpdatedAt: result.UpdatedAt,
 			},
-			Name:        result.OrganizationName,
-			ImageUrl:    result.OrganizationImageUrl,
-			Description: result.OrganizationDescription,
-			MemberCount: result.OrganizationMemberCount,
+			Name:                    result.OrganizationName,
+			ImageUrl:                result.OrganizationImageUrl,
+			Description:             result.OrganizationDescription,
+			MemberCount:             result.OrganizationMemberCount,
+			WhitelistedIPs:          whitelistedIPs,
+			AutoAssignedWorkspaceID: result.OrganizationAutoAssignedWorkspaceID,
+			EnforceMFASetup:         result.OrganizationEnforceMFASetup,
+			EnableIPRestriction:     result.OrganizationEnableIPRestriction,
+		}
+		
+		// Parse public metadata
+		if result.MembershipPublicMetadata != "" && result.MembershipPublicMetadata != "null" {
+			var metadata datatypes.JSONMap
+			if err := json.Unmarshal([]byte(result.MembershipPublicMetadata), &metadata); err != nil {
+				memberships[i].PublicMetadata = make(datatypes.JSONMap)
+			} else {
+				memberships[i].PublicMetadata = metadata
+			}
+		} else {
+			memberships[i].PublicMetadata = make(datatypes.JSONMap)
 		}
 
 		var roles []*model.OrganizationRole
@@ -1538,21 +1570,31 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 			workspace_memberships.organization_id,
 			workspace_memberships.organization_membership_id,
 			workspace_memberships.user_id,
+			workspace_memberships.public_metadata as membership_public_metadata,
 			workspaces.name as workspace_name,
 			workspaces.image_url as workspace_image_url,
 			workspaces.description as workspace_description,
 			workspaces.member_count as workspace_member_count,
+			workspaces.whitelisted_ips as workspace_whitelisted_ips,
+			workspaces.enforce_mfa_setup as workspace_enforce_mfa,
+			workspaces.enable_ip_restriction as workspace_enable_ip_restriction,
 			organizations.name as organization_name,
 			organizations.image_url as organization_image_url,
+			organizations.description as organization_description,
+			organizations.member_count as organization_member_count,
+			organizations.whitelisted_ips as organization_whitelisted_ips,
+			organizations.auto_assigned_workspace_id as organization_auto_assigned_workspace_id,
+			organizations.enforce_mfa_setup as organization_enforce_mfa,
+			organizations.enable_ip_restriction as organization_enable_ip_restriction,
 			COALESCE(
 				(SELECT json_agg(
 					json_build_object(
-						'id', workspace_roles.id,
+						'id', workspace_roles.id::text,
 						'name', workspace_roles.name,
 						'permissions', workspace_roles.permissions,
-						'organization_id', workspace_roles.organization_id,
-						'deployment_id', workspace_roles.deployment_id,
-						'workspace_id', workspace_roles.workspace_id,
+						'organization_id', workspace_roles.organization_id::text,
+						'deployment_id', workspace_roles.deployment_id::text,
+						'workspace_id', workspace_roles.workspace_id::text,
 						'created_at', workspace_roles.created_at,
 						'updated_at', workspace_roles.updated_at
 					) ORDER BY workspace_roles.name
@@ -1587,30 +1629,73 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 	memberships := make([]model.WorkspaceMembership, len(queryResults))
 	for i, result := range queryResults {
 		memberships[i] = result.WorkspaceMembership
-		memberships[i].Workspace = model.Workspace{
+		
+		// Parse workspace whitelisted IPs
+		var workspaceWhitelistedIPs []string
+		if result.WorkspaceWhitelistedIPs != "" && result.WorkspaceWhitelistedIPs != "{}" {
+			trimmed := strings.Trim(result.WorkspaceWhitelistedIPs, "{}")
+			if trimmed != "" {
+				workspaceWhitelistedIPs = strings.Split(trimmed, ",")
+			}
+		}
+		
+		memberships[i].Workspace = model.PublicWorkspaceData{
 			Model: model.Model{
 				ID:        result.WorkspaceID,
 				CreatedAt: result.CreatedAt,
 				UpdatedAt: result.UpdatedAt,
 			},
-			Name:        result.WorkspaceName,
-			ImageUrl:    result.WorkspaceImageUrl,
-			Description: result.WorkspaceDescription,
-			MemberCount: result.WorkspaceMemberCount,
+			Name:                result.WorkspaceName,
+			ImageUrl:            result.WorkspaceImageUrl,
+			Description:         result.WorkspaceDescription,
+			MemberCount:         result.WorkspaceMemberCount,
+			WhitelistedIPs:      workspaceWhitelistedIPs,
+			EnforceMFASetup:     result.WorkspaceEnforceMFASetup,
+			EnableIPRestriction: result.WorkspaceEnableIPRestriction,
 		}
-		memberships[i].Organization = model.Organization{
+		
+		// Parse organization whitelisted IPs
+		var orgWhitelistedIPs []string
+		if result.OrganizationWhitelistedIPs != "" && result.OrganizationWhitelistedIPs != "{}" {
+			trimmed := strings.Trim(result.OrganizationWhitelistedIPs, "{}")
+			if trimmed != "" {
+				orgWhitelistedIPs = strings.Split(trimmed, ",")
+			}
+		}
+		
+		memberships[i].Organization = model.PublicOrganizationData{
 			Model: model.Model{
 				ID: result.OrganizationID,
 			},
-			Name:     result.OrganizationName,
-			ImageUrl: result.OrganizationImageUrl,
+			Name:                    result.OrganizationName,
+			ImageUrl:                result.OrganizationImageUrl,
+			Description:             result.OrganizationDescription,
+			MemberCount:             result.OrganizationMemberCount,
+			WhitelistedIPs:          orgWhitelistedIPs,
+			AutoAssignedWorkspaceID: result.OrganizationAutoAssignedWorkspaceID,
+			EnforceMFASetup:         result.OrganizationEnforceMFASetup,
+			EnableIPRestriction:     result.OrganizationEnableIPRestriction,
+		}
+		
+		// Parse public metadata
+		if result.MembershipPublicMetadata != "" && result.MembershipPublicMetadata != "null" {
+			var metadata datatypes.JSONMap
+			if err := json.Unmarshal([]byte(result.MembershipPublicMetadata), &metadata); err != nil {
+				memberships[i].PublicMetadata = make(datatypes.JSONMap)
+			} else {
+				memberships[i].PublicMetadata = metadata
+			}
+		} else {
+			memberships[i].PublicMetadata = make(datatypes.JSONMap)
 		}
 
 		var roles []*model.WorkspaceRole
-		if result.RolesJSON != "" && result.RolesJSON != "[]" {
-			if err := json.Unmarshal([]byte(result.RolesJSON), &roles); err == nil {
-				memberships[i].Roles = roles
-			}
+		log.Println(result.RolesJSON)
+		err := json.Unmarshal([]byte(result.RolesJSON), &roles)
+		if err == nil {
+			memberships[i].Roles = roles
+		} else {
+			log.Println(err)
 		}
 	}
 
