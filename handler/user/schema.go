@@ -65,12 +65,10 @@ type UserQueryResult struct {
 	PublicMetadata                 string    `gorm:"column:public_metadata"`
 	BackupCodesGenerated           bool      `gorm:"column:backup_codes_generated"`
 	HasPassword                    bool      `gorm:"column:has_password"`
-
-	// JSON aggregated fields
-	UserEmailAddressesJSON string `gorm:"column:user_email_addresses_json"`
-	UserPhoneNumbersJSON   string `gorm:"column:user_phone_numbers_json"`
-	SocialConnectionsJSON  string `gorm:"column:social_connections_json"`
-	UserAuthenticatorJSON  string `gorm:"column:user_authenticator_json"`
+	UserEmailAddressesJSON         string    `gorm:"column:user_email_addresses_json"`
+	UserPhoneNumbersJSON           string    `gorm:"column:user_phone_numbers_json"`
+	SocialConnectionsJSON          string    `gorm:"column:social_connections_json"`
+	UserAuthenticatorJSON          string    `gorm:"column:user_authenticator_json"`
 }
 
 type OrganizationMembershipQueryResult struct {

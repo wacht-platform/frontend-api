@@ -982,7 +982,7 @@ func (h *Handler) GetOrganizationMembers(
 				log.Printf("Error parsing user data for member %d: %v", members[i].ID, err)
 				log.Printf("UserJSON: %s", result.UserJSON)
 			} else {
-				members[i].User = userData
+				members[i].User = &userData
 			}
 		} else {
 			log.Printf("No user data JSON for member %d", members[i].ID)

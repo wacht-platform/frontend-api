@@ -1510,6 +1510,7 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 		}
 
 		var roles []*model.OrganizationRole
+		log.Println(result.RolesJSON)
 		if result.RolesJSON != "" && result.RolesJSON != "[]" {
 			if err := json.Unmarshal([]byte(result.RolesJSON), &roles); err == nil {
 				memberships[i].Roles = roles
