@@ -73,7 +73,7 @@ type User struct {
 	PrivateMetadata                datatypes.JSONMap       `json:"-"                               gorm:"not null"`
 	BackupCodesGenerated           bool                    `json:"backup_codes_generated"          gorm:"not null"`
 	BackupCodes                    pq.StringArray          `json:"-"                               gorm:"type:text[]"`
-	DeletedAt                      gorm.DeletedAt          `gorm:"index"`
+	DeletedAt                      gorm.DeletedAt          `json:"-" gorm:"index"`
 }
 
 type PublicUserData struct {
