@@ -377,7 +377,8 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 	requiresCompletion := false
 	missingFields := []string{}
 
-	if method == model.SignInMethodEmailOTP {
+	switch method {
+	case model.SignInMethodEmailOTP:
 		email, _ := h.service.FindUserByVerifiedEmail(b.Email, deployment.ID)
 
 		if email != nil {
@@ -433,7 +434,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 				&deployment,
 			)
 		}
-	} else if method == model.SignInMethodPhoneOTP {
+	case model.SignInMethodPhoneOTP:
 		phone, _ := h.service.FindUserByPhoneNumber(b.Phone, b.PhoneCountryCode, deployment.ID)
 
 		if phone != nil {

@@ -458,9 +458,10 @@ func (s *AuthService) CheckIdentifierAvailability(
 	identifier string,
 	identifierType string,
 ) (bool, error) {
-	if identifierType == "email" {
+	switch identifierType {
+	case "email":
 		return s.CheckEmailExists(identifier), nil
-	} else if identifierType == "username" {
+	case "username":
 		return s.CheckUsernameExists(identifier), nil
 	}
 	return false, errors.New("invalid identifier type")
