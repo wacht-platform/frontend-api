@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -973,6 +974,33 @@ func (s *AuthService) Delete2FAMethodFromCache(key string) error {
 	return database.Redis.Del(
 		context.Background(),
 		fmt.Sprintf("2fa:%s", key),
+	).Err()
+}
+
+func (s *AuthService) StoreResetTokenInCache(token string, userID uint64) error {
+	return database.Redis.Set(
+		context.Background(),
+		fmt.Sprintf("reset-token:%s", token),
+		userID,
+		15*time.Minute,
+	).Err()
+}
+
+func (s *AuthService) GetUserIDFromResetToken(token string) (uint64, error) {
+	val, err := database.Redis.Get(
+		context.Background(),
+		fmt.Sprintf("reset-token:%s", token),
+	).Result()
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseUint(val, 10, 64)
+}
+
+func (s *AuthService) DeleteResetTokenFromCache(token string) error {
+	return database.Redis.Del(
+		context.Background(),
+		fmt.Sprintf("reset-token:%s", token),
 	).Err()
 }
 

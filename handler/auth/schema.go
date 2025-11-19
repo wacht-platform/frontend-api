@@ -42,12 +42,12 @@ type PrepareVerificationRequest struct {
 
 type ForgotPasswordRequest struct {
 	Email string `form:"email"`
+	OTP   string `form:"otp"`
 }
 
 type ResetPasswordRequest struct {
-	Email    string `form:"email"`
+	Token    string `form:"token"`
 	Password string `form:"password"`
-	OTP      string `form:"otp"`
 }
 
 type SetupAuthenticatorRequest struct {

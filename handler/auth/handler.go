@@ -378,7 +378,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 	missingFields := []string{}
 
 	if method == model.SignInMethodEmailOTP {
-		email, err := h.service.FindUserByVerifiedEmail(b.Email, deployment.ID)
+		email, _ := h.service.FindUserByVerifiedEmail(b.Email, deployment.ID)
 
 		if email != nil {
 			userID = email.UserID
@@ -395,7 +395,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 				}
 			}
 
-			if err = h.service.ValidateUserStatus(email); err != nil {
+			if err := h.service.ValidateUserStatus(email); err != nil {
 				return handler.SendForbidden(c, nil, err.Error(), handler.ErrUserDisabled)
 			}
 
@@ -434,7 +434,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 			)
 		}
 	} else if method == model.SignInMethodPhoneOTP {
-		phone, err := h.service.FindUserByPhoneNumber(b.Phone, b.PhoneCountryCode, deployment.ID)
+		phone, _ := h.service.FindUserByPhoneNumber(b.Phone, b.PhoneCountryCode, deployment.ID)
 
 		if phone != nil {
 			userID = &phone.User.ID
@@ -451,7 +451,7 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 				}
 			}
 
-			if err = h.service.ValidatePhoneUserStatus(phone); err != nil {
+			if err := h.service.ValidatePhoneUserStatus(phone); err != nil {
 				return handler.SendForbidden(c, nil, err.Error(), handler.ErrUserDisabled)
 			}
 
@@ -2572,6 +2572,48 @@ func (h *Handler) ForgotPassword(c *fiber.Ctx) error {
 		)
 	}
 
+	if b.OTP != "" {
+		storedOTP, err := h.service.GetOTPFromRedis(fmt.Sprintf("password-reset:%d", email.UserID))
+		if err != nil {
+			return handler.SendBadRequest(
+				c,
+				nil,
+				"Invalid or expired OTP",
+			)
+		}
+
+		if storedOTP != b.OTP {
+			return handler.SendBadRequest(
+				c,
+				nil,
+				"Invalid OTP",
+			)
+		}
+
+		token, err := utils.GenerateSecureToken(32)
+		if err != nil {
+			return handler.SendInternalServerError(
+				c,
+				err,
+				"Error generating token",
+			)
+		}
+
+		if err := h.service.StoreResetTokenInCache(token, *email.UserID); err != nil {
+			return handler.SendInternalServerError(
+				c,
+				err,
+				"Error storing token",
+			)
+		}
+
+		h.service.DeleteOTPFromRedis(fmt.Sprintf("password-reset:%d", email.UserID))
+
+		return handler.SendSuccess(c, fiber.Map{
+			"token": token,
+		})
+	}
+
 	code, err := utils.GenerateOTP()
 	if err != nil {
 		return handler.SendInternalServerError(
@@ -2613,37 +2655,21 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, err.Error())
 	}
 
-	email, err := h.service.FindUserByEmail(b.Email, deployment.ID)
+	userID, err := h.service.GetUserIDFromResetToken(b.Token)
 	if err != nil {
-		if err == handler.ErrUserNotFound {
-			return handler.SendNotFound(
-				c,
-				nil,
-				err.Error(),
-				handler.ErrUserNotFound,
-			)
-		}
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Invalid or expired token",
+		)
+	}
+
+	var user model.User
+	if err := database.Connection.Where("id = ?", userID).First(&user).Error; err != nil {
 		return handler.SendInternalServerError(
 			c,
 			err,
-			"Something went wrong",
-		)
-	}
-
-	storedOTP, err := h.service.GetOTPFromRedis(fmt.Sprintf("password-reset:%d", email.UserID))
-	if err != nil {
-		return handler.SendBadRequest(
-			c,
-			nil,
-			"Invalid or expired OTP",
-		)
-	}
-
-	if storedOTP != b.OTP {
-		return handler.SendBadRequest(
-			c,
-			nil,
-			"Invalid OTP",
+			"Error finding user",
 		)
 	}
 
@@ -2656,7 +2682,7 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 		)
 	}
 
-	if err := database.Connection.Model(&email.User).Update("password", hashedPassword).Error; err != nil {
+	if err := database.Connection.Model(&user).Update("password", hashedPassword).Error; err != nil {
 		return handler.SendInternalServerError(
 			c,
 			err,
@@ -2664,9 +2690,9 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 		)
 	}
 
-	h.service.DeleteOTPFromRedis(fmt.Sprintf("password-reset:%d", email.UserID))
+	h.service.DeleteResetTokenFromCache(b.Token)
 
-	utils.PublishWebhookEvent(deployment.ID, "user.password.reset", *email.UserID, "user")
+	utils.PublishWebhookEvent(deployment.ID, "user.password.reset", userID, "user")
 
 	return handler.SendSuccess[any](c, nil)
 }
