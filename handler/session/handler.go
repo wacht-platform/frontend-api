@@ -423,6 +423,10 @@ func (h *Handler) GetToken(
 		return handler.SendInternalServerError(c, nil, "Failed to unmarshal claims")
 	}
 
+	if len(*claimsJson) != 0 {
+		tok.Set("claims", claimsJson)
+	}
+
 	signedToken, err := signToken(tok, signingAlg, secret)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, "Failed to sign token")
