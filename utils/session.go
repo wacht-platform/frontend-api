@@ -480,12 +480,14 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		aom.id as "ActiveSignin__ActiveOrganizationMembership__id",
 		aom.organization_id as "ActiveSignin__ActiveOrganizationMembership__organization_id",
 		aom.user_id as "ActiveSignin__ActiveOrganizationMembership__user_id",
+		aom.public_metadata as "ActiveSignin__ActiveOrganizationMembership__public_metadata",
 
 		-- Workspace Membership
 		awm.id as "ActiveSignin__ActiveWorkspaceMembership__id",
 		awm.workspace_id as "ActiveSignin__ActiveWorkspaceMembership__workspace_id",
 		awm.user_id as "ActiveSignin__ActiveWorkspaceMembership__user_id",
 		awm.organization_membership_id as "ActiveSignin__ActiveWorkspaceMembership__organization_membership_id",
+		awm.public_metadata as "ActiveSignin__ActiveWorkspaceMembership__public_metadata",
 
 		-- User Email Addresses (JSON aggregated)
 		COALESCE(
@@ -705,18 +707,6 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 	LEFT JOIN workspace_memberships awm ON asi.active_workspace_membership_id = awm.id
 	WHERE s.id = ? AND s.deleted_at IS NULL`
 
-	type QueryResult struct {
-		model.Session
-		UserEmailAddresses    string `json:"user_email_addresses"`
-		UserPhoneNumbers      string `json:"user_phone_numbers"`
-		UserSocialConnections string `json:"user_social_connections"`
-		SigninAttemptsJSON    string `json:"signin_attempts"`
-		SignupAttemptsJSON    string `json:"signup_attempts"`
-		OrganizationRoles     string `json:"organization_roles"`
-		WorkspaceRoles        string `json:"workspace_roles"`
-		SigninsJSON           string `json:"signins"`
-	}
-
 	var rawResult map[string]any
 	err := database.Connection.Clauses(dbresolver.Read).Raw(mainQuery, sessionID).Scan(&rawResult).Error
 	if err != nil {
@@ -816,6 +806,13 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			if userID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveOrganizationMembership__user_id"]); err == nil {
 				session.ActiveSignin.ActiveOrganizationMembership.UserID = userID
 			}
+			if metadata, ok := rawResult["ActiveSignin__ActiveOrganizationMembership__public_metadata"]; ok && metadata != nil {
+				if metadataBytes, ok := metadata.([]byte); ok {
+					json.Unmarshal(metadataBytes, &session.ActiveSignin.ActiveOrganizationMembership.PublicMetadata)
+				} else if metadataStr, ok := metadata.(string); ok {
+					json.Unmarshal([]byte(metadataStr), &session.ActiveSignin.ActiveOrganizationMembership.PublicMetadata)
+				}
+			}
 		}
 
 		// Parse active workspace membership
@@ -831,6 +828,13 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			}
 			if orgMembershipID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveWorkspaceMembership__organization_membership_id"]); err == nil {
 				session.ActiveSignin.ActiveWorkspaceMembership.OrganizationMembershipID = orgMembershipID
+			}
+			if metadata, ok := rawResult["ActiveSignin__ActiveWorkspaceMembership__public_metadata"]; ok && metadata != nil {
+				if metadataBytes, ok := metadata.([]byte); ok {
+					json.Unmarshal(metadataBytes, &session.ActiveSignin.ActiveWorkspaceMembership.PublicMetadata)
+				} else if metadataStr, ok := metadata.(string); ok {
+					json.Unmarshal([]byte(metadataStr), &session.ActiveSignin.ActiveWorkspaceMembership.PublicMetadata)
+				}
 			}
 		}
 	}

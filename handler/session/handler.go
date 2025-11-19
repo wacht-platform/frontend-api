@@ -362,6 +362,10 @@ func (h *Handler) GetToken(
 	}
 
 	tok.Set("session_id", strconv.FormatUint(session.ID, 10))
+	tok.Set("sid", strconv.FormatUint(session.ID, 10))
+
+	tokenPermissions := map[string][]string{}
+
 	if session.ActiveSignin.ActiveOrganizationMembership != nil {
 		permissionsMap := map[string]bool{}
 		for _, role := range session.ActiveSignin.ActiveOrganizationMembership.Roles {
@@ -370,8 +374,8 @@ func (h *Handler) GetToken(
 			}
 		}
 		permissions := slices.Collect(maps.Keys(permissionsMap))
-		tok.Set("organization_permissions", permissions)
-		tok.Set("organization", strconv.FormatUint(*&session.ActiveSignin.ActiveOrganizationMembership.OrganizationID, 10))
+		tokenPermissions["organization"] = permissions
+		tok.Set("organization", strconv.FormatUint(session.ActiveSignin.ActiveOrganizationMembership.OrganizationID, 10))
 	}
 	if session.ActiveSignin.ActiveWorkspaceMembership != nil {
 		permissionsMap := map[string]bool{}
@@ -381,9 +385,11 @@ func (h *Handler) GetToken(
 			}
 		}
 		permissions := slices.Collect(maps.Keys(permissionsMap))
-		tok.Set("workspace_permissions", permissions)
-		tok.Set("workspace", strconv.FormatUint(*&session.ActiveSignin.ActiveWorkspaceMembership.WorkspaceID, 10))
+		tokenPermissions["workspace"] = permissions
+		tok.Set("workspace", strconv.FormatUint(session.ActiveSignin.ActiveWorkspaceMembership.WorkspaceID, 10))
 	}
+
+	tok.Set("permissions", tokenPermissions)
 
 	signingAlg := template.CustomSigningKey.Algorithm
 	secret := template.CustomSigningKey.Key
