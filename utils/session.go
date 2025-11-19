@@ -407,44 +407,44 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		s.active_signin_id,
 
 		-- Active Signin Data
-		asi.id as "ActiveSignin__id",
-		asi.created_at as "ActiveSignin__created_at",
-		asi.updated_at as "ActiveSignin__updated_at",
-		asi.user_id as "ActiveSignin__user_id",
-		asi.session_id as "ActiveSignin__session_id",
-		asi.active_organization_membership_id as "ActiveSignin__active_organization_membership_id",
-		asi.active_workspace_membership_id as "ActiveSignin__active_workspace_membership_id",
-		asi.expires_at as "ActiveSignin__expires_at",
-		asi.last_active_at as "ActiveSignin__last_active_at",
-		asi.ip_address as "ActiveSignin__ip_address",
-		asi.browser as "ActiveSignin__browser",
-		asi.device as "ActiveSignin__device",
-		asi.city as "ActiveSignin__city",
-		asi.region as "ActiveSignin__region",
-		asi.region_code as "ActiveSignin__region_code",
-		asi.country as "ActiveSignin__country",
-		asi.country_code as "ActiveSignin__country_code",
+		asi.id as "ASI__id",
+		asi.created_at as "ASI__created_at",
+		asi.updated_at as "ASI__updated_at",
+		asi.user_id as "ASI__user_id",
+		asi.session_id as "ASI__session_id",
+		asi.active_organization_membership_id as "ASI__active_org_membership_id",
+		asi.active_workspace_membership_id as "ASI__active_ws_membership_id",
+		asi.expires_at as "ASI__expires_at",
+		asi.last_active_at as "ASI__last_active_at",
+		asi.ip_address as "ASI__ip_address",
+		asi.browser as "ASI__browser",
+		asi.device as "ASI__device",
+		asi.city as "ASI__city",
+		asi.region as "ASI__region",
+		asi.region_code as "ASI__region_code",
+		asi.country as "ASI__country",
+		asi.country_code as "ASI__country_code",
 
 		-- Active User Data
-		au.id as "ActiveSignin__User__id",
-		au.created_at as "ActiveSignin__User__created_at",
-		au.updated_at as "ActiveSignin__User__updated_at",
-		au.first_name as "ActiveSignin__User__first_name",
-		au.last_name as "ActiveSignin__User__last_name",
-		au.username as "ActiveSignin__User__username",
-		au.has_profile_picture as "ActiveSignin__User__has_profile_picture",
-		au.profile_picture_url as "ActiveSignin__User__profile_picture_url",
-		au.availability as "ActiveSignin__User__availability",
-		au.last_password_reset_at as "ActiveSignin__User__last_password_reset_at",
-		au.schema_version as "ActiveSignin__User__schema_version",
-		au.disabled as "ActiveSignin__User__disabled",
-		au.primary_email_address_id as "ActiveSignin__User__primary_email_address_id",
-		au.primary_phone_number_id as "ActiveSignin__User__primary_phone_number_id",
-		au.second_factor_policy as "ActiveSignin__User__second_factor_policy",
-		au.active_organization_membership_id as "ActiveSignin__User__active_organization_membership_id",
-		au.active_workspace_membership_id as "ActiveSignin__User__active_workspace_membership_id",
-		au.public_metadata as "ActiveSignin__User__public_metadata",
-		au.backup_codes_generated as "ActiveSignin__User__backup_codes_generated",
+		au.id as "ASI__User__id",
+		au.created_at as "ASI__User__created_at",
+		au.updated_at as "ASI__User__updated_at",
+		au.first_name as "ASI__User__first_name",
+		au.last_name as "ASI__User__last_name",
+		au.username as "ASI__User__username",
+		au.has_profile_picture as "ASI__User__has_profile_picture",
+		au.profile_picture_url as "ASI__User__profile_picture_url",
+		au.availability as "ASI__User__availability",
+		au.last_password_reset_at as "ASI__User__last_password_reset_at",
+		au.schema_version as "ASI__User__schema_version",
+		au.disabled as "ASI__User__disabled",
+		au.primary_email_address_id as "ASI__User__primary_email_addr_id",
+		au.primary_phone_number_id as "ASI__User__primary_phone_num_id",
+		au.second_factor_policy as "ASI__User__second_factor_policy",
+		au.active_organization_membership_id as "ASI__User__active_org_membership_id",
+		au.active_workspace_membership_id as "ASI__User__active_ws_membership_id",
+		au.public_metadata as "ASI__User__public_metadata",
+		au.backup_codes_generated as "ASI__User__backup_codes_generated",
 
 		-- Primary Email Address for Active User
 		CASE
@@ -460,7 +460,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 				'updated_at', pe.updated_at
 			) FROM user_email_addresses pe WHERE pe.id = au.primary_email_address_id)
 			ELSE NULL
-		END as "ActiveSignin__User__primary_email_address",
+		END as "ASI__User__primary_email_addr",
 
 		-- Primary Phone Number for Active User
 		CASE
@@ -474,38 +474,38 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 				'updated_at', pp.updated_at
 			) FROM user_phone_numbers pp WHERE pp.id = au.primary_phone_number_id)
 			ELSE NULL
-		END as "ActiveSignin__User__primary_phone_number",
+		END as "ASI__User__primary_phone_num",
 
 		-- Organization Membership
-		aom.id as "ActiveSignin__ActiveOrganizationMembership__id",
-		aom.organization_id as "ActiveSignin__ActiveOrganizationMembership__organization_id",
-		aom.user_id as "ActiveSignin__ActiveOrganizationMembership__user_id",
-		aom.public_metadata as "ActiveSignin__ActiveOrganizationMembership__public_metadata",
+		aom.id as "ASI__AOM__id",
+		aom.organization_id as "ASI__AOM__org_id",
+		aom.user_id as "ASI__AOM__user_id",
+		aom.public_metadata as "ASI__AOM__public_metadata",
 
 		-- Organization Details
-		ao.name as "ActiveSignin__ActiveOrganizationMembership__Organization__name",
-		ao.image_url as "ActiveSignin__ActiveOrganizationMembership__Organization__image_url",
-		ao.description as "ActiveSignin__ActiveOrganizationMembership__Organization__description",
-		ao.member_count as "ActiveSignin__ActiveOrganizationMembership__Organization__member_count",
-		ao.enforce_mfa_setup as "ActiveSignin__ActiveOrganizationMembership__Organization__enforce_mfa_setup",
-		ao.enable_ip_restriction as "ActiveSignin__ActiveOrganizationMembership__Organization__enable_ip_restriction",
-		ao.public_metadata as "ActiveSignin__ActiveOrganizationMembership__Organization__public_metadata",
+		ao.name as "ASI__AOM__Org__name",
+		ao.image_url as "ASI__AOM__Org__image_url",
+		ao.description as "ASI__AOM__Org__description",
+		ao.member_count as "ASI__AOM__Org__member_count",
+		ao.enforce_mfa_setup as "ASI__AOM__Org__enforce_mfa",
+		ao.enable_ip_restriction as "ASI__AOM__Org__enable_ip_restrict",
+		ao.public_metadata as "ASI__AOM__Org__public_metadata",
 
 		-- Workspace Membership
-		awm.id as "ActiveSignin__ActiveWorkspaceMembership__id",
-		awm.workspace_id as "ActiveSignin__ActiveWorkspaceMembership__workspace_id",
-		awm.user_id as "ActiveSignin__ActiveWorkspaceMembership__user_id",
-		awm.organization_membership_id as "ActiveSignin__ActiveWorkspaceMembership__organization_membership_id",
-		awm.public_metadata as "ActiveSignin__ActiveWorkspaceMembership__public_metadata",
+		awm.id as "ASI__AWM__id",
+		awm.workspace_id as "ASI__AWM__ws_id",
+		awm.user_id as "ASI__AWM__user_id",
+		awm.organization_membership_id as "ASI__AWM__org_membership_id",
+		awm.public_metadata as "ASI__AWM__public_metadata",
 
 		-- Workspace Details
-		aw.name as "ActiveSignin__ActiveWorkspaceMembership__Workspace__name",
-		aw.image_url as "ActiveSignin__ActiveWorkspaceMembership__Workspace__image_url",
-		aw.description as "ActiveSignin__ActiveWorkspaceMembership__Workspace__description",
-		aw.member_count as "ActiveSignin__ActiveWorkspaceMembership__Workspace__member_count",
-		aw.enforce_mfa_setup as "ActiveSignin__ActiveWorkspaceMembership__Workspace__enforce_mfa_setup",
-		aw.enable_ip_restriction as "ActiveSignin__ActiveWorkspaceMembership__Workspace__enable_ip_restriction",
-		aw.public_metadata as "ActiveSignin__ActiveWorkspaceMembership__Workspace__public_metadata",
+		aw.name as "ASI__AWM__WS__name",
+		aw.image_url as "ASI__AWM__WS__image_url",
+		aw.description as "ASI__AWM__WS__description",
+		aw.member_count as "ASI__AWM__WS__member_count",
+		aw.enforce_mfa_setup as "ASI__AWM__WS__enforce_mfa",
+		aw.enable_ip_restriction as "ASI__AWM__WS__enable_ip_restrict",
+		aw.public_metadata as "ASI__AWM__WS__public_metadata",
 
 		-- User Email Addresses (JSON aggregated)
 		COALESCE(
@@ -746,53 +746,53 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 	}
 
 	// Parse active signin if exists
-	if activeSigninID, err := parseUint64FromInterface(rawResult["ActiveSignin__id"]); err == nil {
+	if activeSigninID, err := parseUint64FromInterface(rawResult["ASI__id"]); err == nil {
 		session.ActiveSignin = &model.Signin{}
 		session.ActiveSignin.ID = activeSigninID
 
 		// Parse signin fields
-		if sessionID, err := parseUint64FromInterface(rawResult["ActiveSignin__session_id"]); err == nil {
+		if sessionID, err := parseUint64FromInterface(rawResult["ASI__session_id"]); err == nil {
 			session.ActiveSignin.SessionID = sessionID
 		}
 
-		session.ActiveSignin.UserID = getOptionalUint64FromMap(rawResult, "ActiveSignin__user_id")
-		session.ActiveSignin.ActiveOrganizationMembershipID = getOptionalUint64FromMap(rawResult, "ActiveSignin__active_organization_membership_id")
-		session.ActiveSignin.ActiveWorkspaceMembershipID = getOptionalUint64FromMap(rawResult, "ActiveSignin__active_workspace_membership_id")
+		session.ActiveSignin.UserID = getOptionalUint64FromMap(rawResult, "ASI__user_id")
+		session.ActiveSignin.ActiveOrganizationMembershipID = getOptionalUint64FromMap(rawResult, "ASI__active_org_membership_id")
+		session.ActiveSignin.ActiveWorkspaceMembershipID = getOptionalUint64FromMap(rawResult, "ASI__active_ws_membership_id")
 
 		// Parse string fields
-		session.ActiveSignin.ExpiresAt = getTimeFromMap(rawResult, "ActiveSignin__expires_at")
-		session.ActiveSignin.LastActiveAt = getTimeFromMap(rawResult, "ActiveSignin__last_active_at")
-		session.ActiveSignin.IpAddress = getStringFromMap(rawResult, "ActiveSignin__ip_address")
-		session.ActiveSignin.Browser = getStringFromMap(rawResult, "ActiveSignin__browser")
-		session.ActiveSignin.Device = getStringFromMap(rawResult, "ActiveSignin__device")
-		session.ActiveSignin.City = getStringFromMap(rawResult, "ActiveSignin__city")
-		session.ActiveSignin.Region = getStringFromMap(rawResult, "ActiveSignin__region")
-		session.ActiveSignin.RegionCode = getStringFromMap(rawResult, "ActiveSignin__region_code")
-		session.ActiveSignin.Country = getStringFromMap(rawResult, "ActiveSignin__country")
-		session.ActiveSignin.CountryCode = getStringFromMap(rawResult, "ActiveSignin__country_code")
+		session.ActiveSignin.ExpiresAt = getTimeFromMap(rawResult, "ASI__expires_at")
+		session.ActiveSignin.LastActiveAt = getTimeFromMap(rawResult, "ASI__last_active_at")
+		session.ActiveSignin.IpAddress = getStringFromMap(rawResult, "ASI__ip_address")
+		session.ActiveSignin.Browser = getStringFromMap(rawResult, "ASI__browser")
+		session.ActiveSignin.Device = getStringFromMap(rawResult, "ASI__device")
+		session.ActiveSignin.City = getStringFromMap(rawResult, "ASI__city")
+		session.ActiveSignin.Region = getStringFromMap(rawResult, "ASI__region")
+		session.ActiveSignin.RegionCode = getStringFromMap(rawResult, "ASI__region_code")
+		session.ActiveSignin.Country = getStringFromMap(rawResult, "ASI__country")
+		session.ActiveSignin.CountryCode = getStringFromMap(rawResult, "ASI__country_code")
 
 		// Parse user if exists
-		if userID, err := parseUint64FromInterface(rawResult["ActiveSignin__User__id"]); err == nil {
+		if userID, err := parseUint64FromInterface(rawResult["ASI__User__id"]); err == nil {
 			session.ActiveSignin.User = &model.User{
-				FirstName:         getStringFromMap(rawResult, "ActiveSignin__User__first_name"),
-				LastName:          getStringFromMap(rawResult, "ActiveSignin__User__last_name"),
-				Username:          getStringFromMap(rawResult, "ActiveSignin__User__username"),
-				Disabled:          getBoolFromMap(rawResult, "ActiveSignin__User__disabled"),
-				HasProfilePicture: getBoolFromMap(rawResult, "ActiveSignin__User__has_profile_picture"),
-				ProfilePictureURL: getStringFromMap(rawResult, "ActiveSignin__User__profile_picture_url"),
+				FirstName:         getStringFromMap(rawResult, "ASI__User__first_name"),
+				LastName:          getStringFromMap(rawResult, "ASI__User__last_name"),
+				Username:          getStringFromMap(rawResult, "ASI__User__username"),
+				Disabled:          getBoolFromMap(rawResult, "ASI__User__disabled"),
+				HasProfilePicture: getBoolFromMap(rawResult, "ASI__User__has_profile_picture"),
+				ProfilePictureURL: getStringFromMap(rawResult, "ASI__User__profile_picture_url"),
 			}
 			session.ActiveSignin.User.ID = userID
 
 			// Parse availability
-			if availability := getStringFromMap(rawResult, "ActiveSignin__User__availability"); availability != "" {
+			if availability := getStringFromMap(rawResult, "ASI__User__availability"); availability != "" {
 				session.ActiveSignin.User.Availability = model.UserAvailability(availability)
 			}
 
 			// Parse primary email address ID
-			session.ActiveSignin.User.PrimaryEmailAddressID = getOptionalUint64FromMap(rawResult, "ActiveSignin__User__primary_email_address_id")
+			session.ActiveSignin.User.PrimaryEmailAddressID = getOptionalUint64FromMap(rawResult, "ASI__User__primary_email_addr_id")
 
 			// Parse primary email JSON
-			if primaryEmailJSON := getStringFromMap(rawResult, "ActiveSignin__User__primary_email_address"); primaryEmailJSON != "" {
+			if primaryEmailJSON := getStringFromMap(rawResult, "ASI__User__primary_email_addr"); primaryEmailJSON != "" {
 				var primaryEmailMap map[string]any
 				if err := json.Unmarshal([]byte(primaryEmailJSON), &primaryEmailMap); err == nil {
 					session.ActiveSignin.User.PrimaryEmailAddress = parsePrimaryEmailFromMap(primaryEmailMap)
@@ -802,10 +802,10 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			}
 
 			// Parse primary phone number ID
-			session.ActiveSignin.User.PrimaryPhoneNumberID = getOptionalUint64FromMap(rawResult, "ActiveSignin__User__primary_phone_number_id")
+			session.ActiveSignin.User.PrimaryPhoneNumberID = getOptionalUint64FromMap(rawResult, "ASI__User__primary_phone_num_id")
 
 			// Parse primary phone JSON
-			if primaryPhoneJSON := getStringFromMap(rawResult, "ActiveSignin__User__primary_phone_number"); primaryPhoneJSON != "" {
+			if primaryPhoneJSON := getStringFromMap(rawResult, "ASI__User__primary_phone_num"); primaryPhoneJSON != "" {
 				var primaryPhoneMap map[string]any
 				if err := json.Unmarshal([]byte(primaryPhoneJSON), &primaryPhoneMap); err == nil {
 					session.ActiveSignin.User.PrimaryPhoneNumber = parsePrimaryPhoneFromMap(primaryPhoneMap)
@@ -815,7 +815,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			}
 
 			// Parse public metadata
-			if metadata, ok := rawResult["ActiveSignin__User__public_metadata"]; ok && metadata != nil {
+			if metadata, ok := rawResult["ASI__User__public_metadata"]; ok && metadata != nil {
 				if metadataBytes, ok := metadata.([]byte); ok {
 					json.Unmarshal(metadataBytes, &session.ActiveSignin.User.PublicMetadata)
 				} else if metadataStr, ok := metadata.(string); ok {
@@ -825,18 +825,18 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		}
 
 		// Parse active organization membership
-		if orgMembershipID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveOrganizationMembership__id"]); err == nil {
+		if orgMembershipID, err := parseUint64FromInterface(rawResult["ASI__AOM__id"]); err == nil {
 			session.ActiveSignin.ActiveOrganizationMembership = &model.OrganizationMembership{}
 			session.ActiveSignin.ActiveOrganizationMembership.ID = orgMembershipID
 
-			if orgID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveOrganizationMembership__organization_id"]); err == nil {
+			if orgID, err := parseUint64FromInterface(rawResult["ASI__AOM__org_id"]); err == nil {
 				session.ActiveSignin.ActiveOrganizationMembership.OrganizationID = orgID
 				session.ActiveSignin.ActiveOrganizationMembership.Organization.ID = orgID
 			}
-			if userID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveOrganizationMembership__user_id"]); err == nil {
+			if userID, err := parseUint64FromInterface(rawResult["ASI__AOM__user_id"]); err == nil {
 				session.ActiveSignin.ActiveOrganizationMembership.UserID = userID
 			}
-			if metadata, ok := rawResult["ActiveSignin__ActiveOrganizationMembership__public_metadata"]; ok && metadata != nil {
+			if metadata, ok := rawResult["ASI__AOM__public_metadata"]; ok && metadata != nil {
 				if metadataBytes, ok := metadata.([]byte); ok {
 					json.Unmarshal(metadataBytes, &session.ActiveSignin.ActiveOrganizationMembership.PublicMetadata)
 				} else if metadataStr, ok := metadata.(string); ok {
@@ -845,17 +845,17 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			}
 
 			// Parse organization details
-			session.ActiveSignin.ActiveOrganizationMembership.Organization.Name = getStringFromMap(rawResult, "ActiveSignin__ActiveOrganizationMembership__Organization__name")
-			session.ActiveSignin.ActiveOrganizationMembership.Organization.ImageUrl = getStringFromMap(rawResult, "ActiveSignin__ActiveOrganizationMembership__Organization__image_url")
-			session.ActiveSignin.ActiveOrganizationMembership.Organization.Description = getStringFromMap(rawResult, "ActiveSignin__ActiveOrganizationMembership__Organization__description")
-			session.ActiveSignin.ActiveOrganizationMembership.Organization.EnforceMFASetup = getBoolFromMap(rawResult, "ActiveSignin__ActiveOrganizationMembership__Organization__enforce_mfa_setup")
-			session.ActiveSignin.ActiveOrganizationMembership.Organization.EnableIPRestriction = getBoolFromMap(rawResult, "ActiveSignin__ActiveOrganizationMembership__Organization__enable_ip_restriction")
+			session.ActiveSignin.ActiveOrganizationMembership.Organization.Name = getStringFromMap(rawResult, "ASI__AOM__Org__name")
+			session.ActiveSignin.ActiveOrganizationMembership.Organization.ImageUrl = getStringFromMap(rawResult, "ASI__AOM__Org__image_url")
+			session.ActiveSignin.ActiveOrganizationMembership.Organization.Description = getStringFromMap(rawResult, "ASI__AOM__Org__description")
+			session.ActiveSignin.ActiveOrganizationMembership.Organization.EnforceMFASetup = getBoolFromMap(rawResult, "ASI__AOM__Org__enforce_mfa")
+			session.ActiveSignin.ActiveOrganizationMembership.Organization.EnableIPRestriction = getBoolFromMap(rawResult, "ASI__AOM__Org__enable_ip_restrict")
 
-			if memberCount, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveOrganizationMembership__Organization__member_count"]); err == nil {
+			if memberCount, err := parseUint64FromInterface(rawResult["ASI__AOM__Org__member_count"]); err == nil {
 				session.ActiveSignin.ActiveOrganizationMembership.Organization.MemberCount = uint32(memberCount)
 			}
 
-			if metadata, ok := rawResult["ActiveSignin__ActiveOrganizationMembership__Organization__public_metadata"]; ok && metadata != nil {
+			if metadata, ok := rawResult["ASI__AOM__Org__public_metadata"]; ok && metadata != nil {
 				if metadataBytes, ok := metadata.([]byte); ok {
 					json.Unmarshal(metadataBytes, &session.ActiveSignin.ActiveOrganizationMembership.Organization.PublicMetadata)
 				} else if metadataStr, ok := metadata.(string); ok {
@@ -865,21 +865,21 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		}
 
 		// Parse active workspace membership
-		if wsMembershipID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveWorkspaceMembership__id"]); err == nil {
+		if wsMembershipID, err := parseUint64FromInterface(rawResult["ASI__AWM__id"]); err == nil {
 			session.ActiveSignin.ActiveWorkspaceMembership = &model.WorkspaceMembership{}
 			session.ActiveSignin.ActiveWorkspaceMembership.ID = wsMembershipID
 
-			if wsID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveWorkspaceMembership__workspace_id"]); err == nil {
+			if wsID, err := parseUint64FromInterface(rawResult["ASI__AWM__ws_id"]); err == nil {
 				session.ActiveSignin.ActiveWorkspaceMembership.WorkspaceID = wsID
 				session.ActiveSignin.ActiveWorkspaceMembership.Workspace.ID = wsID
 			}
-			if userID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveWorkspaceMembership__user_id"]); err == nil {
+			if userID, err := parseUint64FromInterface(rawResult["ASI__AWM__user_id"]); err == nil {
 				session.ActiveSignin.ActiveWorkspaceMembership.UserID = userID
 			}
-			if orgMembershipID, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveWorkspaceMembership__organization_membership_id"]); err == nil {
+			if orgMembershipID, err := parseUint64FromInterface(rawResult["ASI__AWM__org_membership_id"]); err == nil {
 				session.ActiveSignin.ActiveWorkspaceMembership.OrganizationMembershipID = orgMembershipID
 			}
-			if metadata, ok := rawResult["ActiveSignin__ActiveWorkspaceMembership__public_metadata"]; ok && metadata != nil {
+			if metadata, ok := rawResult["ASI__AWM__public_metadata"]; ok && metadata != nil {
 				if metadataBytes, ok := metadata.([]byte); ok {
 					json.Unmarshal(metadataBytes, &session.ActiveSignin.ActiveWorkspaceMembership.PublicMetadata)
 				} else if metadataStr, ok := metadata.(string); ok {
@@ -888,17 +888,17 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			}
 
 			// Parse workspace details
-			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.Name = getStringFromMap(rawResult, "ActiveSignin__ActiveWorkspaceMembership__Workspace__name")
-			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.ImageUrl = getStringFromMap(rawResult, "ActiveSignin__ActiveWorkspaceMembership__Workspace__image_url")
-			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.Description = getStringFromMap(rawResult, "ActiveSignin__ActiveWorkspaceMembership__Workspace__description")
-			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.EnforceMFASetup = getBoolFromMap(rawResult, "ActiveSignin__ActiveWorkspaceMembership__Workspace__enforce_mfa_setup")
-			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.EnableIPRestriction = getBoolFromMap(rawResult, "ActiveSignin__ActiveWorkspaceMembership__Workspace__enable_ip_restriction")
+			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.Name = getStringFromMap(rawResult, "ASI__AWM__WS__name")
+			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.ImageUrl = getStringFromMap(rawResult, "ASI__AWM__WS__image_url")
+			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.Description = getStringFromMap(rawResult, "ASI__AWM__WS__description")
+			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.EnforceMFASetup = getBoolFromMap(rawResult, "ASI__AWM__WS__enforce_mfa")
+			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.EnableIPRestriction = getBoolFromMap(rawResult, "ASI__AWM__WS__enable_ip_restrict")
 
-			if memberCount, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveWorkspaceMembership__Workspace__member_count"]); err == nil {
+			if memberCount, err := parseUint64FromInterface(rawResult["ASI__AWM__WS__member_count"]); err == nil {
 				session.ActiveSignin.ActiveWorkspaceMembership.Workspace.MemberCount = uint64(memberCount)
 			}
 
-			if metadata, ok := rawResult["ActiveSignin__ActiveWorkspaceMembership__Workspace__public_metadata"]; ok && metadata != nil {
+			if metadata, ok := rawResult["ASI__AWM__WS__public_metadata"]; ok && metadata != nil {
 				if metadataBytes, ok := metadata.([]byte); ok {
 					json.Unmarshal(metadataBytes, &session.ActiveSignin.ActiveWorkspaceMembership.Workspace.PublicMetadata)
 				} else if metadataStr, ok := metadata.(string); ok {
