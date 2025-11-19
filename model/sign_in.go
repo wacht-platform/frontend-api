@@ -14,8 +14,8 @@ type Signin struct {
 	ActiveOrganizationMembershipID *uint64                 `json:"active_organization_membership_id,string"`
 	ActiveWorkspaceMembershipID    *uint64                 `json:"active_workspace_membership_id,string"`
 	User                           *User                   `json:"user,omitempty" gorm:"foreignKey:UserID"`
-	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace,omitempty"`
-	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization,omitempty"`
+	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace_membership,omitempty"`
+	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization_membership,omitempty"`
 	ExpiresAt                      time.Time               `json:"expires_at"     gorm:"not null"`
 	LastActiveAt                   time.Time               `json:"last_active_at" gorm:"not null"`
 	IpAddress                      string                  `json:"ip_address"`
