@@ -793,6 +793,15 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 					log.Printf("Warning: failed to parse primary phone JSON: %v", err)
 				}
 			}
+
+			// Parse public metadata
+			if metadata, ok := rawResult["ActiveSignin__User__public_metadata"]; ok && metadata != nil {
+				if metadataBytes, ok := metadata.([]byte); ok {
+					json.Unmarshal(metadataBytes, &session.ActiveSignin.User.PublicMetadata)
+				} else if metadataStr, ok := metadata.(string); ok {
+					json.Unmarshal([]byte(metadataStr), &session.ActiveSignin.User.PublicMetadata)
+				}
+			}
 		}
 
 		// Parse active organization membership
