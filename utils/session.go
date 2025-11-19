@@ -503,7 +503,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		aw.image_url as "ActiveSignin__ActiveWorkspaceMembership__Workspace__image_url",
 		aw.description as "ActiveSignin__ActiveWorkspaceMembership__Workspace__description",
 		aw.member_count as "ActiveSignin__ActiveWorkspaceMembership__Workspace__member_count",
-		aw.enforce_2fa as "ActiveSignin__ActiveWorkspaceMembership__Workspace__enforce_2fa",
+		aw.enforce_mfa_setup as "ActiveSignin__ActiveWorkspaceMembership__Workspace__enforce_mfa_setup",
 		aw.enable_ip_restriction as "ActiveSignin__ActiveWorkspaceMembership__Workspace__enable_ip_restriction",
 		aw.public_metadata as "ActiveSignin__ActiveWorkspaceMembership__Workspace__public_metadata",
 
@@ -891,7 +891,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.Name = getStringFromMap(rawResult, "ActiveSignin__ActiveWorkspaceMembership__Workspace__name")
 			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.ImageUrl = getStringFromMap(rawResult, "ActiveSignin__ActiveWorkspaceMembership__Workspace__image_url")
 			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.Description = getStringFromMap(rawResult, "ActiveSignin__ActiveWorkspaceMembership__Workspace__description")
-			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.EnforceMFASetup = getBoolFromMap(rawResult, "ActiveSignin__ActiveWorkspaceMembership__Workspace__enforce_2fa")
+			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.EnforceMFASetup = getBoolFromMap(rawResult, "ActiveSignin__ActiveWorkspaceMembership__Workspace__enforce_mfa_setup")
 			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.EnableIPRestriction = getBoolFromMap(rawResult, "ActiveSignin__ActiveWorkspaceMembership__Workspace__enable_ip_restriction")
 
 			if memberCount, err := parseUint64FromInterface(rawResult["ActiveSignin__ActiveWorkspaceMembership__Workspace__member_count"]); err == nil {
