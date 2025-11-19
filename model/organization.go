@@ -31,14 +31,15 @@ type Organization struct {
 
 type PublicOrganizationData struct {
 	Model
-	Name                    string         `json:"name"`
-	ImageUrl                string         `json:"image_url"`
-	Description             string         `json:"description"`
-	MemberCount             uint32         `json:"member_count"`
-	WhitelistedIPs          pq.StringArray `json:"whitelisted_ips" gorm:"type:text[]"`
-	AutoAssignedWorkspaceID *uint64        `json:"auto_assigned_workspace_id,string"`
-	EnforceMFASetup         bool           `json:"enforce_mfa" gorm:"not null;default:false"`
-	EnableIPRestriction     bool           `json:"enable_ip_restriction" gorm:"not null;default:false"`
+	Name                    string            `json:"name"`
+	ImageUrl                string            `json:"image_url"`
+	Description             string            `json:"description"`
+	MemberCount             uint32            `json:"member_count"`
+	WhitelistedIPs          pq.StringArray    `json:"whitelisted_ips" gorm:"type:text[]"`
+	AutoAssignedWorkspaceID *uint64           `json:"auto_assigned_workspace_id,string"`
+	EnforceMFASetup         bool              `json:"enforce_mfa" gorm:"not null;default:false"`
+	EnableIPRestriction     bool              `json:"enable_ip_restriction" gorm:"not null;default:false"`
+	PublicMetadata          datatypes.JSONMap `json:"public_metadata" gorm:"not null"`
 }
 
 func (PublicOrganizationData) TableName() string {
