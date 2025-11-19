@@ -2695,7 +2695,90 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 
 	utils.PublishWebhookEvent(deployment.ID, "user.password.reset", userID, "user")
 
-	return handler.SendSuccess[any](c, nil)
+	session := handler.GetSession(c)
+
+	secondFactorEnforced := user.SecondFactorPolicy == model.SecondFactorPolicyEnforced
+	missingFields := h.service.CheckMissingRequiredFields(&user, deployment.AuthSettings)
+	requiresCompletion := len(missingFields) > 0
+
+	var steps []model.SignInAttemptStep
+
+	if secondFactorEnforced {
+		steps = append(steps, model.SignInAttemptStepVerifySecondFactor)
+	}
+
+	if requiresCompletion {
+		steps = append(steps, model.SignInAttemptStepCompleteProfile)
+	}
+
+	authenticated := true
+	completed := len(steps) == 0
+
+	attempt := h.service.CreateSignInAttempt(
+		&user.ID,
+		nil,
+		session.ID,
+		model.SignInMethodPlainEmail,
+		steps,
+		completed,
+		&deployment,
+	)
+
+	attempt.FirstMethodAuthenticated = authenticated
+
+	if requiresCompletion {
+		attempt.RequiresCompletion = true
+		attempt.MissingFields = datatypes.NewJSONSlice(missingFields)
+		requiredFields := h.service.GetRequiredFields(deployment.AuthSettings)
+		attempt.RequiredFields = datatypes.NewJSONSlice(requiredFields)
+		completed = false
+	}
+
+	err = database.Connection.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(attempt).Error; err != nil {
+			return err
+		}
+
+		if completed {
+			if err := h.service.ValidateIPCountryRestrictions(c, deployment.Restrictions); err != nil {
+				return err
+			}
+
+			signIn := h.service.CreateSignin(user.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
+			if err := tx.Create(signIn).Error; err != nil {
+				return err
+			}
+
+			if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error; err != nil {
+				return err
+			}
+
+			if user.PrimaryEmailAddressID != nil {
+				for _, email := range user.UserEmailAddresses {
+					if email.ID == *user.PrimaryEmailAddressID {
+						_ = h.service.nats.SendSignInNotificationEmail(deployment.ID, user.ID, signIn.ID, email.EmailAddress)
+						break
+					}
+				}
+			}
+
+			utils.PublishSignInEvent(deployment.ID, &user, "password_reset", nil, c)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Error processing signin")
+	}
+
+	if completed {
+		h.service.TrackMAU(deployment.ID, user.ID)
+	}
+
+	session.SigninAttempts = append(session.SigninAttempts, *attempt)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+	return handler.SendSuccess(c, session)
 }
 
 func (h *Handler) handleOAuthSignupCompletion(c *fiber.Ctx, attempt *model.SignupAttempt, b *SignUpRequest, session *model.Session, deployment model.Deployment) error {
