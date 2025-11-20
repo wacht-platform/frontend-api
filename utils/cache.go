@@ -5,11 +5,12 @@ import (
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/jellydator/ttlcache/v3"
 )
 
 var (
 	// DeploymentCache stores deployment data with 30 second TTL and 2000 max keys
-	DeploymentCache *expirable.LRU[string, *model.Deployment]
+	DeploymentCache *ttlcache.Cache[string, *model.Deployment]
 
 	// SessionCache stores session data with 30 second TTL and 2000 max keys
 	SessionCache *expirable.LRU[uint64, *model.Session]
@@ -17,7 +18,11 @@ var (
 
 func init() {
 	// Initialize deployment cache
-	DeploymentCache = expirable.NewLRU[string, *model.Deployment](2000, nil, time.Second*30)
+	DeploymentCache = ttlcache.New[string, *model.Deployment](
+		ttlcache.WithTTL[string, *model.Deployment](30 * time.Minute),
+		
+	)
+	go DeploymentCache.Start()
 
 	// Initialize session cache
 	SessionCache = expirable.NewLRU[uint64, *model.Session](2000, nil, time.Second*30)
@@ -25,12 +30,16 @@ func init() {
 
 // GetCachedDeployment attempts to retrieve a deployment from cache
 func GetCachedDeployment(key string) (*model.Deployment, bool) {
-	return DeploymentCache.Get(key)
+	cache := DeploymentCache.Get(key)
+	if cache == nil {
+		return nil, false
+	}
+	return cache.Value(), true
 }
 
 // SetCachedDeployment stores a deployment in cache
 func SetCachedDeployment(key string, deployment *model.Deployment) {
-	DeploymentCache.Add(key, deployment)
+	DeploymentCache.Set(key, deployment, ttlcache.DefaultTTL)
 }
 
 // GetCachedSession attempts to retrieve a session from cache
@@ -50,5 +59,5 @@ func RemoveCachedSession(sessionID uint64) {
 
 // RemoveCachedDeployment removes a deployment from cache
 func RemoveCachedDeployment(key string) {
-	DeploymentCache.Remove(key)
+	DeploymentCache.Delete(key)
 }
