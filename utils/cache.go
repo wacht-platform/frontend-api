@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"sync"
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
@@ -8,11 +9,13 @@ import (
 )
 
 var (
-	// DeploymentCache stores deployment data with 5 second TTL and 2000 max keys
+	// DeploymentCache stores deployment data with 30 second TTL and 2000 max keys
 	DeploymentCache *expirable.LRU[string, *model.Deployment]
+	deploymentMu    sync.RWMutex
 
-	// SessionCache stores session data with 5 second TTL and 2000 max keys
+	// SessionCache stores session data with 30 second TTL and 2000 max keys
 	SessionCache *expirable.LRU[uint64, *model.Session]
+	sessionMu    sync.RWMutex
 )
 
 func init() {
@@ -25,30 +28,42 @@ func init() {
 
 // GetCachedDeployment attempts to retrieve a deployment from cache
 func GetCachedDeployment(key string) (*model.Deployment, bool) {
+	deploymentMu.RLock()
+	defer deploymentMu.RUnlock()
 	return DeploymentCache.Get(key)
 }
 
 // SetCachedDeployment stores a deployment in cache
 func SetCachedDeployment(key string, deployment *model.Deployment) {
+	deploymentMu.Lock()
+	defer deploymentMu.Unlock()
 	DeploymentCache.Add(key, deployment)
 }
 
 // GetCachedSession attempts to retrieve a session from cache
 func GetCachedSession(sessionID uint64) (*model.Session, bool) {
+	sessionMu.RLock()
+	defer sessionMu.RUnlock()
 	return SessionCache.Get(sessionID)
 }
 
 // SetCachedSession stores a session in cache
 func SetCachedSession(sessionID uint64, session *model.Session) {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
 	SessionCache.Add(sessionID, session)
 }
 
 // RemoveCachedSession removes a session from cache
 func RemoveCachedSession(sessionID uint64) {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
 	SessionCache.Remove(sessionID)
 }
 
 // RemoveCachedDeployment removes a deployment from cache
 func RemoveCachedDeployment(key string) {
+	deploymentMu.Lock()
+	defer deploymentMu.Unlock()
 	DeploymentCache.Remove(key)
 }
