@@ -1,6 +1,8 @@
 package router
 
 import (
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -42,9 +44,15 @@ func corsSettings(c *fiber.Ctx) cors.Config {
 
 	if !deployment.IsProduction() {
 		return cors.Config{
-			ExposeHeaders: "X-Development-Session",
-			AllowOrigins:  "*",
-			AllowMethods:  "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
+			AllowOriginsFunc: func(origin string) bool {
+				parts := strings.Split(deployment.FrontendHost, ".")
+				if len(parts) < 2 {
+					return false
+				}
+				return strings.HasSuffix(origin, strings.Join(parts[len(parts)-2:], "."))
+			},
+			AllowCredentials: true,
+			AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
 		}
 	}
 
