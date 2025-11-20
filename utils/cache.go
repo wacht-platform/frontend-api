@@ -1,69 +1,69 @@
 package utils
 
 import (
-	"sync"
 	"time"
 
-	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/jellydator/ttlcache/v3"
 )
 
 var (
-	// DeploymentCache stores deployment data with 30 second TTL and 2000 max keys
-	DeploymentCache *expirable.LRU[string, *model.Deployment]
-	deploymentMu    sync.RWMutex
+	// DeploymentCache stores deployment data with 0 second TTL and 2000 max keys
+	DeploymentCache *ttlcache.Cache[string, *model.Deployment]
 
-	// SessionCache stores session data with 30 second TTL and 2000 max keys
-	SessionCache *expirable.LRU[uint64, *model.Session]
-	sessionMu    sync.RWMutex
+	SessionCache *ttlcache.Cache[uint64, *model.Session]
 )
 
 func init() {
 	// Initialize deployment cache
-	DeploymentCache = expirable.NewLRU[string, *model.Deployment](2000, nil, time.Second*30)
+	DeploymentCache = ttlcache.New(
+		ttlcache.WithTTL[string, *model.Deployment](30*time.Second),
+		ttlcache.WithCapacity[string, *model.Deployment](2000),
+	)
+	go DeploymentCache.Start()
 
 	// Initialize session cache
-	SessionCache = expirable.NewLRU[uint64, *model.Session](2000, nil, time.Second*30)
+	SessionCache = ttlcache.New(
+		ttlcache.WithTTL[uint64, *model.Session](30*time.Second),
+		ttlcache.WithCapacity[uint64, *model.Session](2000),
+	)
+	go SessionCache.Start()
 }
 
 // GetCachedDeployment attempts to retrieve a deployment from cache
 func GetCachedDeployment(key string) (*model.Deployment, bool) {
-	deploymentMu.RLock()
-	defer deploymentMu.RUnlock()
-	return DeploymentCache.Get(key)
+	item := DeploymentCache.Get(key)
+	if item == nil {
+		return nil, false
+	}
+	return item.Value(), true
 }
 
 // SetCachedDeployment stores a deployment in cache
 func SetCachedDeployment(key string, deployment *model.Deployment) {
-	deploymentMu.Lock()
-	defer deploymentMu.Unlock()
-	DeploymentCache.Add(key, deployment)
+	DeploymentCache.Set(key, deployment, ttlcache.DefaultTTL)
 }
 
 // GetCachedSession attempts to retrieve a session from cache
 func GetCachedSession(sessionID uint64) (*model.Session, bool) {
-	sessionMu.RLock()
-	defer sessionMu.RUnlock()
-	return SessionCache.Get(sessionID)
+	item := SessionCache.Get(sessionID)
+	if item == nil {
+		return nil, false
+	}
+	return item.Value(), true
 }
 
 // SetCachedSession stores a session in cache
 func SetCachedSession(sessionID uint64, session *model.Session) {
-	sessionMu.Lock()
-	defer sessionMu.Unlock()
-	SessionCache.Add(sessionID, session)
+	SessionCache.Set(sessionID, session, ttlcache.DefaultTTL)
 }
 
 // RemoveCachedSession removes a session from cache
 func RemoveCachedSession(sessionID uint64) {
-	sessionMu.Lock()
-	defer sessionMu.Unlock()
-	SessionCache.Remove(sessionID)
+	SessionCache.Delete(sessionID)
 }
 
 // RemoveCachedDeployment removes a deployment from cache
 func RemoveCachedDeployment(key string) {
-	deploymentMu.Lock()
-	defer deploymentMu.Unlock()
-	DeploymentCache.Remove(key)
+	DeploymentCache.Delete(key)
 }
