@@ -42,7 +42,7 @@ func setupMiddleware(app *fiber.App) {
 func corsSettings(c *fiber.Ctx) cors.Config {
 	deployment := handler.GetDeployment(c)
 
-	if !deployment.IsProduction() {
+	if deployment.IsProduction() {
 		return cors.Config{
 			AllowOriginsFunc: func(origin string) bool {
 				parts := strings.Split(deployment.FrontendHost, ".")
@@ -60,7 +60,6 @@ func corsSettings(c *fiber.Ctx) cors.Config {
 		AllowOriginsFunc: func(origin string) bool {
 			return true
 		},
-		AllowCredentials: true,
-		AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
+		AllowMethods: "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
 	}
 }
