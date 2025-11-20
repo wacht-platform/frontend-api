@@ -62,6 +62,8 @@ type VerificationEmailTask struct {
 	Recipient        string `json:"recipient"`
 	UserID           uint64 `json:"user_id"`
 	VerificationCode string `json:"verification_code"`
+	IPAddress        string `json:"ip_address"`
+	UserAgent        string `json:"user_agent"`
 }
 
 type PasswordResetEmailTask struct {
@@ -69,6 +71,8 @@ type PasswordResetEmailTask struct {
 	Recipient    string `json:"recipient"`
 	UserID       uint64 `json:"user_id"`
 	ResetCode    string `json:"reset_code"`
+	IPAddress    string `json:"ip_address"`
+	UserAgent    string `json:"user_agent"`
 }
 
 type MagicLinkEmailTask struct {
@@ -156,14 +160,14 @@ type WebhookEventTask struct {
 }
 
 type AnalyticsEventTask struct {
-	DeploymentID  uint64    `json:"deployment_id"`
-	UserID        *uint64   `json:"user_id"`
-	EventType     string    `json:"event_type"`
-	UserName      *string   `json:"user_name"`
-	UserEmail     *string   `json:"user_email"`
-	AuthMethod    *string   `json:"auth_method"`
-	Timestamp     time.Time `json:"timestamp"`
-	IPAddress     *string   `json:"ip_address"`
+	DeploymentID uint64    `json:"deployment_id"`
+	UserID       *uint64   `json:"user_id"`
+	EventType    string    `json:"event_type"`
+	UserName     *string   `json:"user_name"`
+	UserEmail    *string   `json:"user_email"`
+	AuthMethod   *string   `json:"auth_method"`
+	Timestamp    time.Time `json:"timestamp"`
+	IPAddress    *string   `json:"ip_address"`
 }
 
 type BillingEventTask struct {
@@ -255,22 +259,26 @@ func (s *NatsService) publishTask(ctx context.Context, taskType string, payload 
 }
 
 // Email sending methods
-func (s *NatsService) SendVerificationEmail(deploymentID, userID uint64, recipient, verificationCode string) error {
+func (s *NatsService) SendVerificationEmail(deploymentID, userID uint64, recipient, verificationCode, ipAddress, userAgent string) error {
 	task := VerificationEmailTask{
 		DeploymentID:     deploymentID,
 		Recipient:        recipient,
 		UserID:           userID,
 		VerificationCode: verificationCode,
+		IPAddress:        ipAddress,
+		UserAgent:        userAgent,
 	}
 	return s.publishTask(context.Background(), string(EmailVerification), task)
 }
 
-func (s *NatsService) SendPasswordResetEmail(deploymentID, userID uint64, recipient, resetCode string) error {
+func (s *NatsService) SendPasswordResetEmail(deploymentID, userID uint64, recipient, resetCode, ipAddress, userAgent string) error {
 	task := PasswordResetEmailTask{
 		DeploymentID: deploymentID,
 		Recipient:    recipient,
 		UserID:       userID,
 		ResetCode:    resetCode,
+		IPAddress:    ipAddress,
+		UserAgent:    userAgent,
 	}
 	return s.publishTask(context.Background(), string(EmailPasswordReset), task)
 }

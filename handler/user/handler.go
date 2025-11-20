@@ -754,6 +754,8 @@ func (h *Handler) PrepareEmailVerification(c *fiber.Ctx) error {
 		deployment.ID,
 		emailAddress,
 		code,
+		c.IP(),
+		c.Get("User-Agent"),
 	)
 	if err != nil {
 		return handler.SendInternalServerError(
@@ -1502,7 +1504,7 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 	memberships := make([]model.OrganizationMembership, len(queryResults))
 	for i, result := range queryResults {
 		memberships[i] = result.OrganizationMembership
-		
+
 		// Parse whitelisted IPs
 		var whitelistedIPs []string
 		if result.OrganizationWhitelistedIPs != "" && result.OrganizationWhitelistedIPs != "{}" {
@@ -1512,7 +1514,7 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 				whitelistedIPs = strings.Split(trimmed, ",")
 			}
 		}
-		
+
 		memberships[i].Organization = model.PublicOrganizationData{
 			Model: model.Model{
 				ID:        result.OrganizationID,
@@ -1528,7 +1530,7 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 			EnforceMFASetup:         result.OrganizationEnforceMFASetup,
 			EnableIPRestriction:     result.OrganizationEnableIPRestriction,
 		}
-		
+
 		// Parse public metadata
 		if result.MembershipPublicMetadata != "" && result.MembershipPublicMetadata != "null" {
 			var metadata datatypes.JSONMap
@@ -1629,7 +1631,7 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 	memberships := make([]model.WorkspaceMembership, len(queryResults))
 	for i, result := range queryResults {
 		memberships[i] = result.WorkspaceMembership
-		
+
 		// Parse workspace whitelisted IPs
 		var workspaceWhitelistedIPs []string
 		if result.WorkspaceWhitelistedIPs != "" && result.WorkspaceWhitelistedIPs != "{}" {
@@ -1638,7 +1640,7 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 				workspaceWhitelistedIPs = strings.Split(trimmed, ",")
 			}
 		}
-		
+
 		memberships[i].Workspace = model.PublicWorkspaceData{
 			Model: model.Model{
 				ID:        result.WorkspaceID,
@@ -1653,7 +1655,7 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 			EnforceMFASetup:     result.WorkspaceEnforceMFASetup,
 			EnableIPRestriction: result.WorkspaceEnableIPRestriction,
 		}
-		
+
 		// Parse organization whitelisted IPs
 		var orgWhitelistedIPs []string
 		if result.OrganizationWhitelistedIPs != "" && result.OrganizationWhitelistedIPs != "{}" {
@@ -1662,7 +1664,7 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 				orgWhitelistedIPs = strings.Split(trimmed, ",")
 			}
 		}
-		
+
 		memberships[i].Organization = model.PublicOrganizationData{
 			Model: model.Model{
 				ID: result.OrganizationID,
@@ -1676,7 +1678,7 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 			EnforceMFASetup:         result.OrganizationEnforceMFASetup,
 			EnableIPRestriction:     result.OrganizationEnableIPRestriction,
 		}
-		
+
 		// Parse public metadata
 		if result.MembershipPublicMetadata != "" && result.MembershipPublicMetadata != "null" {
 			var metadata datatypes.JSONMap

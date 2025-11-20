@@ -68,8 +68,10 @@ func (s *UserService) sendEmailOTPVerificationAsync(
 	deploymentID uint64,
 	email model.UserEmailAddress,
 	code string,
+	ip string,
+	userAgent string,
 ) error {
-	return s.nats.SendVerificationEmail(deploymentID, *email.UserID, email.EmailAddress, code)
+	return s.nats.SendVerificationEmail(deploymentID, *email.UserID, email.EmailAddress, code, ip, userAgent)
 }
 
 func (s *UserService) sendSmsOTPVerification(

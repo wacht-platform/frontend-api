@@ -1304,7 +1304,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				return handler.SendInternalServerError(c, err, "Error storing OTP", handler.ErrInternal)
 			}
 
-			if err := h.service.SendSigninVerificationEmail(userID, emailAddress, code, deployment); err != nil {
+			if err := h.service.SendSigninVerificationEmail(userID, emailAddress, code, deployment, c.IP(), c.Get("User-Agent")); err != nil {
 				return handler.SendInternalServerError(c, err, "Error sending email OTP verification")
 			}
 		case model.SignInAttemptStepVerifyPhoneOTP:
@@ -1519,7 +1519,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 
-			if err := h.service.SendSignupVerificationEmail(attempt.ID, attempt.Email, code, deployment); err != nil {
+			if err := h.service.SendSignupVerificationEmail(attempt.ID, attempt.Email, code, &deployment, 0, c.IP(), c.Get("User-Agent")); err != nil {
 				return handler.SendInternalServerError(
 					c,
 					err,
@@ -2634,7 +2634,7 @@ func (h *Handler) ForgotPassword(c *fiber.Ctx) error {
 		)
 	}
 
-	if err := h.service.SendPasswordResetEmail(*email.UserID, email.EmailAddress, code, d); err != nil {
+	if err := h.service.SendPasswordResetEmail(&d, *email.UserID, email.EmailAddress, code, c.IP(), c.Get("User-Agent")); err != nil {
 		return handler.SendInternalServerError(
 			c,
 			err,

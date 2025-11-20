@@ -543,13 +543,28 @@ func (s *AuthService) ValidatePassword(password string) error {
 	return nil
 }
 
+func (s *AuthService) SendVerificationEmail(deployment *model.Deployment, userID uint64, email, code, ip, userAgent string) error {
+	if deployment == nil {
+		return fmt.Errorf("deployment is required")
+	}
+
+	// If userID is 0, we might want to look it up or just pass 0 if it's a new user verification
+	return s.nats.SendVerificationEmail(deployment.ID, userID, email, code, ip, userAgent)
+}
+
 func (s *AuthService) SendSignupVerificationEmail(
 	signupAttemptID uint64,
 	email string,
 	code string,
-	deployment model.Deployment,
+	deployment *model.Deployment,
+	userID uint64,
+	ip string,
+	userAgent string,
 ) error {
-	return s.nats.SendVerificationEmail(deployment.ID, 0, email, code)
+	if deployment == nil {
+		return fmt.Errorf("deployment is required")
+	}
+	return s.nats.SendVerificationEmail(deployment.ID, userID, email, code, ip, userAgent)
 }
 
 func (s *AuthService) SendSigninVerificationEmail(
@@ -557,26 +572,32 @@ func (s *AuthService) SendSigninVerificationEmail(
 	email string,
 	code string,
 	deployment model.Deployment,
+	ip string,
+	userAgent string,
 ) error {
-	return s.nats.SendVerificationEmail(deployment.ID, userID, email, code)
+	return s.nats.SendVerificationEmail(deployment.ID, userID, email, code, ip, userAgent)
 }
 
-func (s *AuthService) SendPasswordResetEmail(
-	userID uint64,
-	email string,
-	code string,
-	deployment model.Deployment,
-) error {
-	return s.nats.SendPasswordResetEmail(deployment.ID, userID, email, code)
+func (s *AuthService) SendPasswordResetEmail(deployment *model.Deployment, userID uint64, email, code, ip, userAgent string) error {
+	if deployment == nil {
+		return fmt.Errorf("deployment is required")
+	}
+
+	return s.nats.SendPasswordResetEmail(deployment.ID, userID, email, code, ip, userAgent)
 }
 
 func (s *AuthService) SendEmailVerificationEmail(
 	userID uint64,
 	email string,
 	code string,
-	deployment model.Deployment,
+	deployment *model.Deployment,
+	ip string,
+	userAgent string,
 ) error {
-	return s.nats.SendVerificationEmail(deployment.ID, userID, email, code)
+	if deployment == nil {
+		return fmt.Errorf("deployment is required")
+	}
+	return s.nats.SendVerificationEmail(deployment.ID, userID, email, code, ip, userAgent)
 }
 
 func (s *AuthService) SendSmsOTPVerificationAsync(
