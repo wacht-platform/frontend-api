@@ -2,6 +2,9 @@ package main
 
 import (
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -33,5 +36,17 @@ func main() {
 
 	router.Setup(app)
 
-	log.Fatal(app.Listen(":3000"))
+	// Graceful shutdown handling
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-c
+		log.Println("Gracefully shutting down...")
+		_ = app.Shutdown()
+	}()
+
+	if err := app.Listen(":3000"); err != nil {
+		log.Panic(err)
+	}
 }

@@ -27,7 +27,8 @@ const (
 )
 
 func SetRequestPrelude(c *fiber.Ctx) error {
-	host := c.Hostname()
+	// host := c.Hostname()
+	host := "dimwitted-axis-1.frontend-api.services"
 	path := c.Path()
 
 	if net.ParseIP(host) != nil {
