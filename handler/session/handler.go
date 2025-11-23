@@ -401,30 +401,30 @@ func (h *Handler) GetToken(
 		secret = deployment.KepPair.PrivateKey
 	}
 
-	claimsRaw := string(template.Template)
-	if claimsRaw == "" {
-		claimsRaw = "{}"
+	metadataRaw := string(template.Template)
+	if metadataRaw == "" {
+		metadataRaw = "{}"
 	}
 
 	stralizedsignin, _ := json.Marshal(session.ActiveSignin)
 	parsed := new(map[string]any)
 	json.Unmarshal(stralizedsignin, parsed)
 
-	claimsPopulated, err := raymond.Render(claimsRaw, parsed)
+	metadataPopulated, err := raymond.Render(metadataRaw, parsed)
 
 	if err != nil {
-		return handler.SendInternalServerError(c, nil, "Failed to render claims")
+		return handler.SendInternalServerError(c, nil, "Failed to render metadata")
 	}
 
-	claimsJson := new(map[string]any)
-	err = json.Unmarshal([]byte(claimsPopulated), claimsJson)
+	metadataJson := new(map[string]any)
+	err = json.Unmarshal([]byte(metadataPopulated), metadataJson)
 	if err != nil {
 		log.Println(err)
-		return handler.SendInternalServerError(c, nil, "Failed to unmarshal claims")
+		return handler.SendInternalServerError(c, nil, "Failed to unmarshal metadata")
 	}
 
-	if len(*claimsJson) != 0 {
-		tok.Set("claims", claimsJson)
+	if len(*metadataJson) != 0 {
+		tok.Set("metadata", metadataJson)
 	}
 
 	signedToken, err := signToken(tok, signingAlg, secret)
