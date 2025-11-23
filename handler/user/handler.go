@@ -410,6 +410,24 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 	user.SocialConnections = parseSocialConnectionsJSON(queryResult.SocialConnectionsJSON)
 	user.UserAuthenticator = parseUserAuthenticatorJSON(queryResult.UserAuthenticatorJSON)
 
+	if user.PrimaryEmailAddressID != nil {
+		for i := range user.UserEmailAddresses {
+			if user.UserEmailAddresses[i].ID == *user.PrimaryEmailAddressID {
+				user.PrimaryEmailAddress = &user.UserEmailAddresses[i]
+				break
+			}
+		}
+	}
+
+	if user.PrimaryPhoneNumberID != nil {
+		for i := range user.UserPhoneNumbers {
+			if user.UserPhoneNumbers[i].ID == *user.PrimaryPhoneNumberID {
+				user.PrimaryPhoneNumber = &user.UserPhoneNumbers[i]
+				break
+			}
+		}
+	}
+
 	if queryResult.PublicMetadata != "" && queryResult.PublicMetadata != "null" {
 		var metadata datatypes.JSONMap
 		if err := json.Unmarshal([]byte(queryResult.PublicMetadata), &metadata); err != nil {
