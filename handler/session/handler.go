@@ -366,6 +366,8 @@ func (h *Handler) GetToken(
 
 	tokenPermissions := map[string][]string{}
 
+	log.Println("here", session.ActiveSignin.ActiveOrganizationMembership)
+
 	if session.ActiveSignin.ActiveOrganizationMembership != nil {
 		permissionsMap := map[string]bool{}
 		for _, role := range session.ActiveSignin.ActiveOrganizationMembership.Roles {
