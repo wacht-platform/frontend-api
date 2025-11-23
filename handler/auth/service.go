@@ -781,6 +781,77 @@ func (s *AuthService) ProcessProfileCompletion(
 	return requiresCompletion, missingFields, requiredFields, nil
 }
 
+func (s *AuthService) CheckAndAddUserToOrganizationByDomain(
+	tx *gorm.DB,
+	userID uint64,
+	email string,
+	deploymentID uint64,
+) error {
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return nil
+	}
+	domain := parts[1]
+
+	var orgDomain model.OrganizationDomain
+	if err := tx.Where("fqdn = ? AND verified = ? AND deployment_id = ?", domain, true, deploymentID).
+		First(&orgDomain).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil
+		}
+		return err
+	}
+
+	var org model.Organization
+	if err := tx.Where("id = ?", orgDomain.OrganizationID).First(&org).Error; err != nil {
+		return err
+	}
+
+	// Check if user is already a member
+	var count int64
+	tx.Model(&model.OrganizationMembership{}).
+		Where("organization_id = ? AND user_id = ?", org.ID, userID).
+		Count(&count)
+	if count > 0 {
+		return nil
+	}
+
+	membershipID := snowflake.ID()
+	membership := model.OrganizationMembership{
+		Model:          model.Model{ID: membershipID},
+		OrganizationID: org.ID,
+		UserID:         userID,
+		PublicMetadata: datatypes.JSONMap{},
+	}
+
+	if err := tx.Create(&membership).Error; err != nil {
+		return err
+	}
+
+	if org.AutoAssignedWorkspaceID != nil {
+		// Check if user is already a member of the workspace
+		tx.Model(&model.WorkspaceMembership{}).
+			Where("workspace_id = ? AND user_id = ?", *org.AutoAssignedWorkspaceID, userID).
+			Count(&count)
+
+		if count == 0 {
+			workspaceMembership := model.WorkspaceMembership{
+				Model:                    model.Model{ID: snowflake.ID()},
+				WorkspaceID:              *org.AutoAssignedWorkspaceID,
+				OrganizationID:           org.ID,
+				OrganizationMembershipID: membershipID,
+				UserID:                   userID,
+				PublicMetadata:           datatypes.JSONMap{},
+			}
+			if err := tx.Create(&workspaceMembership).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (s *AuthService) CreateSignupAttempt(
 	b *SignUpRequest,
 	hashedPassword string,

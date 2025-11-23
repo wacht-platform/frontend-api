@@ -767,6 +767,12 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 				return err
 			}
 
+			if !d.AuthSettings.EmailAddress.VerifySignup {
+				if err := h.service.CheckAndAddUserToOrganizationByDomain(tx, u.ID, b.Email, d.ID); err != nil {
+					return err
+				}
+			}
+
 			createdUserID = u.ID
 
 			if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
@@ -1092,6 +1098,10 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 		}
 
 		if err := tx.Create(&connection).Error; err != nil {
+			return err
+		}
+
+		if err := h.service.CheckAndAddUserToOrganizationByDomain(tx, u.ID, user.Email, deployment.ID); err != nil {
 			return err
 		}
 
@@ -2197,6 +2207,10 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				}
 
 				if err := tx.Create(user).Error; err != nil {
+					return err
+				}
+
+				if err := h.service.CheckAndAddUserToOrganizationByDomain(tx, user.ID, email.EmailAddress, d.ID); err != nil {
 					return err
 				}
 
