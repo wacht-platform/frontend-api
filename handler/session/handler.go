@@ -199,7 +199,7 @@ func (h *Handler) SwitchOrganization(
 
 	membership := new(model.OrganizationMembership)
 	if err := database.Connection.
-		Preload("Roles.Permissions").
+		Preload("Roles").
 		Model(&model.OrganizationMembership{}).
 		Where("user_id = ? AND organization_id = ?", session.ActiveSignin.UserID, orgIDuint64).
 		First(membership).Error; err != nil || membership.ID == 0 {
@@ -303,7 +303,7 @@ func (h *Handler) SwitchWorkspace(
 
 	membership := new(model.WorkspaceMembership)
 	if err := database.Connection.
-		Preload("Roles.Permissions").
+		Preload("Roles").
 		Model(&model.WorkspaceMembership{}).
 		Where("user_id = ? AND workspace_id = ?", session.ActiveSignin.UserID, workspaceIDuint64).
 		Joins("Organization").
@@ -344,7 +344,6 @@ func (h *Handler) SwitchWorkspace(
 		return fiber.NewError(fiber.StatusForbidden, eligibility.Message)
 	}
 
-	// Use a transaction for atomicity
 	tx := database.Connection.Begin()
 	if err := tx.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).
 		Updates(map[string]interface{}{
