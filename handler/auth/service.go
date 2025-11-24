@@ -430,26 +430,26 @@ func (s *AuthService) HashPassword(password string) (string, error) {
 	return utils.HashPassword(password)
 }
 
-func (s *AuthService) CheckEmailExists(email string) bool {
+func (s *AuthService) CheckEmailExists(email string, deploymentID uint64) bool {
 	var count int64
 	s.db.Model(&model.UserEmailAddress{}).
-		Where("email = ?", email).
+		Where("email_address = ? AND deployment_id = ?", email, deploymentID).
 		Count(&count)
 	return count > 0
 }
 
-func (s *AuthService) CheckUsernameExists(username string) bool {
+func (s *AuthService) CheckUsernameExists(username string, deploymentID uint64) bool {
 	var count int64
 	s.db.Model(&model.User{}).
-		Where("username = ?", username).
+		Where("username = ? AND deployment_id = ?", username, deploymentID).
 		Count(&count)
 	return count > 0
 }
 
-func (s *AuthService) CheckUserphoneExists(phone string, countryCode string) bool {
+func (s *AuthService) CheckUserphoneExists(phone string, countryCode string, deploymentID uint64) bool {
 	var count int64
 	s.db.Model(&model.UserPhoneNumber{}).
-		Where("phone_number = ? AND country_code = ?", phone, countryCode).
+		Where("phone_number = ? AND country_code = ? AND deployment_id = ?", phone, countryCode, deploymentID).
 		Count(&count)
 	return count > 0
 }
@@ -457,12 +457,13 @@ func (s *AuthService) CheckUserphoneExists(phone string, countryCode string) boo
 func (s *AuthService) CheckIdentifierAvailability(
 	identifier string,
 	identifierType string,
+	deploymentID uint64,
 ) (bool, error) {
 	switch identifierType {
 	case "email":
-		return s.CheckEmailExists(identifier), nil
+		return s.CheckEmailExists(identifier, deploymentID), nil
 	case "username":
-		return s.CheckUsernameExists(identifier), nil
+		return s.CheckUsernameExists(identifier, deploymentID), nil
 	}
 	return false, errors.New("invalid identifier type")
 }

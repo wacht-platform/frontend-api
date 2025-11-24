@@ -713,16 +713,16 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 
 	var errors []handler.Error
 
-	if b.Email != "" && h.service.CheckEmailExists(b.Email) {
+	if b.Email != "" && h.service.CheckEmailExists(b.Email, d.ID) {
 		errors = append(errors, handler.ErrEmailExists)
 	}
 
-	if b.Username != "" && h.service.CheckUsernameExists(b.Username) {
+	if b.Username != "" && h.service.CheckUsernameExists(b.Username, d.ID) {
 		errors = append(errors, handler.ErrUsernameExists)
 	}
 
 	if b.PhoneNumber != "" &&
-		h.service.CheckUserphoneExists(b.PhoneNumber, b.PhoneCountryCode) {
+		h.service.CheckUserphoneExists(b.PhoneNumber, b.PhoneCountryCode, d.ID) {
 		errors = append(errors, handler.ErrPhoneNumberExists)
 	}
 
@@ -1240,9 +1240,12 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 func (h *Handler) CheckIdentifierAvailability(c *fiber.Ctx) error {
 	identifier := c.Query("identifier")
 	identifierType := c.Query("type")
+	deployment := handler.GetDeployment(c)
+
 	exists, err := h.service.CheckIdentifierAvailability(
 		identifier,
 		identifierType,
+		deployment.ID,
 	)
 	if err != nil {
 		return handler.SendInternalServerError(
