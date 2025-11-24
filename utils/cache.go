@@ -26,6 +26,7 @@ func init() {
 	SessionCache = ttlcache.New[uint64, *model.Session](
 		ttlcache.WithTTL[uint64, *model.Session](30 * time.Second),
 	)
+	go SessionCache.Start()
 }
 
 // GetCachedDeployment attempts to retrieve a deployment from cache
