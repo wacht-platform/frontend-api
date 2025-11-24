@@ -42,7 +42,7 @@ func setupMiddleware(app *fiber.App) {
 			return c.IP() + c.Path()
 		},
 		LimitReached: func(c *fiber.Ctx) error {
-			return handler.SendForbidden(
+			return handler.SendTooManyRequests(
 				c,
 				nil,
 				"Too many requests. Please try again later.",

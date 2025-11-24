@@ -106,3 +106,12 @@ func SendInternalServerError(
 ) error {
 	return SendResponse(c, 500, data, message, errors)
 }
+
+func SendTooManyRequests(
+	c *fiber.Ctx,
+	data any,
+	message string,
+	errors ...Error,
+) error {
+	return SendResponse(c, 429, data, message, errors)
+}
