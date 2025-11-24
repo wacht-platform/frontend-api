@@ -57,9 +57,15 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 }
 
 func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
+	blocked, _ := utils.CheckRateLimit(b.Username)
+	if blocked {
+		return handler.SendForbidden(c, nil, "Too many failed attempts. Please try again later.", handler.ErrTooManyRequests)
+	}
+
 	user, err := h.service.FindUserByUsername(b.Username, d.ID)
 	if err != nil {
 		if err == handler.ErrUserNotFound {
+			_ = utils.IncrementRateLimit(b.Username)
 			return handler.SendUnauthorized(c, nil, "Invalid credentials", handler.ErrInvalidCredentials)
 		}
 		return handler.SendInternalServerError(
@@ -104,6 +110,7 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 		}
 
 		if !match {
+			_ = utils.IncrementRateLimit(b.Username)
 			return handler.SendUnauthorized(c, nil, "Invalid credentials", handler.ErrInvalidCredentials)
 		}
 		authenticated = true
@@ -116,6 +123,10 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 			"Invalid credentials",
 			handler.ErrInvalidCredentials,
 		)
+	}
+
+	if authenticated {
+		_ = utils.ClearRateLimit(b.Username)
 	}
 
 	secondFactorEnforced := user.SecondFactorPolicy == model.SecondFactorPolicyEnforced
@@ -214,9 +225,15 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 }
 
 func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
+	blocked, _ := utils.CheckRateLimit(b.Email)
+	if blocked {
+		return handler.SendForbidden(c, nil, "Too many failed attempts. Please try again later.", handler.ErrTooManyRequests)
+	}
+
 	email, err := h.service.FindUserByEmail(b.Email, d.ID)
 	if err != nil {
 		if err == handler.ErrUserNotFound {
+			_ = utils.IncrementRateLimit(b.Email)
 			return handler.SendUnauthorized(c, nil, "Invalid credentials", handler.ErrInvalidCredentials)
 		}
 		return handler.SendInternalServerError(
@@ -261,6 +278,7 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 		}
 
 		if !match {
+			_ = utils.IncrementRateLimit(b.Email)
 			return handler.SendUnauthorized(c, nil, "Invalid credentials", handler.ErrInvalidCredentials)
 		}
 		authenticated = true
@@ -273,6 +291,10 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 			"Invalid credentials",
 			handler.ErrInvalidCredentials,
 		)
+	}
+
+	if authenticated {
+		_ = utils.ClearRateLimit(b.Email)
 	}
 
 	secondFactorEnforced := email.User.SecondFactorPolicy == model.SecondFactorPolicyEnforced

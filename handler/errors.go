@@ -162,6 +162,10 @@ var (
 		Code:    "SOCIAL_ACCOUNT_ALREADY_CONNECTED",
 		Message: "This social account is already connected to another user.",
 	}
+	ErrTooManyRequests = Error{
+		Code:    "TOO_MANY_REQUESTS",
+		Message: "Too many failed attempts. Please try again later.",
+	}
 )
 
 func ErrRequiredField(field string) error {
