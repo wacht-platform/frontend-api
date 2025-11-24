@@ -3,6 +3,7 @@ package router
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/handler/organization"
+	"github.com/ilabs/wacht-fe/middleware"
 )
 
 func setupOrganizationRoutes(
@@ -10,6 +11,9 @@ func setupOrganizationRoutes(
 ) {
 	orgHandler := organization.NewHandler()
 	router := app.Group("/organizations")
+
+	router.Use(middleware.EnforceB2BSettings)
+
 	router.Post("/", orgHandler.CreateOrganization)
 	router.Post("/:id/update", orgHandler.UpdateOrganization)
 	router.Post("/:id/delete", orgHandler.DeleteOrganization)

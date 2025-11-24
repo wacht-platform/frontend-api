@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"slices"
 	"strconv"
 
 	"github.com/godruoyi/go-snowflake"
@@ -52,6 +53,20 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
+	d := handler.GetDeployment(c)
+	if d.B2BSettings.LimitWorkspaceCreationPerOrg {
+		var workspaceCount int64
+		if err := database.Connection.Model(&model.Workspace{}).
+			Where("organization_id = ?", b.OrganizationID).
+			Count(&workspaceCount).Error; err != nil {
+			return handler.SendInternalServerError(c, err, "Failed to check workspace limits")
+		}
+
+		if d.B2BSettings.WorkspacesPerOrgCount > 0 && workspaceCount >= int64(d.B2BSettings.WorkspacesPerOrgCount) {
+			return handler.SendForbidden(c, nil, fmt.Sprintf("Organization has reached the maximum number of workspaces allowed (%d)", d.B2BSettings.WorkspacesPerOrgCount))
+		}
+	}
+
 	if img != nil {
 		url, err := h.service.uploadWorkspaceImage(workspaceid, img)
 		if err != nil {
@@ -73,8 +88,6 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 			"Not a member of this organization or insufficient permissions to create a workspace.",
 		)
 	}
-
-	d := handler.GetDeployment(c)
 
 	workspace := model.Workspace{
 		Model: model.Model{
@@ -355,11 +368,8 @@ func (h *Handler) CreateWorkspaceRole(c *fiber.Ctx) error {
 	// Check if user has permission to manage workspace
 	hasPermission := false
 	for _, role := range membership.Roles {
-		for _, perm := range role.Permissions {
-			if perm == "workspace:owner" || perm == "workspace:admin" || perm == "workspace:manage" {
-				hasPermission = true
-				break
-			}
+		if slices.Contains(role.Permissions, "workspace:admin") {
+			hasPermission = true
 		}
 		if hasPermission {
 			break
@@ -424,11 +434,8 @@ func (h *Handler) DeleteWorkspaceRole(c *fiber.Ctx) error {
 
 	hasPermission := false
 	for _, role := range membership.Roles {
-		for _, perm := range role.Permissions {
-			if perm == "workspace:owner" || perm == "workspace:admin" || perm == "workspace:manage" {
-				hasPermission = true
-				break
-			}
+		if slices.Contains(role.Permissions, "workspace:admin") {
+			hasPermission = true
 		}
 		if hasPermission {
 			break
@@ -767,6 +774,20 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 	b, validation := handler.Validate[AddMemberToWorkspaceRequest](c)
 	if validation != nil {
 		return handler.SendBadRequest(c, validation, "Bad request body")
+	}
+
+	d := handler.GetDeployment(c)
+	if d.B2BSettings.MaxAllowedWorkspaceMembers > 0 {
+		var memberCount int64
+		if err := database.Connection.Model(&model.WorkspaceMembership{}).
+			Where("workspace_id = ?", workspaceID).
+			Count(&memberCount).Error; err != nil {
+			return handler.SendInternalServerError(c, err, "Failed to check member limits")
+		}
+
+		if uint64(memberCount) >= d.B2BSettings.MaxAllowedWorkspaceMembers {
+			return handler.SendForbidden(c, nil, fmt.Sprintf("Workspace has reached the maximum number of members allowed (%d)", d.B2BSettings.MaxAllowedWorkspaceMembers))
+		}
 	}
 
 	session := handler.GetSession(c)

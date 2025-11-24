@@ -26,5 +26,5 @@ type WorkspaceMembership struct {
 	Roles                    []*WorkspaceRole               `json:"roles" gorm:"many2many:workspace_membership_roles;joinForeignKey:WorkspaceMembershipID;JoinReferences:WorkspaceRoleID;References:ID;foreignKey:ID"`
 	RoleAssociations         []WorkspaceMembershipRoleAssoc `json:"-" gorm:"foreignKey:WorkspaceMembershipID;references:ID"`
 	PublicMetadata           datatypes.JSONMap              `json:"public_metadata" gorm:"not null"`
+	EligibilityRestriction   *EligibilityRestriction        `json:"eligibility_restriction,omitempty" gorm:"-"`
 }
-

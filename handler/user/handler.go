@@ -1204,11 +1204,18 @@ func (h *Handler) DeleteAuthenticator(c *fiber.Ctx) error {
 	}
 
 	deployment := handler.GetDeployment(c)
-	utils.PublishWebhookEvent(deployment.ID, "user.mfa.disabled", *session.ActiveSignin.UserID, "user_authenticator")
 
-	query := database.Connection.Where("id = ? AND user_id = ?", authenticatorID, session.ActiveSignin.UserID).
+	tx := database.Connection.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	query := tx.Where("id = ? AND user_id = ?", authenticatorID, session.ActiveSignin.UserID).
 		Delete(&model.UserAuthenticator{})
 	if query.Error != nil {
+		tx.Rollback()
 		return handler.SendInternalServerError(
 			c,
 			nil,
@@ -1216,6 +1223,37 @@ func (h *Handler) DeleteAuthenticator(c *fiber.Ctx) error {
 			handler.ErrInternal,
 		)
 	}
+
+	if query.RowsAffected == 0 {
+		tx.Rollback()
+		return handler.SendBadRequest(c, nil, "Authenticator not found")
+	}
+
+	if err := tx.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Updates(map[string]interface{}{
+		"backup_codes":           pq.Array([]string{}),
+		"backup_codes_generated": false,
+		"second_factor_policy":   deployment.AuthSettings.SecondFactorPolicy,
+	}).Error; err != nil {
+		tx.Rollback()
+		return handler.SendInternalServerError(
+			c,
+			nil,
+			"Failed to clear backup codes and reset settings",
+			handler.ErrInternal,
+		)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return handler.SendInternalServerError(
+			c,
+			nil,
+			"Failed to commit transaction",
+			handler.ErrInternal,
+		)
+	}
+
+	utils.PublishWebhookEvent(deployment.ID, "user.mfa.disabled", *session.ActiveSignin.UserID, "user_authenticator")
+	utils.RemoveCachedSession(session.ID)
 
 	return handler.SendSuccess(c, "Authenticator deleted successfully")
 }
@@ -1571,6 +1609,24 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 		}
 	}
 
+	// Calculate eligibility restrictions for all memberships
+	var user model.User
+	deployment := handler.GetDeployment(c)
+	clientIP := c.IP()
+
+	if err := database.Connection.Preload("UserAuthenticator").First(&user, session.ActiveSignin.UserID).Error; err == nil {
+		for i := range memberships {
+			eligibility := utils.CalculateOrganizationEligibility(
+				&user,
+				&memberships[i].Organization,
+				memberships[i].Roles,
+				clientIP,
+				&deployment,
+			)
+			memberships[i].EligibilityRestriction = eligibility
+		}
+	}
+
 	return handler.SendSuccess(c, memberships)
 }
 
@@ -1716,6 +1772,24 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 			memberships[i].Roles = roles
 		} else {
 			log.Println(err)
+		}
+	}
+
+	// Calculate eligibility restrictions for all workspace memberships
+	var user model.User
+	deployment := handler.GetDeployment(c)
+	clientIP := c.IP()
+
+	if err := database.Connection.Preload("UserAuthenticator").First(&user, session.ActiveSignin.UserID).Error; err == nil {
+		for i := range memberships {
+			eligibility := utils.CalculateWorkspaceEligibility(
+				&user,
+				&memberships[i].Workspace,
+				memberships[i].Roles,
+				clientIP,
+				&deployment,
+			)
+			memberships[i].EligibilityRestriction = eligibility
 		}
 	}
 

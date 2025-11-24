@@ -51,6 +51,7 @@ const (
 	ErrCodeInvitationRequiresSignup     = "INVITATION_REQUIRES_SIGNUP"
 	ErrCodeInvitationRequiresSignin     = "INVITATION_REQUIRES_SIGNIN"
 	ErrCodeAlreadyOrganizationMember    = "ALREADY_ORGANIZATION_MEMBER"
+	ErrCodeMfaRequired                  = "MFA_REQUIRED"
 )
 
 var (
@@ -165,6 +166,10 @@ var (
 	ErrTooManyRequests = Error{
 		Code:    "TOO_MANY_REQUESTS",
 		Message: "Too many failed attempts. Please try again later.",
+	}
+	ErrMfaRequired = Error{
+		Code:    ErrCodeMfaRequired,
+		Message: "Multi-Factor Authentication is required to access this organization or workspace.",
 	}
 )
 

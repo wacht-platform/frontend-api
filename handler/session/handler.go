@@ -198,13 +198,41 @@ func (h *Handler) SwitchOrganization(
 	}
 
 	membership := new(model.OrganizationMembership)
-	count := database.Connection.
+	if err := database.Connection.
+		Preload("Roles.Permissions").
 		Model(&model.OrganizationMembership{}).
 		Where("user_id = ? AND organization_id = ?", session.ActiveSignin.UserID, orgIDuint64).
-		First(membership).
-		RowsAffected
-	if count == 0 {
+		First(membership).Error; err != nil || membership.ID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "You are not a member of this organization")
+	}
+
+	var org model.Organization
+	if err := database.Connection.First(&org, orgIDuint64).Error; err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to load organization")
+	}
+
+	var user model.User
+	if err := database.Connection.Preload("UserAuthenticator").First(&user, session.ActiveSignin.UserID).Error; err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to load user")
+	}
+
+	deployment := handler.GetDeployment(c)
+	orgData := model.PublicOrganizationData{
+		WhitelistedIPs:      org.WhitelistedIPs,
+		EnforceMFASetup:     org.EnforceMFASetup,
+		EnableIPRestriction: org.EnableIPRestriction,
+	}
+
+	eligibility := utils.CalculateOrganizationEligibility(
+		&user,
+		&orgData,
+		membership.Roles,
+		c.IP(),
+		&deployment,
+	)
+
+	if eligibility.Type != model.EligibilityRestrictionNone {
+		return fiber.NewError(fiber.StatusForbidden, eligibility.Message)
 	}
 
 	tx := database.Connection.Begin()
@@ -227,7 +255,6 @@ func (h *Handler) SwitchOrganization(
 	tx.Commit()
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
-	deployment := handler.GetDeployment(c)
 	if natsService, err := service.NewNatsService(); err == nil {
 		go natsService.PublishBillingEvent(deployment.ID, orgIDuint64, "organization_accessed")
 	}
@@ -275,15 +302,46 @@ func (h *Handler) SwitchWorkspace(
 	}
 
 	membership := new(model.WorkspaceMembership)
-	err = database.Connection.
+	if err := database.Connection.
+		Preload("Roles.Permissions").
 		Model(&model.WorkspaceMembership{}).
 		Where("user_id = ? AND workspace_id = ?", session.ActiveSignin.UserID, workspaceIDuint64).
 		Joins("Organization").
-		First(membership).
-		Error
-	if err != nil {
+		First(membership).Error; err != nil {
 		log.Println(err)
 		return fiber.NewError(fiber.StatusBadRequest, "You are not a member of this workspace")
+	}
+
+	// Load workspace details
+	var workspace model.Workspace
+	if err := database.Connection.First(&workspace, workspaceIDuint64).Error; err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to load workspace")
+	}
+
+	// Load user with MFA details
+	var user model.User
+	if err := database.Connection.Preload("UserAuthenticator").First(&user, session.ActiveSignin.UserID).Error; err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to load user")
+	}
+
+	// Check eligibility before allowing switch
+	deployment := handler.GetDeployment(c)
+	workspaceData := model.PublicWorkspaceData{
+		WhitelistedIPs:      workspace.WhitelistedIPs,
+		EnforceMFASetup:     workspace.EnforceMFASetup,
+		EnableIPRestriction: workspace.EnableIPRestriction,
+	}
+
+	eligibility := utils.CalculateWorkspaceEligibility(
+		&user,
+		&workspaceData,
+		membership.Roles,
+		c.IP(),
+		&deployment,
+	)
+
+	if eligibility.Type != model.EligibilityRestrictionNone {
+		return fiber.NewError(fiber.StatusForbidden, eligibility.Message)
 	}
 
 	// Use a transaction for atomicity
@@ -307,7 +365,7 @@ func (h *Handler) SwitchWorkspace(
 	tx.Commit()
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
-	deployment := handler.GetDeployment(c)
+	deployment = handler.GetDeployment(c)
 	if natsService, err := service.NewNatsService(); err == nil {
 		go natsService.PublishBillingEvent(deployment.ID, workspaceIDuint64, "workspace_accessed")
 	}

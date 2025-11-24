@@ -52,6 +52,26 @@ func (h *Handler) CreateOrganization(
 		return handler.SendBadRequest(c, nil, "Organizations are not enabled for this deployment")
 	}
 
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	if d.B2BSettings.LimitOrgCreationPerUser {
+		var orgCount int64
+		if err := database.Connection.Model(&model.OrganizationMembership{}).
+			Where("user_id = ?", session.ActiveSignin.UserID).
+			Joins("JOIN organization_membership_roles ON organization_membership_roles.organization_membership_id = organization_memberships.id").
+			Where("organization_membership_roles.organization_role_id = ?", d.B2BSettings.DefaultOrgCreatorRoleID).
+			Count(&orgCount).Error; err != nil {
+			return handler.SendInternalServerError(c, err, "Failed to check organization limits")
+		}
+
+		if d.B2BSettings.MaxOrgsPerUser > 0 && orgCount >= int64(d.B2BSettings.MaxOrgsPerUser) {
+			return handler.SendForbidden(c, nil, fmt.Sprintf("You have reached the maximum number of organizations allowed (%d)", d.B2BSettings.MaxOrgsPerUser))
+		}
+	}
+
 	if img != nil {
 		url, err := h.service.uploadOrganizationImage(orgid, img)
 		if err != nil {
@@ -63,11 +83,6 @@ func (h *Handler) CreateOrganization(
 
 	if validation != nil {
 		return handler.SendBadRequest(c, validation, "Bad request body")
-	}
-
-	session := handler.GetSession(c)
-	if session.ActiveSignin == nil {
-		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
 	org := model.Organization{
@@ -432,6 +447,27 @@ func (h *Handler) InviteMember(
 		return handler.SendInternalServerError(c, err, "Failed to generate invitation token")
 	}
 	token := fmt.Sprintf("org.%s", tokenBase)
+
+	if d := handler.GetDeployment(c); d.B2BSettings.MaxAllowedOrgMembers > 0 {
+		var memberCount int64
+		if err := database.Connection.Model(&model.OrganizationMembership{}).
+			Where("organization_id = ?", orgID).
+			Count(&memberCount).Error; err != nil {
+			return handler.SendInternalServerError(c, err, "Failed to check member limits")
+		}
+
+		// Count pending invitations as well
+		var inviteCount int64
+		if err := database.Connection.Model(&model.OrganizationInvitation{}).
+			Where("organization_id = ?", orgID).
+			Count(&inviteCount).Error; err != nil {
+			return handler.SendInternalServerError(c, err, "Failed to check invitation limits")
+		}
+
+		if uint64(memberCount+inviteCount) >= d.B2BSettings.MaxAllowedOrgMembers {
+			return handler.SendForbidden(c, nil, fmt.Sprintf("Organization has reached the maximum number of members allowed (%d)", d.B2BSettings.MaxAllowedOrgMembers))
+		}
+	}
 
 	invitation := model.OrganizationInvitation{
 		Model: model.Model{
@@ -1035,6 +1071,10 @@ func (h *Handler) CreateOrganizationRole(
 		return handler.SendForbidden(c, nil, "Insufficient permissions to manage roles.")
 	}
 
+	if !deployment.B2BSettings.CustomOrgRoleEnabled {
+		return handler.SendForbidden(c, nil, "Custom organization roles are disabled for this deployment.")
+	}
+
 	body, validation := handler.Validate[CreateRoleRequest](c)
 
 	if validation != nil {
@@ -1161,7 +1201,6 @@ func (h *Handler) AddOrganizationDomain(
 	}
 
 	requiredPermissions := map[string]bool{
-		"organization:owner":  true,
 		"organization:admin":  true,
 		"organization:manage": true,
 	}
@@ -1212,7 +1251,6 @@ func (h *Handler) VerifyOrganizationDomain(
 	}
 
 	requiredPermissions := map[string]bool{
-		"organization:owner":  true,
 		"organization:admin":  true,
 		"organization:manage": true,
 	}
@@ -1293,7 +1331,6 @@ func (h *Handler) DeleteOrganizationDomain(
 	}
 
 	requiredPermissions := map[string]bool{
-		"organization:owner":  true,
 		"organization:admin":  true,
 		"organization:manage": true,
 	}
