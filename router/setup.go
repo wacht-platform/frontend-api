@@ -1,14 +1,18 @@
 package router
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/middleware"
+	"github.com/ilabs/wacht-fe/service"
 )
 
 func Setup(app *fiber.App) {
@@ -32,22 +36,24 @@ func setupRoutes(app *fiber.App) {
 func setupMiddleware(app *fiber.App) {
 	app.Use(logger.New())
 	app.Use(recover.New())
-	// app.Use(limiter.New(limiter.Config{
-	// 	Max:        100,
-	// 	Expiration: 1 * time.Minute,
-	// 	Storage:    middleware.NewRedisStorage(),
-	// 	KeyGenerator: func(c *fiber.Ctx) string {
-	// 		return c.IP() + c.Path()
-	// 	},
-	// 	LimitReached: func(c *fiber.Ctx) error {
-	// 		return handler.SendTooManyRequests(
-	// 			c,
-	// 			nil,
-	// 			"Too many requests. Please try again later.",
-	// 			handler.ErrTooManyRequests,
-	// 		)
-	// 	},
-	// }))
+	natsService, _ := service.NewNatsService()
+	app.Use(limiter.New(limiter.Config{
+		Max:        100,
+		Expiration: 1 * time.Minute,
+		Storage:    middleware.NewNatsStorage(natsService),
+		KeyGenerator: func(c *fiber.Ctx) string {
+			now := time.Now()
+			return fmt.Sprintf("%s:%s:%d:%d", c.IP(), c.Path(), now.Hour(), now.Minute())
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return handler.SendTooManyRequests(
+				c,
+				nil,
+				"Too many requests. Please try again later.",
+				handler.ErrTooManyRequests,
+			)
+		},
+	}))
 	app.Use(middleware.SetRequestPrelude)
 	app.Use(func(c *fiber.Ctx) error {
 		cfg := corsSettings(c)

@@ -427,6 +427,30 @@ func (s *NatsService) PublishBillingEvent(deploymentID, resourceID uint64, event
 	return s.publishTask(context.Background(), string(BillingEvent), task)
 }
 
+func (s *NatsService) PublishRateLimit(payload []byte) error {
+	return s.nc.Publish("rate_limit.inc", payload)
+}
+
+func (s *NatsService) SubscribeToRateLimits(ch chan []byte) {
+	s.nc.Subscribe("rate_limit.inc", func(m *nats.Msg) {
+		ch <- m.Data
+	})
+}
+
+func (s *NatsService) GetRateLimitKV(ctx context.Context) (jetstream.KeyValue, error) {
+	kv, err := s.js.KeyValue(ctx, "rate_limits")
+	if err != nil {
+		kv, err = s.js.CreateKeyValue(ctx, jetstream.KeyValueConfig{
+			Bucket: "rate_limits",
+			TTL:    1 * time.Minute,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create key value bucket: %w", err)
+		}
+	}
+	return kv, nil
+}
+
 func (s *NatsService) Close() {
 	if s.nc != nil && !s.nc.IsClosed() {
 		s.nc.Close()
