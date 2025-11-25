@@ -21,6 +21,9 @@ func init() {
 
 // GetCachedDeployment attempts to retrieve a deployment from cache
 func GetCachedDeployment(key string) (*model.Deployment, bool) {
+	if !Cache.Has(key) {
+		return nil, false
+	}
 	cache := Cache.Get(key)
 	if cache == nil {
 		return nil, false
@@ -35,6 +38,9 @@ func SetCachedDeployment(key string, deployment *model.Deployment) {
 
 // GetCachedSession attempts to retrieve a session from cache
 func GetCachedSession(sessionID uint64) (*model.Session, bool) {
+	if !Cache.Has(fmt.Sprintf("%d", sessionID)) {
+		return nil, false
+	}
 	cache := Cache.Get(fmt.Sprintf("%d", sessionID))
 	if cache == nil {
 		return nil, false
