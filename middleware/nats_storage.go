@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/ilabs/wacht-fe/service"
+	"github.com/ilabs/wacht-fe/utils"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -21,7 +22,6 @@ type RateLimitMessage struct {
 }
 
 type NatsStorage struct {
-	data        *ttlcache.Cache[string, int]
 	natsService *service.NatsService
 	kv          jetstream.KeyValue
 	nodeID      string
@@ -31,9 +31,6 @@ func NewNatsStorage(natsService *service.NatsService) *NatsStorage {
 	storage := &NatsStorage{
 		natsService: natsService,
 		nodeID:      uuid.New().String(),
-		data: ttlcache.New(
-			ttlcache.WithTTL[string, int](1 * time.Minute),
-		),
 	}
 
 	// Initialize KV
@@ -44,8 +41,6 @@ func NewNatsStorage(natsService *service.NatsService) *NatsStorage {
 	} else {
 		storage.kv = kv
 	}
-
-	go storage.data.Start()
 
 	go storage.subscribe()
 
@@ -66,15 +61,15 @@ func (s *NatsStorage) subscribe() {
 			continue
 		}
 
-		if item := s.data.Get(update.Key); item != nil {
-			newValue := item.Value() + update.Increment
-			s.data.Set(update.Key, newValue, ttlcache.DefaultTTL)
+		if item := utils.Cache.Get(update.Key); item != nil {
+			newValue := item.Value().(int) + update.Increment
+			utils.Cache.Set(update.Key, newValue, ttlcache.DefaultTTL)
 		}
 	}
 }
 
 func (s *NatsStorage) Get(key string) ([]byte, error) {
-	if item := s.data.Get(key); item != nil {
+	if item := utils.Cache.Get(key); item != nil {
 		return fmt.Appendf(nil, "%d", item.Value()), nil
 	}
 
@@ -84,7 +79,7 @@ func (s *NatsStorage) Get(key string) ([]byte, error) {
 			val := kvEntry.Value()
 			intVal, _ := strconv.Atoi(string(val))
 
-			s.data.Set(key, intVal, ttlcache.DefaultTTL)
+			utils.Cache.Set(key, intVal, time.Minute)
 
 			return val, nil
 		}
@@ -102,8 +97,8 @@ func (s *NatsStorage) SetWithExp(key string, val []byte, exp time.Duration) erro
 	fmt.Sscanf(string(val), "%d", &newVal)
 
 	var oldVal int
-	if item := s.data.Get(key); item != nil {
-		oldVal = item.Value()
+	if item := utils.Cache.Get(key); item != nil {
+		oldVal = item.Value().(int)
 	}
 
 	delta := newVal - oldVal
@@ -123,7 +118,7 @@ func (s *NatsStorage) SetWithExp(key string, val []byte, exp time.Duration) erro
 		}
 	}
 
-	s.data.Set(key, newVal, exp)
+	utils.Cache.Set(key, newVal, exp)
 
 	return nil
 }
@@ -154,7 +149,7 @@ func (s *NatsStorage) persistAsync(key string, delta int) {
 }
 
 func (s *NatsStorage) Delete(key string) error {
-	s.data.Delete(key)
+	utils.Cache.Delete(key)
 	if s.kv != nil {
 		go s.kv.Delete(context.Background(), key)
 	}
@@ -162,11 +157,9 @@ func (s *NatsStorage) Delete(key string) error {
 }
 
 func (s *NatsStorage) Reset() error {
-	s.data.DeleteAll()
 	return nil
 }
 
 func (s *NatsStorage) Close() error {
-	s.data.Stop()
 	return nil
 }
