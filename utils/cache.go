@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/ilabs/wacht-fe/model"
@@ -8,61 +9,50 @@ import (
 )
 
 var (
-	// DeploymentCache stores deployment data with 30 second TTL and 2000 max keys
-	DeploymentCache *ttlcache.Cache[string, *model.Deployment]
-
-	// SessionCache stores session data with 30 second TTL and 2000 max keys
-	SessionCache *ttlcache.Cache[uint64, *model.Session]
+	Cache *ttlcache.Cache[string, any]
 )
 
 func init() {
-	// Initialize deployment cache
-	DeploymentCache = ttlcache.New(
-		ttlcache.WithTTL[string, *model.Deployment](30 * time.Second),
+	Cache = ttlcache.New(
+		ttlcache.WithTTL[string, any](30 * time.Second),
 	)
-	go DeploymentCache.Start()
-
-	// Initialize session cache
-	SessionCache = ttlcache.New(
-		ttlcache.WithTTL[uint64, *model.Session](30 * time.Second),
-	)
-	go SessionCache.Start()
+	go Cache.Start()
 }
 
 // GetCachedDeployment attempts to retrieve a deployment from cache
 func GetCachedDeployment(key string) (*model.Deployment, bool) {
-	cache := DeploymentCache.Get(key)
+	cache := Cache.Get(key)
 	if cache == nil {
 		return nil, false
 	}
-	return cache.Value(), true
+	return cache.Value().(*model.Deployment), true
 }
 
 // SetCachedDeployment stores a deployment in cache
 func SetCachedDeployment(key string, deployment *model.Deployment) {
-	DeploymentCache.Set(key, deployment, ttlcache.DefaultTTL)
+	Cache.Set(key, deployment, ttlcache.DefaultTTL)
 }
 
 // GetCachedSession attempts to retrieve a session from cache
 func GetCachedSession(sessionID uint64) (*model.Session, bool) {
-	cache := SessionCache.Get(sessionID)
+	cache := Cache.Get(fmt.Sprintf("%d", sessionID))
 	if cache == nil {
 		return nil, false
 	}
-	return cache.Value(), true
+	return cache.Value().(*model.Session), true
 }
 
 // SetCachedSession stores a session in cache
 func SetCachedSession(sessionID uint64, session *model.Session) {
-	SessionCache.Set(sessionID, session, ttlcache.DefaultTTL)
+	Cache.Set(fmt.Sprintf("%d", sessionID), session, ttlcache.DefaultTTL)
 }
 
 // RemoveCachedSession removes a session from cache
 func RemoveCachedSession(sessionID uint64) {
-	SessionCache.Delete(sessionID)
+	Cache.Delete(fmt.Sprintf("%d", sessionID))
 }
 
 // RemoveCachedDeployment removes a deployment from cache
 func RemoveCachedDeployment(key string) {
-	DeploymentCache.Delete(key)
+	Cache.Delete(key)
 }
