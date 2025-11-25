@@ -1,6 +1,8 @@
 module github.com/ilabs/wacht-fe
 
-go 1.23.4
+go 1.24.0
+
+toolchain go1.24.2
 
 require (
 	cloud.google.com/go/secretmanager v1.15.0
@@ -21,6 +23,7 @@ require (
 	github.com/pquerna/otp v1.4.0
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/ua-parser/uap-go v0.0.0-20250213224047-9c035f085b90
+	golang.org/x/crypto v0.45.0
 	golang.org/x/oauth2 v0.30.0
 	gorm.io/datatypes v1.2.5
 	gorm.io/driver/postgres v1.5.11
@@ -81,11 +84,10 @@ require (
 	go.opentelemetry.io/otel v1.36.0 // indirect
 	go.opentelemetry.io/otel/metric v1.36.0 // indirect
 	go.opentelemetry.io/otel/trace v1.36.0 // indirect
-	golang.org/x/crypto v0.39.0 // indirect
-	golang.org/x/net v0.41.0 // indirect
-	golang.org/x/sync v0.15.0 // indirect
-	golang.org/x/sys v0.33.0 // indirect
-	golang.org/x/text v0.26.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
+	golang.org/x/sync v0.18.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	google.golang.org/api v0.237.0 // indirect
 	google.golang.org/genproto v0.0.0-20250505200425-f936aa4a68b2 // indirect
