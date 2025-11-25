@@ -17,13 +17,13 @@ var (
 
 func init() {
 	// Initialize deployment cache
-	DeploymentCache = ttlcache.New[string, *model.Deployment](
+	DeploymentCache = ttlcache.New(
 		ttlcache.WithTTL[string, *model.Deployment](30 * time.Second),
 	)
 	go DeploymentCache.Start()
 
 	// Initialize session cache
-	SessionCache = ttlcache.New[uint64, *model.Session](
+	SessionCache = ttlcache.New(
 		ttlcache.WithTTL[uint64, *model.Session](30 * time.Second),
 	)
 	go SessionCache.Start()

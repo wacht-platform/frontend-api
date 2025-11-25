@@ -38,7 +38,7 @@ func setupMiddleware(app *fiber.App) {
 	app.Use(recover.New())
 	natsService, _ := service.NewNatsService()
 	app.Use(limiter.New(limiter.Config{
-		Max:        100,
+		Max:        20,
 		Expiration: 1 * time.Minute,
 		Storage:    middleware.NewNatsStorage(natsService),
 		KeyGenerator: func(c *fiber.Ctx) string {
