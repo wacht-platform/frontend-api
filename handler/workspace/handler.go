@@ -131,6 +131,16 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 				log.Printf("Failed to assign default creator role to workspace %d for user %d: %v", workspace.ID, session.ActiveSignin.UserID, err)
 			}
 		}
+
+		session.ActiveSignin.ActiveOrganizationMembershipID = &orgMembership.ID
+		session.ActiveSignin.ActiveWorkspaceMembershipID = &creatorMembership.ID
+		if err := tx.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).Updates(map[string]any{
+			"active_organization_membership_id": orgMembership.ID,
+			"active_workspace_membership_id":    creatorMembership.ID,
+		}).Error; err != nil {
+			return err
+		}
+
 		return nil
 	})
 
