@@ -11,6 +11,7 @@ type SignInRequest struct {
 	PhoneCountryCode string             `form:"phone_country_code"`
 	Password         string             `form:"password"`
 	Strategy         model.SignInMethod `form:"strategy"`
+	Token            string             `form:"token"`
 }
 
 type SignUpRequest struct {

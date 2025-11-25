@@ -30,6 +30,7 @@ const (
 	SignInMethodEmailOTP      SignInMethod = "email_otp"
 	SignInMethodSSO           SignInMethod = "sso"
 	Passkey                   SignInMethod = "passkey"
+	SignInMethodImpersonation SignInMethod = "impersonation"
 )
 
 func (s *SignInMethod) Scan(value any) error {
