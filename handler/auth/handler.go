@@ -1321,6 +1321,7 @@ func (h *Handler) SSOCallback(c *fiber.Ctx) error {
 				}
 			}
 
+			utils.PublishSignUpEvent(deployment.ID, &u, "oauth", primaryEmail, c)
 			utils.PublishSignInEvent(deployment.ID, &u, "oauth", primaryEmail, c)
 		}
 
@@ -2423,6 +2424,9 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 			}
 
 			h.service.TrackMAU(d.ID, user.ID)
+
+			utils.PublishSignUpEvent(d.ID, user, "email_password", &attempt.Email, c)
+			utils.PublishSignInEvent(d.ID, user, "email_password", &attempt.Email, c)
 
 			handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 

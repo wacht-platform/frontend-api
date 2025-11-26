@@ -15,6 +15,8 @@ func PublishSignInEvent(deploymentID uint64, user *model.User, authMethod string
 		return
 	}
 
+	ipAddress := c.IP()
+
 	go func() {
 		var userName *string
 		if user.FirstName != "" && user.LastName != "" {
@@ -25,8 +27,6 @@ func PublishSignInEvent(deploymentID uint64, user *model.User, authMethod string
 		} else if user.LastName != "" {
 			userName = &user.LastName
 		}
-
-		ipAddress := c.IP()
 
 		userID := user.ID
 		if err := natsService.PublishAnalyticsEvent(
@@ -53,6 +53,8 @@ func PublishSignUpEvent(deploymentID uint64, user *model.User, authMethod string
 		return
 	}
 
+	ipAddress := c.IP()
+
 	go func() {
 		var userName *string
 		if user.FirstName != "" && user.LastName != "" {
@@ -63,8 +65,6 @@ func PublishSignUpEvent(deploymentID uint64, user *model.User, authMethod string
 		} else if user.LastName != "" {
 			userName = &user.LastName
 		}
-
-		ipAddress := c.IP()
 
 		userID := user.ID
 		if err := natsService.PublishAnalyticsEvent(
