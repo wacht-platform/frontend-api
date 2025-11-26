@@ -423,32 +423,22 @@ func (h *Handler) handleImpersonationSignIn(c *fiber.Ctx, b SignInRequest, d mod
 		return handler.SendBadRequest(c, nil, "Invalid token: incorrect type")
 	}
 
-	var userID uint64
-	switch v := userIDClaim.(type) {
-	case float64:
-		userID = uint64(v)
-	case string:
-		parsed, err := strconv.ParseUint(v, 10, 64)
-		if err != nil {
-			return handler.SendBadRequest(c, nil, "Invalid user_id in token")
-		}
-		userID = parsed
-	default:
-		return handler.SendBadRequest(c, nil, "Invalid user_id type in token")
+	userIDStr, ok := userIDClaim.(string)
+	if !ok {
+		return handler.SendBadRequest(c, nil, "Invalid user_id type in token (expected string)")
+	}
+	userID, err := strconv.ParseUint(userIDStr, 10, 64)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid user_id format in token")
 	}
 
-	var deploymentID uint64
-	switch v := deploymentIDClaim.(type) {
-	case float64:
-		deploymentID = uint64(v)
-	case string:
-		parsed, err := strconv.ParseUint(v, 10, 64)
-		if err != nil {
-			return handler.SendBadRequest(c, nil, "Invalid deployment_id in token")
-		}
-		deploymentID = parsed
-	default:
-		return handler.SendBadRequest(c, nil, "Invalid deployment_id type in token")
+	deploymentIDStr, ok := deploymentIDClaim.(string)
+	if !ok {
+		return handler.SendBadRequest(c, nil, "Invalid deployment_id type in token (expected string)")
+	}
+	deploymentID, err := strconv.ParseUint(deploymentIDStr, 10, 64)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid deployment_id format in token")
 	}
 
 	if deploymentID != d.ID {
