@@ -160,14 +160,14 @@ type WebhookEventTask struct {
 }
 
 type AnalyticsEventTask struct {
-	DeploymentID uint64    `json:"deployment_id"`
-	UserID       *uint64   `json:"user_id"`
-	EventType    string    `json:"event_type"`
-	UserName     *string   `json:"user_name"`
-	UserEmail    *string   `json:"user_email"`
-	AuthMethod   *string   `json:"auth_method"`
-	Timestamp    time.Time `json:"timestamp"`
-	IPAddress    *string   `json:"ip_address"`
+	DeploymentID   uint64    `json:"deployment_id"`
+	UserID         *uint64   `json:"user_id"`
+	EventType      string    `json:"event_type"`
+	UserName       *string   `json:"user_name"`
+	UserIdentifier *string   `json:"user_identifier"`
+	AuthMethod     *string   `json:"auth_method"`
+	Timestamp      time.Time `json:"timestamp"`
+	IPAddress      *string   `json:"ip_address"`
 }
 
 type BillingEventTask struct {
@@ -404,16 +404,16 @@ func (s *NatsService) PublishWebhookEvent(deploymentID uint64, eventType string,
 	return s.publishTask(context.Background(), "webhook.event", task)
 }
 
-func (s *NatsService) PublishAnalyticsEvent(deploymentID uint64, userID *uint64, eventType string, userName, userEmail, authMethod, ipAddress *string) error {
+func (s *NatsService) PublishAnalyticsEvent(deploymentID uint64, userID *uint64, eventType string, userName, userIdentifier, authMethod, ipAddress *string) error {
 	task := AnalyticsEventTask{
-		DeploymentID: deploymentID,
-		UserID:       userID,
-		EventType:    eventType,
-		UserName:     userName,
-		UserEmail:    userEmail,
-		AuthMethod:   authMethod,
-		Timestamp:    time.Now(),
-		IPAddress:    ipAddress,
+		DeploymentID:   deploymentID,
+		UserID:         userID,
+		EventType:      eventType,
+		UserName:       userName,
+		UserIdentifier: userIdentifier,
+		AuthMethod:     authMethod,
+		Timestamp:      time.Now(),
+		IPAddress:      ipAddress,
 	}
 	return s.publishTask(context.Background(), "analytics.event", task)
 }
