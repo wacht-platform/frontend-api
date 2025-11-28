@@ -166,8 +166,17 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 
 	utils.RemoveCachedSession(session.ID)
 
+	var creatorMembership *model.WorkspaceMembership
+	for _, member := range finalWorkspace.Members {
+		if member.UserID == *session.ActiveSignin.UserID {
+			creatorMembership = member
+			break
+		}
+	}
+
 	return handler.SendSuccess(c, fiber.Map{
-		"workspace": finalWorkspace,
+		"workspace":  finalWorkspace,
+		"membership": creatorMembership,
 	})
 }
 
