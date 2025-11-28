@@ -689,6 +689,15 @@ func (h *Handler) UpdateWorkspace(c *fiber.Ctx) error {
 	if b.Description != "" {
 		workspace.Description = b.Description
 	}
+	if b.EnforceMFASetup != nil {
+		workspace.EnforceMFASetup = *b.EnforceMFASetup
+	}
+	if b.EnableIPRestriction != nil {
+		workspace.EnableIPRestriction = *b.EnableIPRestriction
+	}
+	if b.WhitelistedIPs != nil {
+		workspace.WhitelistedIPs = b.WhitelistedIPs
+	}
 
 	if err := database.Connection.Save(&workspace).Error; err != nil {
 		log.Printf("Failed to update workspace %d: %v", workspaceID, err)

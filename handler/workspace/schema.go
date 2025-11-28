@@ -9,8 +9,11 @@ type CreateWorkspaceRequest struct {
 }
 
 type UpdateWorkspaceRequest struct {
-	Name        string `form:"name"        validate:"required"`
-	Description string `form:"description"`
+	Name                string   `json:"name"                  form:"name"                  validate:"required"`
+	Description         string   `json:"description"           form:"description"`
+	EnforceMFASetup     *bool    `json:"enforce_2fa"           form:"enforce_2fa"`
+	EnableIPRestriction *bool    `json:"enable_ip_restriction" form:"enable_ip_restriction"`
+	WhitelistedIPs      []string `json:"whitelisted_ips"       form:"whitelisted_ips"`
 }
 
 type InviteWorkspaceMemberRequest struct {
@@ -20,6 +23,6 @@ type InviteWorkspaceMemberRequest struct {
 
 type WorkspaceMemberQueryResult struct {
 	model.WorkspaceMembership
-	RolesJSON           string `gorm:"column:roles_json"`
-	PublicUserDataJSON  string `gorm:"column:public_user_data_json"`
+	RolesJSON          string `gorm:"column:roles_json"`
+	PublicUserDataJSON string `gorm:"column:public_user_data_json"`
 }
