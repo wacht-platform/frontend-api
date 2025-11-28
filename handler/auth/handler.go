@@ -1850,13 +1850,9 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 			model.SignInAttemptStepVerifyEmailOTP:
 			{
 
-				storedOTP, err := h.service.GetOTPFromRedis(fmt.Sprintf("signin:%d", attempt.ID))
-				if err != nil {
+				valid, err := h.service.VerifyOTPFromRedis(fmt.Sprintf("signin:%d", attempt.ID), b.VerificationCode)
+				if err != nil || !valid {
 					return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
-				}
-
-				if storedOTP != b.VerificationCode {
-					return handler.SendBadRequest(c, nil, "Invalid OTP")
 				}
 
 				var emailAddress string
@@ -2313,12 +2309,9 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				return handler.SendBadRequest(c, nil, "Invalid OTP")
 			}
 		} else {
-			storedOTP, err := h.service.GetOTPFromRedis(fmt.Sprintf("signup:%d", attempt.ID))
-			if err != nil {
+			valid, err := h.service.VerifyOTPFromRedis(fmt.Sprintf("signup:%d", attempt.ID), b.VerificationCode)
+			if err != nil || !valid {
 				return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
-			}
-			if storedOTP != b.VerificationCode {
-				return handler.SendBadRequest(c, nil, "Invalid OTP")
 			}
 		}
 
@@ -2745,20 +2738,12 @@ func (h *Handler) ForgotPassword(c *fiber.Ctx) error {
 	}
 
 	if b.OTP != "" {
-		storedOTP, err := h.service.GetOTPFromRedis(fmt.Sprintf("password-reset:%d", email.UserID))
-		if err != nil {
+		valid, err := h.service.VerifyOTPFromRedis(fmt.Sprintf("password-reset:%d", *email.UserID), b.OTP)
+		if err != nil || !valid {
 			return handler.SendBadRequest(
 				c,
 				nil,
 				"Invalid or expired OTP",
-			)
-		}
-
-		if storedOTP != b.OTP {
-			return handler.SendBadRequest(
-				c,
-				nil,
-				"Invalid OTP",
 			)
 		}
 
@@ -2779,7 +2764,7 @@ func (h *Handler) ForgotPassword(c *fiber.Ctx) error {
 			)
 		}
 
-		h.service.DeleteOTPFromRedis(fmt.Sprintf("password-reset:%d", email.UserID))
+		h.service.DeleteOTPFromRedis(fmt.Sprintf("password-reset:%d", *email.UserID))
 
 		return handler.SendSuccess(c, fiber.Map{
 			"token": token,
@@ -2796,7 +2781,7 @@ func (h *Handler) ForgotPassword(c *fiber.Ctx) error {
 		)
 	}
 
-	if err := h.service.StoreOTPInCache(fmt.Sprintf("password-reset:%d", email.UserID), code); err != nil {
+	if err := h.service.StoreOTPInCache(fmt.Sprintf("password-reset:%d", *email.UserID), code); err != nil {
 		return handler.SendInternalServerError(
 			c,
 			err,

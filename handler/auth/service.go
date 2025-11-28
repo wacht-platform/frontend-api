@@ -664,13 +664,9 @@ func (s *AuthService) VerifyMagicLinkToken(
 	token string,
 ) error {
 	key := fmt.Sprintf("magic_link:%d", attemptID)
-	storedToken, err := s.GetOTPFromRedis(key)
-	if err != nil {
-		return err
-	}
-
-	if storedToken != token {
-		return errors.New("invalid magic link token")
+	valid, err := s.VerifyOTPFromRedis(key, token)
+	if err != nil || !valid {
+		return errors.New("invalid or expired magic link token")
 	}
 
 	s.DeleteOTPFromRedis(key)
@@ -1026,19 +1022,38 @@ const (
 )
 
 func (s *AuthService) StoreOTPInCache(key string, otp string) error {
-	return database.Redis.Set(
-		context.Background(),
-		fmt.Sprintf("otp:%s", key),
-		otp,
-		otpExpirationTime,
-	).Err()
+	ctx := context.Background()
+	redisKey := fmt.Sprintf("otp:%s", key)
+
+	// Add OTP to the set
+	if err := database.Redis.SAdd(ctx, redisKey, otp).Err(); err != nil {
+		return err
+	}
+
+	// Set TTL to 90 seconds for the entire set
+	return database.Redis.Expire(ctx, redisKey, 90*time.Second).Err()
 }
 
 func (s *AuthService) GetOTPFromRedis(key string) (string, error) {
+	// This method is deprecated but kept for backward compatibility
+	// Use VerifyOTPFromRedis instead
 	return database.Redis.Get(
 		context.Background(),
 		fmt.Sprintf("otp:%s", key),
 	).Result()
+}
+
+func (s *AuthService) VerifyOTPFromRedis(key string, otp string) (bool, error) {
+	ctx := context.Background()
+	redisKey := fmt.Sprintf("otp:%s", key)
+
+	// Check if OTP exists in the set
+	exists, err := database.Redis.SIsMember(ctx, redisKey, otp).Result()
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
 }
 
 func (s *AuthService) DeleteOTPFromRedis(key string) error {
