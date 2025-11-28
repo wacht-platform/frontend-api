@@ -2822,7 +2822,7 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 	}
 
 	var user model.User
-	if err := database.Connection.Where("id = ?", userID).First(&user).Error; err != nil {
+	if err := database.Connection.Preload("UserEmailAddresses").Where("id = ?", userID).First(&user).Error; err != nil {
 		return handler.SendInternalServerError(
 			c,
 			err,
@@ -2848,6 +2848,16 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 	}
 
 	h.service.DeleteResetTokenFromCache(b.Token)
+
+	// Send password change notification email
+	if user.PrimaryEmailAddressID != nil {
+		for _, email := range user.UserEmailAddresses {
+			if email.ID == *user.PrimaryEmailAddressID {
+				_ = h.service.nats.SendPasswordChangeEmail(deployment.ID, user.ID, email.EmailAddress)
+				break
+			}
+		}
+	}
 
 	utils.PublishWebhookEvent(deployment.ID, "user.password.reset", userID, "user")
 
