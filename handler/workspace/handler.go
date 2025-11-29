@@ -81,7 +81,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 		"organization_id = ? AND user_id = ?",
 		b.OrganizationID,
 		session.ActiveSignin.UserID,
-	).Preload("Roles").First(&orgMembership).Error; err != nil {
+	).First(&orgMembership).Error; err != nil {
 		return handler.SendForbidden(
 			c,
 			nil,
