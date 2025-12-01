@@ -392,6 +392,80 @@ func parseSignupAttemptFromMap(attemptData map[string]any) (*model.SignupAttempt
 	return attempt, nil
 }
 
+func parseOrganizationRoleFromMap(roleData map[string]any) (*model.OrganizationRole, error) {
+	if roleData == nil {
+		return nil, fmt.Errorf("role data is nil")
+	}
+
+	role := &model.OrganizationRole{}
+
+	if id, err := getUint64FromMap(roleData, "id"); err == nil {
+		role.ID = id
+	}
+
+	role.CreatedAt = getTimeFromMap(roleData, "created_at")
+	role.UpdatedAt = getTimeFromMap(roleData, "updated_at")
+
+	if orgID, err := getUint64FromMap(roleData, "organization_id"); err == nil {
+		role.OrganizationID = &orgID
+	}
+
+	role.Name = getStringFromMap(roleData, "name")
+
+	if deploymentID, err := getUint64FromMap(roleData, "deployment_id"); err == nil {
+		role.DeploymentID = deploymentID
+	}
+
+	if permissions, ok := roleData["permissions"].([]interface{}); ok {
+		for _, p := range permissions {
+			if pStr, ok := p.(string); ok {
+				role.Permissions = append(role.Permissions, pStr)
+			}
+		}
+	}
+
+	return role, nil
+}
+
+func parseWorkspaceRoleFromMap(roleData map[string]any) (*model.WorkspaceRole, error) {
+	if roleData == nil {
+		return nil, fmt.Errorf("role data is nil")
+	}
+
+	role := &model.WorkspaceRole{}
+
+	if id, err := getUint64FromMap(roleData, "id"); err == nil {
+		role.ID = id
+	}
+
+	role.CreatedAt = getTimeFromMap(roleData, "created_at")
+	role.UpdatedAt = getTimeFromMap(roleData, "updated_at")
+
+	if orgID, err := getUint64FromMap(roleData, "organization_id"); err == nil {
+		role.OrganizationID = orgID
+	}
+
+	role.Name = getStringFromMap(roleData, "name")
+
+	if deploymentID, err := getUint64FromMap(roleData, "deployment_id"); err == nil {
+		role.DeploymentID = deploymentID
+	}
+
+	if workspaceID, err := getUint64FromMap(roleData, "workspace_id"); err == nil {
+		role.WorkspaceID = workspaceID
+	}
+
+	if permissions, ok := roleData["permissions"].([]interface{}); ok {
+		for _, p := range permissions {
+			if pStr, ok := p.(string); ok {
+				role.Permissions = append(role.Permissions, pStr)
+			}
+		}
+	}
+
+	return role, nil
+}
+
 func GetSessionByID(sessionID uint64) (*model.Session, error) {
 	if cachedSession, found := GetCachedSession(sessionID); found {
 		return cachedSession, nil
@@ -862,6 +936,18 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 					json.Unmarshal([]byte(metadataStr), &session.ActiveSignin.ActiveOrganizationMembership.Organization.PublicMetadata)
 				}
 			}
+
+			// Parse organization roles
+			if rolesJSON := getStringFromMap(rawResult, "organization_roles"); rolesJSON != "" && rolesJSON != "[]" {
+				var rolesArray []map[string]any
+				if err := json.Unmarshal([]byte(rolesJSON), &rolesArray); err == nil {
+					for _, roleMap := range rolesArray {
+						if role, err := parseOrganizationRoleFromMap(roleMap); err == nil {
+							session.ActiveSignin.ActiveOrganizationMembership.Roles = append(session.ActiveSignin.ActiveOrganizationMembership.Roles, role)
+						}
+					}
+				}
+			}
 		}
 
 		// Parse active workspace membership
@@ -903,6 +989,18 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 					json.Unmarshal(metadataBytes, &session.ActiveSignin.ActiveWorkspaceMembership.Workspace.PublicMetadata)
 				} else if metadataStr, ok := metadata.(string); ok {
 					json.Unmarshal([]byte(metadataStr), &session.ActiveSignin.ActiveWorkspaceMembership.Workspace.PublicMetadata)
+				}
+			}
+
+			// Parse workspace roles
+			if rolesJSON := getStringFromMap(rawResult, "workspace_roles"); rolesJSON != "" && rolesJSON != "[]" {
+				var rolesArray []map[string]any
+				if err := json.Unmarshal([]byte(rolesJSON), &rolesArray); err == nil {
+					for _, roleMap := range rolesArray {
+						if role, err := parseWorkspaceRoleFromMap(roleMap); err == nil {
+							session.ActiveSignin.ActiveWorkspaceMembership.Roles = append(session.ActiveSignin.ActiveWorkspaceMembership.Roles, role)
+						}
+					}
 				}
 			}
 		}
