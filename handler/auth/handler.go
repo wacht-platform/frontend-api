@@ -40,6 +40,11 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 	d := handler.GetDeployment(c)
 	session := handler.GetSession(c)
 
+	if b.Email != "" {
+		b.Email = strings.TrimSpace(b.Email)
+		b.Email = strings.ToLower(b.Email)
+	}
+
 	switch b.Strategy {
 	case model.SignInMethodEmailOTP:
 		return h.handleOTPSignIn(c, *b, session, model.SignInMethodEmailOTP)
