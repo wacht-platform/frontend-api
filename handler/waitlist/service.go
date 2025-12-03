@@ -1,6 +1,8 @@
 package waitlist
 
 import (
+	"log"
+
 	"github.com/godruoyi/go-snowflake"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
@@ -78,7 +80,9 @@ func (s *WaitlistService) CreateWaitlistEntry(
 		return nil, err
 	}
 
-	_ = s.nats.SendWaitlistSignupEmail(deploymentID, b.Email, b.FirstName, b.LastName)
+	if err := s.nats.SendWaitlistSignupEmail(deploymentID, b.Email, b.FirstName, b.LastName); err != nil {
+		log.Printf("Failed to send waitlist signup email to %s: %v", b.Email, err)
+	}
 
 	return entry, nil
 }
