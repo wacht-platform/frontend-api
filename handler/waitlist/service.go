@@ -5,16 +5,24 @@ import (
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/service"
 	"gorm.io/gorm"
 )
 
 type WaitlistService struct {
-	db *gorm.DB
+	db   *gorm.DB
+	nats *service.NatsService
 }
 
 func NewWaitlistService() *WaitlistService {
+	natsService, err := service.NewNatsService()
+	if err != nil {
+		panic("Failed to initialize NATS service: " + err.Error())
+	}
+
 	return &WaitlistService{
-		db: database.Connection,
+		db:   database.Connection,
+		nats: natsService,
 	}
 }
 
@@ -69,6 +77,8 @@ func (s *WaitlistService) CreateWaitlistEntry(
 	if err := s.db.Create(entry).Error; err != nil {
 		return nil, err
 	}
+
+	_ = s.nats.SendWaitlistSignupEmail(deploymentID, b.Email, b.FirstName, b.LastName)
 
 	return entry, nil
 }
