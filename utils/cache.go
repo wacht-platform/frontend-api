@@ -14,14 +14,14 @@ var (
 
 func init() {
 	Cache = ttlcache.New(
-		ttlcache.WithTTL[string, any](30 * time.Second),
+		ttlcache.WithTTL[string, any](30*time.Second),
+		ttlcache.WithDisableTouchOnHit[string, any](),
 	)
 	go Cache.Start()
 }
 
 // GetCachedDeployment attempts to retrieve a deployment from cache
 func GetCachedDeployment(key string) (*model.Deployment, bool) {
-	Cache.DeleteExpired()
 	if !Cache.Has(key) {
 		return nil, false
 	}
@@ -39,7 +39,6 @@ func SetCachedDeployment(key string, deployment *model.Deployment) {
 
 // GetCachedSession attempts to retrieve a session from cache
 func GetCachedSession(sessionID uint64) (*model.Session, bool) {
-	Cache.DeleteExpired()
 	if !Cache.Has(fmt.Sprintf("%d", sessionID)) {
 		return nil, false
 	}
