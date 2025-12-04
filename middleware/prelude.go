@@ -147,6 +147,8 @@ func handleExistingSession(c *fiber.Ctx, deployment model.Deployment, sessionTok
 
 	c.Locals("session", sessionID)
 
+	go utils.UpdateSessionLastActive(sessionID)
+
 	return c.Next()
 }
 

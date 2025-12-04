@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -1060,4 +1061,24 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 	SetCachedSession(sessionID, session)
 
 	return session, nil
+}
+
+func UpdateSessionLastActive(sessionID uint64) {
+	ctx := context.Background()
+	key := fmt.Sprintf("session:last_active:%d", sessionID)
+
+	if database.Redis.Get(ctx, key).Err() == nil {
+		return
+	}
+
+	database.Redis.Set(ctx, key, "1", 5*time.Minute)
+
+	database.Connection.Exec(`
+		UPDATE signins
+		SET last_active_at = NOW()
+		WHERE id = (
+			SELECT active_signin_id
+			FROM sessions
+			WHERE id = ?
+		)`, sessionID)
 }
