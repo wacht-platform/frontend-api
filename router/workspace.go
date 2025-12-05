@@ -13,7 +13,6 @@ func setupWorkspaceRoutes(app *fiber.App) {
 	router.Use(middleware.EnforceB2BSettings)
 
 	router.Post("/", workspaceHandler.CreateWorkspace)
-	router.Get("/:id", workspaceHandler.GetWorkspace)
 	router.Post("/:id/update", workspaceHandler.UpdateWorkspace)
 	router.Post("/:id/delete", workspaceHandler.DeleteWorkspace)
 

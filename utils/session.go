@@ -467,6 +467,30 @@ func parseWorkspaceRoleFromMap(roleData map[string]any) (*model.WorkspaceRole, e
 	return role, nil
 }
 
+func parseSegmentFromMap(segmentData map[string]any) (*model.Segment, error) {
+	if segmentData == nil {
+		return nil, fmt.Errorf("segment data is nil")
+	}
+
+	segment := &model.Segment{}
+
+	if id, err := getUint64FromMap(segmentData, "id"); err == nil {
+		segment.ID = id
+	}
+
+	segment.CreatedAt = getTimeFromMap(segmentData, "created_at")
+	segment.UpdatedAt = getTimeFromMap(segmentData, "updated_at")
+
+	if deploymentID, err := getUint64FromMap(segmentData, "deployment_id"); err == nil {
+		segment.DeploymentID = deploymentID
+	}
+
+	segment.Name = getStringFromMap(segmentData, "name")
+	segment.Type = model.SegmentType(getStringFromMap(segmentData, "type"))
+
+	return segment, nil
+}
+
 func GetSessionByID(sessionID uint64) (*model.Session, error) {
 	if cachedSession, found := GetCachedSession(sessionID); found {
 		return cachedSession, nil
@@ -631,6 +655,23 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			'[]'::json
 		) as user_social_connections,
 
+		-- User Segments (JSON aggregated)
+		COALESCE(
+			(SELECT json_agg(
+				json_build_object(
+					'id', s.id,
+					'created_at', s.created_at,
+					'updated_at', s.updated_at,
+					'deployment_id', s.deployment_id,
+					'name', s.name,
+					'type', s.type
+				)
+			) FROM user_segments us
+			JOIN segments s ON us.segment_id = s.id
+			WHERE us.user_id = au.id AND s.deleted_at IS NULL),
+			'[]'::json
+		) as user_segments,
+
 		-- Signin Attempts (JSON aggregated)
 		COALESCE(
 			(SELECT json_agg(
@@ -703,6 +744,23 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			'[]'::json
 		) as organization_roles,
 
+		-- Organization Segments (JSON aggregated)
+		COALESCE(
+			(SELECT json_agg(
+				json_build_object(
+					'id', s.id,
+					'created_at', s.created_at,
+					'updated_at', s.updated_at,
+					'deployment_id', s.deployment_id,
+					'name', s.name,
+					'type', s.type
+				)
+			) FROM organization_segments os
+			JOIN segments s ON os.segment_id = s.id
+			WHERE os.organization_id = ao.id AND s.deleted_at IS NULL),
+			'[]'::json
+		) as organization_segments,
+
 		-- Workspace Roles (JSON aggregated)
 		COALESCE(
 			(SELECT json_agg(
@@ -721,6 +779,23 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			WHERE wmr.workspace_membership_id = asi.active_workspace_membership_id),
 			'[]'::json
 		) as workspace_roles,
+
+		-- Workspace Segments (JSON aggregated)
+		COALESCE(
+			(SELECT json_agg(
+				json_build_object(
+					'id', s.id,
+					'created_at', s.created_at,
+					'updated_at', s.updated_at,
+					'deployment_id', s.deployment_id,
+					'name', s.name,
+					'type', s.type
+				)
+			) FROM workspace_segments ws
+			JOIN segments s ON ws.segment_id = s.id
+			WHERE ws.workspace_id = aw.id AND s.deleted_at IS NULL),
+			'[]'::json
+		) as workspace_segments,
 
 		-- All Signins for Session (JSON aggregated)
 		COALESCE(
@@ -897,6 +972,18 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 					json.Unmarshal([]byte(metadataStr), &session.ActiveSignin.User.PublicMetadata)
 				}
 			}
+
+			// Parse user segments
+			if segmentsJSON := getStringFromMap(rawResult, "user_segments"); segmentsJSON != "" && segmentsJSON != "[]" {
+				var segmentsArray []map[string]any
+				if err := json.Unmarshal([]byte(segmentsJSON), &segmentsArray); err == nil {
+					for _, segmentMap := range segmentsArray {
+						if segment, err := parseSegmentFromMap(segmentMap); err == nil {
+							session.ActiveSignin.User.Segments = append(session.ActiveSignin.User.Segments, segment)
+						}
+					}
+				}
+			}
 		}
 
 		// Parse active organization membership
@@ -945,6 +1032,18 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 					for _, roleMap := range rolesArray {
 						if role, err := parseOrganizationRoleFromMap(roleMap); err == nil {
 							session.ActiveSignin.ActiveOrganizationMembership.Roles = append(session.ActiveSignin.ActiveOrganizationMembership.Roles, role)
+						}
+					}
+				}
+			}
+
+			// Parse organization segments
+			if segmentsJSON := getStringFromMap(rawResult, "organization_segments"); segmentsJSON != "" && segmentsJSON != "[]" {
+				var segmentsArray []map[string]any
+				if err := json.Unmarshal([]byte(segmentsJSON), &segmentsArray); err == nil {
+					for _, segmentMap := range segmentsArray {
+						if segment, err := parseSegmentFromMap(segmentMap); err == nil {
+							session.ActiveSignin.ActiveOrganizationMembership.Organization.Segments = append(session.ActiveSignin.ActiveOrganizationMembership.Organization.Segments, segment)
 						}
 					}
 				}
@@ -1000,6 +1099,18 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 					for _, roleMap := range rolesArray {
 						if role, err := parseWorkspaceRoleFromMap(roleMap); err == nil {
 							session.ActiveSignin.ActiveWorkspaceMembership.Roles = append(session.ActiveSignin.ActiveWorkspaceMembership.Roles, role)
+						}
+					}
+				}
+			}
+
+			// Parse workspace segments
+			if segmentsJSON := getStringFromMap(rawResult, "workspace_segments"); segmentsJSON != "" && segmentsJSON != "[]" {
+				var segmentsArray []map[string]any
+				if err := json.Unmarshal([]byte(segmentsJSON), &segmentsArray); err == nil {
+					for _, segmentMap := range segmentsArray {
+						if segment, err := parseSegmentFromMap(segmentMap); err == nil {
+							session.ActiveSignin.ActiveWorkspaceMembership.Workspace.Segments = append(session.ActiveSignin.ActiveWorkspaceMembership.Workspace.Segments, segment)
 						}
 					}
 				}

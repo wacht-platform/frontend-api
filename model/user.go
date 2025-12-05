@@ -59,6 +59,7 @@ type User struct {
 	PrimaryPhoneNumber             *UserPhoneNumber        `json:"primary_phone_number"            gorm:"-:migration;foreignKey:PrimaryPhoneNumberID;references:ID"`
 	PrimaryEmailAddress            *UserEmailAddress       `json:"primary_email_address"           gorm:"-:migration;foreignKey:PrimaryEmailAddressID;references:ID"`
 	SecondFactorPolicy             SecondFactorPolicy      `json:"second_factor_policy"            gorm:"not null"`
+	Segments                       []*Segment              `json:"segments"                        gorm:"many2many:user_segments;"`
 	UserEmailAddresses             []UserEmailAddress      `json:"user_email_addresses"            gorm:"constraint:OnDelete:CASCADE;"`
 	UserPhoneNumbers               []UserPhoneNumber       `json:"user_phone_numbers"              gorm:"constraint:OnDelete:CASCADE;"`
 	UserAuthenticator              *UserAuthenticator      `json:"user_authenticator"              gorm:"constraint:OnDelete:CASCADE;"`

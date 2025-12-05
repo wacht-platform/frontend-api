@@ -16,6 +16,7 @@ type Workspace struct {
 	InviteOnly          bool                   `json:"invite_only"     gorm:"not null;default:true"`
 	Roles               []*WorkspaceRole       `json:"roles"`
 	Members             []*WorkspaceMembership `json:"members"`
+	Segments            []*Segment             `json:"segments"        gorm:"many2many:workspace_segments;"`
 	EnforceMFASetup     bool                   `json:"enforce_2fa" gorm:"not null;default:false"`
 	EnableIPRestriction bool                   `json:"enable_ip_restriction" gorm:"not null;default:false"`
 	WhitelistedIPs      pq.StringArray         `json:"whitelisted_ips" gorm:"type:text[]"`
@@ -34,6 +35,7 @@ type PublicWorkspaceData struct {
 	EnforceMFASetup     bool              `json:"enforce_2fa" gorm:"not null;default:false"`
 	EnableIPRestriction bool              `json:"enable_ip_restriction" gorm:"not null;default:false"`
 	PublicMetadata      datatypes.JSONMap `json:"public_metadata" gorm:"not null"`
+	Segments            []*Segment        `json:"segments"`
 }
 
 func (PublicWorkspaceData) TableName() string {

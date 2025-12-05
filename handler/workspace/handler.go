@@ -157,6 +157,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 	if err := database.Connection.
 		Preload("Members", "user_id = ?", session.ActiveSignin.UserID).
 		Preload("Members.Roles").
+		Preload("Segments").
 		First(&finalWorkspace, workspace.ID).Error; err != nil {
 		log.Printf("Failed to fetch created workspace for response: %v", err)
 		return handler.SendSuccess(c, fiber.Map{"workspace": workspace})
@@ -180,44 +181,8 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) GetWorkspace(c *fiber.Ctx) error {
-	workspaceIDStr := c.Params("id")
-	workspaceID, err := getuint64Param(c, "id")
-	if err != nil {
-		return handler.SendBadRequest(c, err, err.Error())
-	}
-
-	session := handler.GetSession(c)
-	if session.ActiveSignin == nil {
-		return handler.SendUnauthorized(c, nil, "No active sign in")
-	}
-
-	var workspace model.Workspace
-	if err := database.Connection.First(&workspace, workspaceID).Error; err != nil {
-		return handler.SendNotFound(c, nil, "Workspace not found")
-	}
-
-	// Check if user is a member to allow access
-	var membership model.WorkspaceMembership
-	if err := database.Connection.Where(
-		"workspace_id = ? AND user_id = ?",
-		workspaceIDStr, // Use string for direct param match if that's how it was stored
-		session.ActiveSignin.UserID,
-	).Preload("Roles").First(&membership).Error; err != nil {
-		return handler.SendForbidden(
-			c,
-			nil,
-			"Not a member of this workspace",
-		)
-	}
-
-	return handler.SendSuccess(c, fiber.Map{
-		"workspace":  workspace,
-		"membership": membership,
-	})
-}
-
 func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
+
 	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, err.Error())
@@ -655,7 +620,7 @@ func (h *Handler) UpdateWorkspace(c *fiber.Ctx) error {
 	}
 
 	var workspace model.Workspace
-	if err := database.Connection.First(&workspace, workspaceID).Error; err != nil {
+	if err := database.Connection.Preload("Segments", "deleted_at IS NULL").First(&workspace, workspaceID).Error; err != nil {
 		return handler.SendNotFound(c, nil, "Workspace not found")
 	}
 

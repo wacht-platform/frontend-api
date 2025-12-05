@@ -75,10 +75,16 @@ type userAuthenticatorJSON struct {
 	OtpUrl    string `json:"otp_url"`
 }
 
-// parseUserEmailAddressesJSON parses the JSON string into a slice of UserEmailAddress
-// Handles JSON parsing errors gracefully without breaking the response
+type segmentJSON struct {
+	ID           string `json:"id"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+	DeploymentID string `json:"deployment_id"`
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+}
+
 func parseUserEmailAddressesJSON(jsonStr string) []model.UserEmailAddress {
-	// Handle empty, null, or empty array cases
 	if jsonStr == "" || jsonStr == "[]" || jsonStr == "null" {
 		return []model.UserEmailAddress{}
 	}
@@ -252,6 +258,41 @@ func parseUserAuthenticatorJSON(jsonStr string) *model.UserAuthenticator {
 	}
 }
 
+func parseSegmentsJSON(jsonStr string) []*model.Segment {
+	if jsonStr == "" || jsonStr == "[]" || jsonStr == "null" {
+		return []*model.Segment{}
+	}
+
+	var jsonSegments []segmentJSON
+	if err := json.Unmarshal([]byte(jsonStr), &jsonSegments); err != nil {
+		log.Printf("Error parsing segments JSON: %v, JSON: %s", err, jsonStr)
+		return []*model.Segment{}
+	}
+
+	var segments []*model.Segment
+	for _, jsonSeg := range jsonSegments {
+		id, err := strconv.ParseUint(jsonSeg.ID, 10, 64)
+		if err != nil {
+			continue
+		}
+		deploymentID, _ := strconv.ParseUint(jsonSeg.DeploymentID, 10, 64)
+		createdAt, _ := time.Parse(time.RFC3339, jsonSeg.CreatedAt)
+		updatedAt, _ := time.Parse(time.RFC3339, jsonSeg.UpdatedAt)
+
+		segments = append(segments, &model.Segment{
+			Model: model.Model{
+				ID:        id,
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
+			},
+			DeploymentID: deploymentID,
+			Name:         jsonSeg.Name,
+			Type:         model.SegmentType(jsonSeg.Type),
+		})
+	}
+	return segments
+}
+
 func (h *Handler) GetUser(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 
@@ -343,6 +384,23 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 			) as social_connections_json,
 
 			COALESCE(
+				(SELECT json_agg(
+					json_build_object(
+						'id', s.id::text,
+						'created_at', s.created_at,
+						'updated_at', s.updated_at,
+						'deployment_id', s.deployment_id::text,
+						'name', s.name,
+						'type', s.type
+					)
+				)
+				FROM user_segments us
+				JOIN segments s ON us.segment_id = s.id
+				WHERE us.user_id = u.id AND s.deleted_at IS NULL
+				), '[]'::json
+			) as segments_json,
+
+			COALESCE(
 				(SELECT json_build_object(
 					'id', ua.id::text,
 					'created_at', ua.created_at,
@@ -408,6 +466,7 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 	user.UserEmailAddresses = parseUserEmailAddressesJSON(queryResult.UserEmailAddressesJSON)
 	user.UserPhoneNumbers = parseUserPhoneNumbersJSON(queryResult.UserPhoneNumbersJSON)
 	user.SocialConnections = parseSocialConnectionsJSON(queryResult.SocialConnectionsJSON)
+	user.Segments = parseSegmentsJSON(queryResult.SegmentsJSON)
 	user.UserAuthenticator = parseUserAuthenticatorJSON(queryResult.UserAuthenticatorJSON)
 
 	if user.PrimaryEmailAddressID != nil {
@@ -1544,7 +1603,23 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 				JOIN organization_roles ON organization_membership_roles.organization_role_id = organization_roles.id
 				WHERE organization_membership_roles.organization_membership_id = organization_memberships.id
 				), '[]'::json
-			) as roles_json
+			) as roles_json,
+			COALESCE(
+				(SELECT json_agg(
+					json_build_object(
+						'id', s.id::text,
+						'created_at', s.created_at,
+						'updated_at', s.updated_at,
+						'deployment_id', s.deployment_id::text,
+						'name', s.name,
+						'type', s.type
+					)
+				)
+				FROM organization_segments os
+				JOIN segments s ON os.segment_id = s.id
+				WHERE os.organization_id = organizations.id AND s.deleted_at IS NULL
+				), '[]'::json
+			) as segments_json
 		FROM organization_memberships
 		JOIN organizations ON organization_memberships.organization_id = organizations.id
 		WHERE organization_memberships.user_id = ?
@@ -1598,6 +1673,8 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 		} else {
 			memberships[i].PublicMetadata = make(datatypes.JSONMap)
 		}
+
+		memberships[i].Organization.Segments = parseSegmentsJSON(result.SegmentsJSON)
 
 		var roles []*model.OrganizationRole
 		log.Println(result.RolesJSON)
@@ -1679,7 +1756,23 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 				JOIN workspace_roles ON workspace_membership_roles.workspace_role_id = workspace_roles.id
 				WHERE workspace_membership_roles.workspace_membership_id = workspace_memberships.id
 				), '[]'::json
-			) as roles_json
+			) as roles_json,
+			COALESCE(
+				(SELECT json_agg(
+					json_build_object(
+						'id', s.id::text,
+						'created_at', s.created_at,
+						'updated_at', s.updated_at,
+						'deployment_id', s.deployment_id::text,
+						'name', s.name,
+						'type', s.type
+					)
+				)
+				FROM workspace_segments ws
+				JOIN segments s ON ws.segment_id = s.id
+				WHERE ws.workspace_id = workspaces.id AND s.deleted_at IS NULL
+				), '[]'::json
+			) as segments_json
 		FROM workspace_memberships
 		JOIN workspaces ON workspace_memberships.workspace_id = workspaces.id
 		JOIN organizations ON workspace_memberships.organization_id = organizations.id
@@ -1764,6 +1857,8 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 		} else {
 			memberships[i].PublicMetadata = make(datatypes.JSONMap)
 		}
+
+		memberships[i].Workspace.Segments = parseSegmentsJSON(result.SegmentsJSON)
 
 		var roles []*model.WorkspaceRole
 		log.Println(result.RolesJSON)

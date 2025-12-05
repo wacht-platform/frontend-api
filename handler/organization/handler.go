@@ -238,7 +238,8 @@ func (h *Handler) UpdateOrganization(
 	if err := database.Connection.
 		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
 		Preload("Roles").
-		Joins("Organization").
+		Preload("Organization").
+		Preload("Organization.Segments", "deleted_at IS NULL").
 		First(&membership).
 		Error; err != nil {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")

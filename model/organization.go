@@ -15,6 +15,7 @@ type Organization struct {
 	MemberCount             uint32                    `json:"member_count"    gorm:"not null"`
 	Roles                   []*OrganizationRole       `json:"roles"`
 	Members                 []*OrganizationMembership `json:"members"`
+	Segments                []*Segment                `json:"segments"        gorm:"many2many:organization_segments;"`
 	Workspaces              []*Workspace              `json:"workspaces"`
 	WorkspaceRoles          []*WorkspaceRole          `json:"workspace_roles"`
 	WorkspaceMembers        []*WorkspaceMembership    `json:"workspace_members"`
@@ -40,6 +41,7 @@ type PublicOrganizationData struct {
 	EnforceMFASetup         bool              `json:"enforce_mfa" gorm:"not null;default:false"`
 	EnableIPRestriction     bool              `json:"enable_ip_restriction" gorm:"not null;default:false"`
 	PublicMetadata          datatypes.JSONMap `json:"public_metadata" gorm:"not null"`
+	Segments                []*Segment        `json:"segments"`
 }
 
 func (PublicOrganizationData) TableName() string {
