@@ -35,7 +35,7 @@ type PublicWorkspaceData struct {
 	EnforceMFASetup     bool              `json:"enforce_2fa" gorm:"not null;default:false"`
 	EnableIPRestriction bool              `json:"enable_ip_restriction" gorm:"not null;default:false"`
 	PublicMetadata      datatypes.JSONMap `json:"public_metadata" gorm:"not null"`
-	Segments            []*Segment        `json:"segments"`
+	Segments            []*Segment        `json:"segments" gorm:"many2many:workspace_segments;"`
 }
 
 func (PublicWorkspaceData) TableName() string {

@@ -41,7 +41,7 @@ type PublicOrganizationData struct {
 	EnforceMFASetup         bool              `json:"enforce_mfa" gorm:"not null;default:false"`
 	EnableIPRestriction     bool              `json:"enable_ip_restriction" gorm:"not null;default:false"`
 	PublicMetadata          datatypes.JSONMap `json:"public_metadata" gorm:"not null"`
-	Segments                []*Segment        `json:"segments"`
+	Segments                []*Segment        `json:"segments" gorm:"many2many:organization_segments;"`
 }
 
 func (PublicOrganizationData) TableName() string {
