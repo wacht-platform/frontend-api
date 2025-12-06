@@ -487,7 +487,7 @@ func (h *Handler) handleImpersonationSignIn(c *fiber.Ctx, b SignInRequest, d mod
 			return err
 		}
 
-		signIn = h.service.CreateSignin(userID, session.ID, c, 600)
+		signIn = h.service.CreateSignin(userID, session.ID, c, 1200)
 		if err := tx.Create(signIn).Error; err != nil {
 			return err
 		}
