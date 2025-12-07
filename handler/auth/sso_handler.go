@@ -433,28 +433,22 @@ func validateSAMLResponse(
 	}
 
 	log.Printf("[validateSAMLResponse] Decoded SAML response, length=%d bytes", len(samlResponseXML))
-	log.Printf("[validateSAMLResponse] SAML Response XML (first 500 chars): %s", truncateString(string(samlResponseXML), 500))
+	log.Printf("[validateSAMLResponse] FULL SAML Response XML:\n%s", string(samlResponseXML))
 
 	acsURL, _ := url.Parse(fmt.Sprintf("https://%s/auth/sso/callback", deployment.BackendHost))
 	log.Printf("[validateSAMLResponse] Parsing with ACS URL: %s", acsURL.String())
+	log.Printf("[validateSAMLResponse] Expected IdP Entity ID: %s", connection.IdpEntityID)
+	log.Printf("[validateSAMLResponse] IdP SSO URL: %s", connection.IdpSSOURL)
+	log.Printf("[validateSAMLResponse] FULL IdP Certificate:\n%s", connection.IdpCertificate)
 
 	assertion, err := sp.ParseXMLResponse(samlResponseXML, []string{""}, *acsURL)
 	if err != nil {
 		log.Printf("[validateSAMLResponse] ParseXMLResponse FAILED: %v", err)
-		log.Printf("[validateSAMLResponse] IdP Entity ID: %s", connection.IdpEntityID)
-		log.Printf("[validateSAMLResponse] IdP SSO URL: %s", connection.IdpSSOURL)
-		return nil, fmt.Errorf("Authentication failed: %v", err)
+		return nil, fmt.Errorf("authentication failed: %v", err)
 	}
 
 	log.Printf("[validateSAMLResponse] SUCCESS! Subject NameID: %s", assertion.Subject.NameID.Value)
 	return assertion, nil
-}
-
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
 }
 
 func encodeRelayState(attemptID uint64, redirectURI string, deploymentID uint64) string {
