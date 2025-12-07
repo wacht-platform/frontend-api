@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"encoding/xml"
 	"fmt"
+	"log"
 	"math/big"
 	"net/url"
 	"strconv"
@@ -84,6 +85,8 @@ func (h *Handler) EnterpriseSSOCallback(c *fiber.Ctx) error {
 	samlResponse := c.FormValue("SAMLResponse")
 	relayState := c.FormValue("RelayState")
 
+	log.Printf("[SSO Callback] SAMLResponse length: %d, RelayState: %s", len(samlResponse), relayState)
+
 	if samlResponse == "" {
 		return handler.SendBadRequest(c, nil, "SAMLResponse is required")
 	}
@@ -92,14 +95,21 @@ func (h *Handler) EnterpriseSSOCallback(c *fiber.Ctx) error {
 
 	attemptID, redirectURI, err := decodeRelayState(relayState, deployment.ID)
 	if err != nil {
+		log.Printf("[SSO Callback] Failed to decode RelayState: %v", err)
 		return handler.SendBadRequest(c, nil, "Invalid RelayState")
 	}
+
+	log.Printf("[SSO Callback] Decoded attemptID: %d, redirectURI: %s", attemptID, redirectURI)
 
 	// Lookup attempt by ID from RelayState (not by session)
 	var attempt model.SignInAttempt
 	if err := database.Connection.Where("id = ?", attemptID).First(&attempt).Error; err != nil {
+		log.Printf("[SSO Callback] Failed to find attempt with ID %d: %v", attemptID, err)
 		return handler.SendBadRequest(c, nil, "Invalid or expired authentication attempt")
 	}
+
+	log.Printf("[SSO Callback] Found attempt: ID=%d, SessionID=%d, CreatedAt=%v, ConnectionID=%v",
+		attempt.ID, attempt.SessionID, attempt.CreatedAt, attempt.EnterpriseConnectionID)
 
 	// Load the original session from the attempt
 	var session model.Session
@@ -107,10 +117,15 @@ func (h *Handler) EnterpriseSSOCallback(c *fiber.Ctx) error {
 		Preload("Signins").
 		Preload("SigninAttempts").
 		First(&session).Error; err != nil {
+		log.Printf("[SSO Callback] Failed to find session with ID %d: %v", attempt.SessionID, err)
 		return handler.SendBadRequest(c, nil, "Session not found")
 	}
 
+	log.Printf("[SSO Callback] Found session: ID=%d, AttemptAge=%v", session.ID, time.Since(attempt.CreatedAt))
+
 	if time.Since(attempt.CreatedAt) > 10*time.Minute {
+		log.Printf("[SSO Callback] Attempt expired! CreatedAt=%v, Now=%v, Age=%v",
+			attempt.CreatedAt, time.Now(), time.Since(attempt.CreatedAt))
 		return handler.SendBadRequest(c, nil, "Authentication attempt has expired")
 	}
 
