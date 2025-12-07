@@ -1,12 +1,15 @@
 package auth
 
 import (
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/pem"
 	"encoding/xml"
 	"fmt"
+	"math/big"
 	"net/url"
 	"strconv"
 	"strings"
@@ -442,9 +445,9 @@ func (h *Handler) SSOMetadata(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to get deployment keypair")
 	}
 
-	keyBlock, _ := pem.Decode([]byte(keypair.PrivateKey))
+	keyBlock, _ := pem.Decode([]byte(*keypair.SamlPrivateKey))
 	if keyBlock == nil {
-		return handler.SendInternalServerError(c, nil, "Failed to parse private key PEM")
+		return handler.SendInternalServerError(c, nil, "Failed to parse SAML private key PEM")
 	}
 
 	var privKey *rsa.PrivateKey
@@ -452,19 +455,35 @@ func (h *Handler) SSOMetadata(c *fiber.Ctx) error {
 	if err != nil {
 		privKey, err = x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
 		if err != nil {
-			return handler.SendInternalServerError(c, err, "Failed to parse private key")
+			return handler.SendInternalServerError(c, err, "Failed to parse SAML private key")
 		}
 	} else {
-		privKey = pk.(*rsa.PrivateKey)
+		var ok bool
+		privKey, ok = pk.(*rsa.PrivateKey)
+		if !ok {
+			return handler.SendInternalServerError(c, nil, "SAML private key is not RSA")
+		}
 	}
 
-	certBlock, _ := pem.Decode([]byte(keypair.PublicKey))
-	if certBlock == nil {
-		return handler.SendInternalServerError(c, nil, "Failed to parse certificate PEM")
+	certTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{deployment.BackendHost},
+			CommonName:   deployment.BackendHost,
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
 	}
-	cert, err := x509.ParseCertificate(certBlock.Bytes)
+	certDER, err := x509.CreateCertificate(rand.Reader, certTemplate, certTemplate, &privKey.PublicKey, privKey)
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to parse certificate")
+		return handler.SendInternalServerError(c, err, "Failed to create SAML certificate")
+	}
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to parse SAML certificate")
 	}
 
 	acsURL, _ := url.Parse(fmt.Sprintf("https://%s/auth/sso/callback", deployment.BackendHost))
