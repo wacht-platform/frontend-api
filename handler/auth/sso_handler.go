@@ -446,7 +446,12 @@ func validateSAMLResponse(
 		log.Printf("[validateSAMLResponse] ParseXMLResponse FAILED!")
 		log.Printf("[validateSAMLResponse] Error type: %T", err)
 		log.Printf("[validateSAMLResponse] Error message: %v", err)
-		log.Printf("[validateSAMLResponse] Error details: %v", err.Error())
+
+		// Try to extract details from InvalidResponseError
+		if invalidErr, ok := err.(*saml.InvalidResponseError); ok {
+			log.Printf("[validateSAMLResponse] InvalidResponseError.Now: %v", invalidErr.Now)
+			log.Printf("[validateSAMLResponse] InvalidResponseError.PrivateErr: %v", invalidErr.PrivateErr)
+		}
 
 		return nil, fmt.Errorf("authentication failed: %v", err)
 	}
