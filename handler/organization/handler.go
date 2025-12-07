@@ -1402,11 +1402,18 @@ func (h *Handler) CreateEnterpriseConnection(c *fiber.Ctx) error {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
+	var domain model.OrganizationDomain
+	if err := database.Connection.
+		Where("id = ? AND organization_id = ? AND verified = true", b.DomainID, orgID).
+		First(&domain).Error; err != nil {
+		return handler.SendBadRequest(c, nil, "Domain must be verified before configuring SSO")
+	}
+
 	connection := model.EnterpriseConnection{
 		ID:             snowflake.ID(),
 		OrganizationID: getuint64(orgID),
 		DeploymentID:   d.ID,
-		DomainID:       b.DomainID,
+		DomainID:       &b.DomainID,
 		Protocol:       b.Protocol,
 		IdpEntityID:    b.IdpEntityID,
 		IdpSSOURL:      b.IdpSSOURL,

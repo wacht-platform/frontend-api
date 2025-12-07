@@ -68,11 +68,11 @@ type WorkspaceInfo struct {
 }
 
 type CreateEnterpriseConnectionRequest struct {
-	DomainID       *uint64 `form:"domain_id,string"`
-	Protocol       string  `form:"protocol" validate:"required,oneof=saml oidc"`
-	IdpEntityID    string  `form:"idp_entity_id" validate:"required"`
-	IdpSSOURL      string  `form:"idp_sso_url" validate:"required,url"`
-	IdpCertificate string  `form:"idp_certificate" validate:"required"`
+	DomainID       uint64 `form:"domain_id,string" validate:"required"`
+	Protocol       string `form:"protocol" validate:"required,oneof=saml oidc"`
+	IdpEntityID    string `form:"idp_entity_id" validate:"required"`
+	IdpSSOURL      string `form:"idp_sso_url" validate:"required,url"`
+	IdpCertificate string `form:"idp_certificate" validate:"required"`
 }
 
 type UpdateEnterpriseConnectionRequest struct {
