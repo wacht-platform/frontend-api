@@ -443,7 +443,11 @@ func validateSAMLResponse(
 
 	assertion, err := sp.ParseXMLResponse(samlResponseXML, []string{""}, *acsURL)
 	if err != nil {
-		log.Printf("[validateSAMLResponse] ParseXMLResponse FAILED: %v", err)
+		log.Printf("[validateSAMLResponse] ParseXMLResponse FAILED!")
+		log.Printf("[validateSAMLResponse] Error type: %T", err)
+		log.Printf("[validateSAMLResponse] Error message: %v", err)
+		log.Printf("[validateSAMLResponse] Error details: %v", err.Error())
+
 		return nil, fmt.Errorf("authentication failed: %v", err)
 	}
 
