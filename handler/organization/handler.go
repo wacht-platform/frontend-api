@@ -1274,11 +1274,6 @@ func (h *Handler) VerifyOrganizationDomain(
 		})
 	}
 
-	const maxVerificationAttempts = 5
-	if domain.VerificationAttempts >= maxVerificationAttempts {
-		return handler.SendBadRequest(c, nil, "Maximum verification attempts exceeded. Please delete this domain and add it again to retry verification.")
-	}
-
 	domain.VerificationAttempts++
 	if err := database.Connection.Save(&domain).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to update domain verification attempts")
@@ -1288,16 +1283,16 @@ func (h *Handler) VerifyOrganizationDomain(
 
 	txtRecords, err := net.LookupTXT(fullRecordName)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify domain. Please ensure you've added the TXT record '%s' with value '%s'. Attempts remaining: %d",
-			fullRecordName, domain.VerificationDnsRecordData, maxVerificationAttempts-domain.VerificationAttempts)
+		msg := fmt.Sprintf("Failed to verify domain. Please ensure you've added the TXT record '%s' with value '%s'",
+			fullRecordName, domain.VerificationDnsRecordData)
 		return handler.SendBadRequest(c, err, msg)
 	}
 
 	verified := slices.Contains(txtRecords, domain.VerificationDnsRecordData)
 
 	if !verified {
-		msg := fmt.Sprintf("Verification failed. Please ensure you've added the TXT record '%s' with value '%s'. Attempts remaining: %d",
-			fullRecordName, domain.VerificationDnsRecordData, maxVerificationAttempts-domain.VerificationAttempts)
+		msg := fmt.Sprintf("Verification failed. Please ensure you've added the TXT record '%s' with value '%s'",
+			fullRecordName, domain.VerificationDnsRecordData)
 		return handler.SendBadRequest(c, nil, msg)
 	}
 
