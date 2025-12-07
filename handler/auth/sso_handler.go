@@ -58,20 +58,23 @@ func (h *Handler) SSOLogin(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to get deployment keypair")
 	}
 
-	attempt := model.NewSignInAttempt(model.SignInMethodEnterpriseSso)
-	attempt.SessionID = session.ID
-	attempt.EnterpriseConnectionID = &connection.ID
-
-	if err := database.Connection.Create(attempt).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to create sign-in attempt")
-	}
-
 	sp, err := buildServiceProvider(connection, &deployment, keypair)
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to build SAML service provider")
 	}
 
 	authnRequest, _ := sp.MakeAuthenticationRequest(connection.IdpSSOURL, saml.HTTPRedirectBinding, saml.HTTPPostBinding)
+
+	requestID := authnRequest.ID
+	attempt := model.NewSignInAttempt(model.SignInMethodEnterpriseSso)
+	attempt.SessionID = session.ID
+	attempt.EnterpriseConnectionID = &connection.ID
+	attempt.SamlRequestID = &requestID
+
+	if err := database.Connection.Create(attempt).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to create sign-in attempt")
+	}
+
 	relayState := encodeRelayState(attempt.ID, redirectURI, deployment.ID)
 	redirectURL, _ := authnRequest.Redirect(relayState, sp)
 
@@ -144,7 +147,14 @@ func (h *Handler) EnterpriseSSOCallback(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to get deployment keypair")
 	}
 
-	assertion, err := validateSAMLResponse(connection, samlResponse, &deployment, keypair)
+	// Get the stored SAML request ID for InResponseTo validation
+	var requestIDs []string
+	if attempt.SamlRequestID != nil && *attempt.SamlRequestID != "" {
+		requestIDs = []string{*attempt.SamlRequestID}
+	}
+	log.Printf("[SSO Callback] Using request IDs for validation: %v", requestIDs)
+
+	assertion, err := validateSAMLResponse(connection, samlResponse, &deployment, keypair, requestIDs)
 	if err != nil {
 		return handler.SendBadRequest(c, nil, fmt.Sprintf("Invalid SAML response: %v", err))
 	}
@@ -415,6 +425,7 @@ func validateSAMLResponse(
 	samlResponseB64 string,
 	deployment *model.Deployment,
 	keypair model.DeploymentKeyPair,
+	requestIDs []string,
 ) (*saml.Assertion, error) {
 	log.Printf("[validateSAMLResponse] Starting validation for connection ID=%d", connection.ID)
 
@@ -441,7 +452,8 @@ func validateSAMLResponse(
 	log.Printf("[validateSAMLResponse] IdP SSO URL: %s", connection.IdpSSOURL)
 	log.Printf("[validateSAMLResponse] FULL IdP Certificate:\n%s", connection.IdpCertificate)
 
-	assertion, err := sp.ParseXMLResponse(samlResponseXML, []string{""}, *acsURL)
+	log.Printf("[validateSAMLResponse] Validating with request IDs: %v", requestIDs)
+	assertion, err := sp.ParseXMLResponse(samlResponseXML, requestIDs, *acsURL)
 	if err != nil {
 		log.Printf("[validateSAMLResponse] ParseXMLResponse FAILED!")
 		log.Printf("[validateSAMLResponse] Error type: %T", err)

@@ -82,6 +82,7 @@ type SignInAttempt struct {
 	Method                             SignInMethod                           `json:"method"          gorm:"not null"`
 	SSOProvider                        SocialConnectionProvider               `json:"sso_provider"`
 	EnterpriseConnectionID             *uint64                                `json:"enterprise_connection_id"`
+	SamlRequestID                      *string                                `json:"-"`
 	ExpiresAt                          time.Time                              `json:"expires_at"      gorm:"not null"`
 	CurrentStep                        SignInAttemptStep                      `json:"current_step"    gorm:"not null"`
 	RemainingSteps                     datatypes.JSONSlice[SignInAttemptStep] `json:"remaining_steps" gorm:"not null"`

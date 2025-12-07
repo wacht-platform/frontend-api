@@ -9,8 +9,8 @@ import (
 
 type Signin struct {
 	Model
-	SessionID                      uint64                  `json:"session_id,string"     gorm:"index:idx_session_user_id,unique"`
-	UserID                         *uint64                 `json:"user_id,string"        gorm:"index:idx_session_user_id,unique"`
+	SessionID                      uint64                  `json:"session_id,string"     gorm:"index"`
+	UserID                         *uint64                 `json:"user_id,string"        gorm:"index"`
 	ActiveOrganizationMembershipID *uint64                 `json:"active_organization_membership_id,string"`
 	ActiveWorkspaceMembershipID    *uint64                 `json:"active_workspace_membership_id,string"`
 	User                           *User                   `json:"user,omitempty" gorm:"foreignKey:UserID"`
