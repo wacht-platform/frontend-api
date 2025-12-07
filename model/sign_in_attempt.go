@@ -28,7 +28,8 @@ const (
 	SignInMethodPhoneOTP      SignInMethod = "phone_otp"
 	SignInMethodMagicLink     SignInMethod = "magic_link"
 	SignInMethodEmailOTP      SignInMethod = "email_otp"
-	SignInMethodSSO           SignInMethod = "sso"
+	SignInMethodSSO           SignInMethod = "sso"            // OAuth2 social login
+	SignInMethodEnterpriseSso SignInMethod = "enterprise_sso" // SAML/OIDC enterprise SSO
 	Passkey                   SignInMethod = "passkey"
 	SignInMethodImpersonation SignInMethod = "impersonation"
 )
@@ -80,6 +81,7 @@ type SignInAttempt struct {
 	SessionID                          uint64                                 `json:"session_id"      gorm:"not null"`
 	Method                             SignInMethod                           `json:"method"          gorm:"not null"`
 	SSOProvider                        SocialConnectionProvider               `json:"sso_provider"`
+	EnterpriseConnectionID             *uint64                                `json:"enterprise_connection_id"`
 	ExpiresAt                          time.Time                              `json:"expires_at"      gorm:"not null"`
 	CurrentStep                        SignInAttemptStep                      `json:"current_step"    gorm:"not null"`
 	RemainingSteps                     datatypes.JSONSlice[SignInAttemptStep] `json:"remaining_steps" gorm:"not null"`

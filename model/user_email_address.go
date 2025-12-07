@@ -8,14 +8,15 @@ import (
 type VerificationStrategy string
 
 const (
-	Otp            VerificationStrategy = "otp"
-	OauthGoogle    VerificationStrategy = "oauth_google"
-	OauthGithub    VerificationStrategy = "oauth_github"
-	OauthMicrosoft VerificationStrategy = "oauth_microsoft"
-	OauthFacebook  VerificationStrategy = "oauth_facebook"
-	OauthLinkedIn  VerificationStrategy = "oauth_linkedin"
-	OauthDiscord   VerificationStrategy = "oauth_discord"
-	OauthApple     VerificationStrategy = "oauth_apple"
+	Otp                               VerificationStrategy = "otp"
+	OauthGoogle                       VerificationStrategy = "oauth_google"
+	OauthGithub                       VerificationStrategy = "oauth_github"
+	OauthMicrosoft                    VerificationStrategy = "oauth_microsoft"
+	OauthFacebook                     VerificationStrategy = "oauth_facebook"
+	OauthLinkedIn                     VerificationStrategy = "oauth_linkedin"
+	OauthDiscord                      VerificationStrategy = "oauth_discord"
+	OauthApple                        VerificationStrategy = "oauth_apple"
+	VerificationStrategyEnterpriseSso VerificationStrategy = "enterprise_sso"
 )
 
 func (o *VerificationStrategy) Scan(value any) error {

@@ -13,8 +13,8 @@ func setupAuthRoutes(
 
 	router.Post("/signin", authHandler.SignIn)
 	router.Post("/signup", authHandler.SignUp)
-	router.Post("/oauth2/init", authHandler.InitSSO)
-	router.Get("/oauth2/callback", authHandler.SSOCallback)
+	router.Post("/oauth2/init", authHandler.InitOAuth2)
+	router.Get("/oauth2/callback", authHandler.OAuth2Callback)
 	router.Post("/complete-profile", authHandler.CompleteProfile)
 	router.Get("/identifier-availability", authHandler.CheckIdentifierAvailability)
 	router.Post("/prepare-verification", authHandler.PrepareVerification)
@@ -22,4 +22,8 @@ func setupAuthRoutes(
 	router.Get("/verify-magic-link", authHandler.VerifyMagicLink)
 	router.Post("/forgot-password", authHandler.ForgotPassword)
 	router.Post("/reset-password", authHandler.ResetPassword)
+	router.Post("/identify", authHandler.Identify)
+	router.Get("/sso/metadata", authHandler.SSOMetadata)
+	router.Get("/sso/login", authHandler.SSOLogin)
+	router.Post("/sso/callback", authHandler.EnterpriseSSOCallback)
 }

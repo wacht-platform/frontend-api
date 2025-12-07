@@ -33,4 +33,8 @@ func setupOrganizationRoutes(
 	router.Post("/:id/domains", orgHandler.AddOrganizationDomain)
 	router.Post("/:id/domains/:domainId/verify", orgHandler.VerifyOrganizationDomain)
 	router.Post("/:id/domains/:domainId/delete", orgHandler.DeleteOrganizationDomain)
+	router.Get("/:id/enterprise-connections", orgHandler.GetEnterpriseConnections)
+	router.Post("/:id/enterprise-connections", orgHandler.CreateEnterpriseConnection)
+	router.Post("/:id/enterprise-connections/:connectionId/update", orgHandler.UpdateEnterpriseConnection)
+	router.Post("/:id/enterprise-connections/:connectionId/delete", orgHandler.DeleteEnterpriseConnection)
 }

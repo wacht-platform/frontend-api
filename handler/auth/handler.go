@@ -973,7 +973,7 @@ func (h *Handler) AuthMethods(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, d.AuthSettings)
 }
 
-func (h *Handler) InitSSO(c *fiber.Ctx) error {
+func (h *Handler) InitOAuth2(c *fiber.Ctx) error {
 	provider := model.SocialConnectionProvider(c.Query("provider"))
 	if provider == "" {
 		return handler.SendBadRequest(
@@ -1037,7 +1037,7 @@ func (h *Handler) InitSSO(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) SSOCallback(c *fiber.Ctx) error {
+func (h *Handler) OAuth2Callback(c *fiber.Ctx) error {
 	code := c.Query("code")
 	deployment := handler.GetDeployment(c)
 	session := handler.GetSession(c)

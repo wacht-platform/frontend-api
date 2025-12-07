@@ -1350,3 +1350,158 @@ func (h *Handler) DeleteOrganizationDomain(
 		"success": true,
 	})
 }
+
+func (h *Handler) GetEnterpriseConnections(c *fiber.Ctx) error {
+	orgID := c.Params("id")
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	var membership model.OrganizationMembership
+	if err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
+		First(&membership).Error; err != nil {
+		return handler.SendForbidden(c, nil, "Not a member of this organization")
+	}
+
+	var connections []model.EnterpriseConnection
+	if err := database.Connection.
+		Where("organization_id = ?", orgID).
+		Preload("Domain").
+		Find(&connections).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to get enterprise connections")
+	}
+
+	return handler.SendSuccess(c, connections)
+}
+
+func (h *Handler) CreateEnterpriseConnection(c *fiber.Ctx) error {
+	orgID := c.Params("id")
+	d := handler.GetDeployment(c)
+	b, validation := handler.Validate[CreateEnterpriseConnectionRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
+	}
+
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	var membership model.OrganizationMembership
+	if err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&membership).Error; err != nil {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	hasPermission := h.service.hasPermission(membership, orgManagementPermissions)
+	if !hasPermission {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	connection := model.EnterpriseConnection{
+		ID:             snowflake.ID(),
+		OrganizationID: getuint64(orgID),
+		DeploymentID:   d.ID,
+		DomainID:       b.DomainID,
+		Protocol:       b.Protocol,
+		IdpEntityID:    b.IdpEntityID,
+		IdpSSOURL:      b.IdpSSOURL,
+		IdpCertificate: b.IdpCertificate,
+	}
+
+	if err := database.Connection.Create(&connection).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to create enterprise connection")
+	}
+
+	return handler.SendSuccess(c, connection)
+}
+
+func (h *Handler) UpdateEnterpriseConnection(c *fiber.Ctx) error {
+	orgID := c.Params("id")
+	connectionID := c.Params("connectionId")
+	b, validation := handler.Validate[UpdateEnterpriseConnectionRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
+	}
+
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	var membership model.OrganizationMembership
+	if err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&membership).Error; err != nil {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	hasPermission := h.service.hasPermission(membership, orgManagementPermissions)
+	if !hasPermission {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	var connection model.EnterpriseConnection
+	if err := database.Connection.
+		Where("id = ? AND organization_id = ?", connectionID, orgID).
+		First(&connection).Error; err != nil {
+		return handler.SendNotFound(c, nil, "Enterprise connection not found")
+	}
+
+	if b.DomainID != nil {
+		connection.DomainID = b.DomainID
+	}
+	if b.IdpEntityID != nil {
+		connection.IdpEntityID = *b.IdpEntityID
+	}
+	if b.IdpSSOURL != nil {
+		connection.IdpSSOURL = *b.IdpSSOURL
+	}
+	if b.IdpCertificate != nil {
+		connection.IdpCertificate = *b.IdpCertificate
+	}
+
+	if err := database.Connection.Save(&connection).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to update enterprise connection")
+	}
+
+	return handler.SendSuccess(c, connection)
+}
+
+func (h *Handler) DeleteEnterpriseConnection(c *fiber.Ctx) error {
+	orgID := c.Params("id")
+	connectionID := c.Params("connectionId")
+
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	var membership model.OrganizationMembership
+	if err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&membership).Error; err != nil {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	hasPermission := h.service.hasPermission(membership, orgManagementPermissions)
+	if !hasPermission {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	if err := database.Connection.
+		Delete(&model.EnterpriseConnection{ID: getuint64(connectionID), OrganizationID: getuint64(orgID)}).
+		Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to delete enterprise connection")
+	}
+
+	return handler.SendSuccess(c, fiber.Map{
+		"success": true,
+	})
+}
