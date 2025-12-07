@@ -24,6 +24,6 @@ func setupAuthRoutes(
 	router.Post("/reset-password", authHandler.ResetPassword)
 	router.Post("/identify", authHandler.Identify)
 	router.Get("/sso/metadata", authHandler.SSOMetadata)
-	router.Get("/sso/login", authHandler.SSOLogin)
+	router.Post("/sso/login", authHandler.SSOLogin)
 	router.Post("/sso/callback", authHandler.EnterpriseSSOCallback)
 }

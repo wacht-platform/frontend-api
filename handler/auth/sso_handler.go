@@ -71,7 +71,10 @@ func (h *Handler) SSOLogin(c *fiber.Ctx) error {
 	relayState := encodeRelayState(attempt.ID, redirectURI, deployment.ID)
 	redirectURL, _ := authnRequest.Redirect(relayState, sp)
 
-	return c.Redirect(redirectURL.String(), fiber.StatusFound)
+	return handler.SendSuccess(c, fiber.Map{
+		"sso_url": redirectURL.String(),
+		"session": session,
+	})
 }
 
 func (h *Handler) EnterpriseSSOCallback(c *fiber.Ctx) error {
@@ -83,16 +86,25 @@ func (h *Handler) EnterpriseSSOCallback(c *fiber.Ctx) error {
 	}
 
 	deployment := handler.GetDeployment(c)
-	session := handler.GetSession(c)
 
 	attemptID, redirectURI, err := decodeRelayState(relayState, deployment.ID)
 	if err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid RelayState")
 	}
 
+	// Lookup attempt by ID from RelayState (not by session)
 	var attempt model.SignInAttempt
-	if err := database.Connection.Where("id = ? AND session_id = ?", attemptID, session.ID).First(&attempt).Error; err != nil {
+	if err := database.Connection.Where("id = ?", attemptID).First(&attempt).Error; err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid or expired authentication attempt")
+	}
+
+	// Load the original session from the attempt
+	var session model.Session
+	if err := database.Connection.Where("id = ?", attempt.SessionID).
+		Preload("Signins").
+		Preload("SigninAttempts").
+		First(&session).Error; err != nil {
+		return handler.SendBadRequest(c, nil, "Session not found")
 	}
 
 	if time.Since(attempt.CreatedAt) > 10*time.Minute {
@@ -194,6 +206,22 @@ func (h *Handler) EnterpriseSSOCallback(c *fiber.Ctx) error {
 	}
 
 	if redirectURI != "" {
+		// For staging deployments, add session token to URL so frontend can store it
+		if !deployment.IsProduction() {
+			var keypair model.DeploymentKeyPair
+			if err := database.Connection.Where("deployment_id = ?", deployment.ID).First(&keypair).Error; err == nil {
+				token, err := utils.SignNewJWT(session.ID, deployment.BackendHost, time.Now().Add(6*time.Hour), keypair, database.Connection)
+				if err == nil {
+					parsedURL, parseErr := url.Parse(redirectURI)
+					if parseErr == nil {
+						q := parsedURL.Query()
+						q.Set("__dev_session__", token)
+						parsedURL.RawQuery = q.Encode()
+						redirectURI = parsedURL.String()
+					}
+				}
+			}
+		}
 		return c.Redirect(redirectURI, fiber.StatusFound)
 	}
 
