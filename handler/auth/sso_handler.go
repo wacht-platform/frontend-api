@@ -302,9 +302,14 @@ func buildServiceProvider(
 	deployment *model.Deployment,
 	keypair model.DeploymentKeyPair,
 ) (*saml.ServiceProvider, error) {
-	keyBlock, _ := pem.Decode([]byte(keypair.PrivateKey))
+	// Use SAML RSA key (not ECDSA used for JWT)
+	if keypair.SamlPrivateKey == nil {
+		return nil, fmt.Errorf("SAML private key not configured")
+	}
+
+	keyBlock, _ := pem.Decode([]byte(*keypair.SamlPrivateKey))
 	if keyBlock == nil {
-		return nil, fmt.Errorf("failed to parse private key PEM")
+		return nil, fmt.Errorf("failed to parse SAML private key PEM")
 	}
 
 	var privKey *rsa.PrivateKey
@@ -312,19 +317,36 @@ func buildServiceProvider(
 	if err != nil {
 		privKey, err = x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse private key: %v", err)
+			return nil, fmt.Errorf("failed to parse SAML private key: %v", err)
 		}
 	} else {
-		privKey = pk.(*rsa.PrivateKey)
+		var ok bool
+		privKey, ok = pk.(*rsa.PrivateKey)
+		if !ok {
+			return nil, fmt.Errorf("SAML private key is not RSA")
+		}
 	}
 
-	certBlock, _ := pem.Decode([]byte(keypair.PublicKey))
-	if certBlock == nil {
-		return nil, fmt.Errorf("failed to parse certificate PEM")
+	// Generate self-signed certificate from RSA key
+	certTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{deployment.BackendHost},
+			CommonName:   deployment.BackendHost,
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
 	}
-	cert, err := x509.ParseCertificate(certBlock.Bytes)
+	certDER, err := x509.CreateCertificate(rand.Reader, certTemplate, certTemplate, &privKey.PublicKey, privKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse certificate: %v", err)
+		return nil, fmt.Errorf("failed to create SAML certificate: %v", err)
+	}
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse SAML certificate: %v", err)
 	}
 
 	idpCertBlock, _ := pem.Decode([]byte(connection.IdpCertificate))
