@@ -14,4 +14,10 @@ type EnterpriseConnection struct {
 	IdpEntityID    string              `json:"idp_entity_id"`
 	IdpSSOURL      string              `json:"idp_sso_url"`
 	IdpCertificate string              `json:"idp_certificate"`
+
+	// OIDC-specific fields
+	OIDCClientID     *string `json:"oidc_client_id,omitempty"`
+	OIDCClientSecret *string `json:"-"` // Never expose in JSON responses
+	OIDCIssuerURL    *string `json:"oidc_issuer_url,omitempty"`
+	OIDCScopes       *string `json:"oidc_scopes,omitempty"`
 }

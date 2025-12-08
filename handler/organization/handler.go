@@ -1397,22 +1397,46 @@ func (h *Handler) CreateEnterpriseConnection(c *fiber.Ctx) error {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	var domain model.OrganizationDomain
-	if err := database.Connection.
-		Where("id = ? AND organization_id = ? AND verified = true", b.DomainID, orgID).
-		First(&domain).Error; err != nil {
-		return handler.SendBadRequest(c, nil, "Domain must be verified before configuring SSO")
-	}
-
 	connection := model.EnterpriseConnection{
 		ID:             snowflake.ID(),
 		OrganizationID: getuint64(orgID),
 		DeploymentID:   d.ID,
-		DomainID:       &b.DomainID,
 		Protocol:       b.Protocol,
-		IdpEntityID:    b.IdpEntityID,
-		IdpSSOURL:      b.IdpSSOURL,
-		IdpCertificate: b.IdpCertificate,
+	}
+
+	// Handle domain if provided
+	if b.DomainID != 0 {
+		var domain model.OrganizationDomain
+		if err := database.Connection.
+			Where("id = ? AND organization_id = ? AND verified = true", b.DomainID, orgID).
+			First(&domain).Error; err != nil {
+			return handler.SendBadRequest(c, nil, "Domain must be verified before configuring SSO")
+		}
+		connection.DomainID = &b.DomainID
+	}
+
+	// Set protocol-specific fields
+	switch b.Protocol {
+	case "saml":
+		connection.IdpEntityID = b.IdpEntityID
+		connection.IdpSSOURL = b.IdpSSOURL
+		connection.IdpCertificate = b.IdpCertificate
+	case "oidc":
+		if b.OIDCClientID != "" {
+			connection.OIDCClientID = &b.OIDCClientID
+		}
+		if b.OIDCClientSecret != "" {
+			connection.OIDCClientSecret = &b.OIDCClientSecret
+		}
+		if b.OIDCIssuerURL != "" {
+			connection.OIDCIssuerURL = &b.OIDCIssuerURL
+		}
+		if b.OIDCScopes != "" {
+			connection.OIDCScopes = &b.OIDCScopes
+		} else {
+			defaultScopes := "openid profile email"
+			connection.OIDCScopes = &defaultScopes
+		}
 	}
 
 	if err := database.Connection.Create(&connection).Error; err != nil {
@@ -1455,9 +1479,12 @@ func (h *Handler) UpdateEnterpriseConnection(c *fiber.Ctx) error {
 		return handler.SendNotFound(c, nil, "Enterprise connection not found")
 	}
 
+	// Common fields
 	if b.DomainID != nil {
 		connection.DomainID = b.DomainID
 	}
+
+	// SAML fields
 	if b.IdpEntityID != nil {
 		connection.IdpEntityID = *b.IdpEntityID
 	}
@@ -1466,6 +1493,20 @@ func (h *Handler) UpdateEnterpriseConnection(c *fiber.Ctx) error {
 	}
 	if b.IdpCertificate != nil {
 		connection.IdpCertificate = *b.IdpCertificate
+	}
+
+	// OIDC fields
+	if b.OIDCClientID != nil {
+		connection.OIDCClientID = b.OIDCClientID
+	}
+	if b.OIDCClientSecret != nil && *b.OIDCClientSecret != "" {
+		connection.OIDCClientSecret = b.OIDCClientSecret
+	}
+	if b.OIDCIssuerURL != nil {
+		connection.OIDCIssuerURL = b.OIDCIssuerURL
+	}
+	if b.OIDCScopes != nil {
+		connection.OIDCScopes = b.OIDCScopes
 	}
 
 	if err := database.Connection.Save(&connection).Error; err != nil {

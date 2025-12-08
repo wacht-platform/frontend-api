@@ -26,4 +26,5 @@ func setupAuthRoutes(
 	router.Get("/sso/metadata", authHandler.SSOMetadata)
 	router.Post("/sso/login", authHandler.SSOLogin)
 	router.Post("/sso/callback", authHandler.EnterpriseSSOCallback)
+	router.Get("/sso/oidc/callback", authHandler.OIDCCallback)
 }

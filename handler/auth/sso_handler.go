@@ -52,6 +52,12 @@ func (h *Handler) SSOLogin(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Invalid enterprise connection for this deployment")
 	}
 
+	// Route to OIDC handler if protocol is OIDC
+	if connection.Protocol == "oidc" {
+		return h.OIDCLogin(c, connection)
+	}
+
+	// SAML flow (default)
 	var keypair model.DeploymentKeyPair
 	if err := database.Connection.Where("deployment_id = ?", deployment.ID).First(&keypair).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to get deployment keypair")

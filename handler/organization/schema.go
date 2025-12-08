@@ -68,16 +68,32 @@ type WorkspaceInfo struct {
 }
 
 type CreateEnterpriseConnectionRequest struct {
-	DomainID       uint64 `form:"domain_id,string" validate:"required"`
-	Protocol       string `form:"protocol" validate:"required,oneof=saml oidc"`
-	IdpEntityID    string `form:"idp_entity_id" validate:"required"`
-	IdpSSOURL      string `form:"idp_sso_url" validate:"required,url"`
-	IdpCertificate string `form:"idp_certificate" validate:"required"`
+	DomainID uint64 `form:"domain_id,string"`
+	Protocol string `form:"protocol" validate:"required,oneof=saml oidc"`
+
+	// SAML fields (required if protocol is saml)
+	IdpEntityID    string `form:"idp_entity_id"`
+	IdpSSOURL      string `form:"idp_sso_url"`
+	IdpCertificate string `form:"idp_certificate"`
+
+	// OIDC fields (required if protocol is oidc)
+	OIDCClientID     string `form:"oidc_client_id"`
+	OIDCClientSecret string `form:"oidc_client_secret"`
+	OIDCIssuerURL    string `form:"oidc_issuer_url"`
+	OIDCScopes       string `form:"oidc_scopes"`
 }
 
 type UpdateEnterpriseConnectionRequest struct {
-	DomainID       *uint64 `form:"domain_id,string"`
+	DomainID *uint64 `form:"domain_id,string"`
+
+	// SAML fields
 	IdpEntityID    *string `form:"idp_entity_id"`
 	IdpSSOURL      *string `form:"idp_sso_url"`
 	IdpCertificate *string `form:"idp_certificate"`
+
+	// OIDC fields
+	OIDCClientID     *string `form:"oidc_client_id"`
+	OIDCClientSecret *string `form:"oidc_client_secret"`
+	OIDCIssuerURL    *string `form:"oidc_issuer_url"`
+	OIDCScopes       *string `form:"oidc_scopes"`
 }
