@@ -16,8 +16,8 @@ type EnterpriseConnection struct {
 	IdpCertificate string              `json:"idp_certificate"`
 
 	// OIDC-specific fields
-	OIDCClientID     *string `json:"oidc_client_id,omitempty"`
-	OIDCClientSecret *string `json:"-"` // Never expose in JSON responses
-	OIDCIssuerURL    *string `json:"oidc_issuer_url,omitempty"`
-	OIDCScopes       *string `json:"oidc_scopes,omitempty"`
+	OIDCClientID     *string `gorm:"column:oidc_client_id" json:"oidc_client_id,omitempty"`
+	OIDCClientSecret *string `gorm:"column:oidc_client_secret" json:"-"` // Never expose in JSON responses
+	OIDCIssuerURL    *string `gorm:"column:oidc_issuer_url" json:"oidc_issuer_url,omitempty"`
+	OIDCScopes       *string `gorm:"column:oidc_scopes" json:"oidc_scopes,omitempty"`
 }
