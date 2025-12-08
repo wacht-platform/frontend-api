@@ -9,7 +9,6 @@ import (
 	"encoding/pem"
 	"encoding/xml"
 	"fmt"
-	"log"
 	"math/big"
 	"net/url"
 	"strconv"
@@ -88,8 +87,6 @@ func (h *Handler) EnterpriseSSOCallback(c *fiber.Ctx) error {
 	samlResponse := c.FormValue("SAMLResponse")
 	relayState := c.FormValue("RelayState")
 
-	log.Printf("[SSO Callback] SAMLResponse length: %d, RelayState: %s", len(samlResponse), relayState)
-
 	if samlResponse == "" {
 		return handler.SendBadRequest(c, nil, "SAMLResponse is required")
 	}
@@ -98,37 +95,23 @@ func (h *Handler) EnterpriseSSOCallback(c *fiber.Ctx) error {
 
 	attemptID, redirectURI, err := decodeRelayState(relayState, deployment.ID)
 	if err != nil {
-		log.Printf("[SSO Callback] Failed to decode RelayState: %v", err)
 		return handler.SendBadRequest(c, nil, "Invalid RelayState")
 	}
 
-	log.Printf("[SSO Callback] Decoded attemptID: %d, redirectURI: %s", attemptID, redirectURI)
-
-	// Lookup attempt by ID from RelayState (not by session)
 	var attempt model.SignInAttempt
 	if err := database.Connection.Where("id = ?", attemptID).First(&attempt).Error; err != nil {
-		log.Printf("[SSO Callback] Failed to find attempt with ID %d: %v", attemptID, err)
 		return handler.SendBadRequest(c, nil, "Invalid or expired authentication attempt")
 	}
 
-	log.Printf("[SSO Callback] Found attempt: ID=%d, SessionID=%d, CreatedAt=%v, ConnectionID=%v",
-		attempt.ID, attempt.SessionID, attempt.CreatedAt, attempt.EnterpriseConnectionID)
-
-	// Load the original session from the attempt
 	var session model.Session
 	if err := database.Connection.Where("id = ?", attempt.SessionID).
 		Preload("Signins").
 		Preload("SigninAttempts").
 		First(&session).Error; err != nil {
-		log.Printf("[SSO Callback] Failed to find session with ID %d: %v", attempt.SessionID, err)
 		return handler.SendBadRequest(c, nil, "Session not found")
 	}
 
-	log.Printf("[SSO Callback] Found session: ID=%d, AttemptAge=%v", session.ID, time.Since(attempt.CreatedAt))
-
 	if time.Since(attempt.CreatedAt) > 10*time.Minute {
-		log.Printf("[SSO Callback] Attempt expired! CreatedAt=%v, Now=%v, Age=%v",
-			attempt.CreatedAt, time.Now(), time.Since(attempt.CreatedAt))
 		return handler.SendBadRequest(c, nil, "Authentication attempt has expired")
 	}
 
@@ -147,12 +130,10 @@ func (h *Handler) EnterpriseSSOCallback(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to get deployment keypair")
 	}
 
-	// Get the stored SAML request ID for InResponseTo validation
 	var requestIDs []string
 	if attempt.SamlRequestID != nil && *attempt.SamlRequestID != "" {
 		requestIDs = []string{*attempt.SamlRequestID}
 	}
-	log.Printf("[SSO Callback] Using request IDs for validation: %v", requestIDs)
 
 	assertion, err := validateSAMLResponse(connection, samlResponse, &deployment, keypair, requestIDs)
 	if err != nil {
@@ -427,48 +408,22 @@ func validateSAMLResponse(
 	keypair model.DeploymentKeyPair,
 	requestIDs []string,
 ) (*saml.Assertion, error) {
-	log.Printf("[validateSAMLResponse] Starting validation for connection ID=%d", connection.ID)
-
 	sp, err := buildServiceProvider(connection, deployment, keypair)
 	if err != nil {
-		log.Printf("[validateSAMLResponse] Failed to build service provider: %v", err)
 		return nil, err
 	}
 
-	log.Printf("[validateSAMLResponse] Service provider built successfully, ACS URL=%s", sp.AcsURL.String())
-
 	samlResponseXML, err := base64.StdEncoding.DecodeString(samlResponseB64)
 	if err != nil {
-		log.Printf("[validateSAMLResponse] Failed to decode base64: %v", err)
 		return nil, fmt.Errorf("failed to decode SAMLResponse: %v", err)
 	}
 
-	log.Printf("[validateSAMLResponse] Decoded SAML response, length=%d bytes", len(samlResponseXML))
-	log.Printf("[validateSAMLResponse] FULL SAML Response XML:\n%s", string(samlResponseXML))
-
 	acsURL, _ := url.Parse(fmt.Sprintf("https://%s/auth/sso/callback", deployment.BackendHost))
-	log.Printf("[validateSAMLResponse] Parsing with ACS URL: %s", acsURL.String())
-	log.Printf("[validateSAMLResponse] Expected IdP Entity ID: %s", connection.IdpEntityID)
-	log.Printf("[validateSAMLResponse] IdP SSO URL: %s", connection.IdpSSOURL)
-	log.Printf("[validateSAMLResponse] FULL IdP Certificate:\n%s", connection.IdpCertificate)
-
-	log.Printf("[validateSAMLResponse] Validating with request IDs: %v", requestIDs)
 	assertion, err := sp.ParseXMLResponse(samlResponseXML, requestIDs, *acsURL)
 	if err != nil {
-		log.Printf("[validateSAMLResponse] ParseXMLResponse FAILED!")
-		log.Printf("[validateSAMLResponse] Error type: %T", err)
-		log.Printf("[validateSAMLResponse] Error message: %v", err)
-
-		// Try to extract details from InvalidResponseError
-		if invalidErr, ok := err.(*saml.InvalidResponseError); ok {
-			log.Printf("[validateSAMLResponse] InvalidResponseError.Now: %v", invalidErr.Now)
-			log.Printf("[validateSAMLResponse] InvalidResponseError.PrivateErr: %v", invalidErr.PrivateErr)
-		}
-
 		return nil, fmt.Errorf("authentication failed: %v", err)
 	}
 
-	log.Printf("[validateSAMLResponse] SUCCESS! Subject NameID: %s", assertion.Subject.NameID.Value)
 	return assertion, nil
 }
 
