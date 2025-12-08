@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/ilabs/wacht-fe/database"
+	"github.com/ilabs/wacht-fe/handler/scim"
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/service"
 	"gorm.io/gorm"
@@ -26,6 +27,7 @@ type OrgService struct {
 	s3   *service.S3Service
 	db   *gorm.DB
 	nats *service.NatsService
+	scim *scim.SCIMService
 }
 
 func NewOrgService() *OrgService {
@@ -39,6 +41,7 @@ func NewOrgService() *OrgService {
 		s3:   service.NewS3Service(),
 		db:   database.Connection,
 		nats: natsService,
+		scim: scim.NewSCIMService(),
 	}
 }
 
@@ -62,4 +65,8 @@ func (s *OrgService) hasPermission(membership model.OrganizationMembership, requ
 		}
 	}
 	return false
+}
+
+func (s *OrgService) getSCIMService() *scim.SCIMService {
+	return s.scim
 }

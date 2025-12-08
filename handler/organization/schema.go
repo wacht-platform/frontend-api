@@ -97,3 +97,13 @@ type UpdateEnterpriseConnectionRequest struct {
 	OIDCIssuerURL    *string `form:"oidc_issuer_url"`
 	OIDCScopes       *string `form:"oidc_scopes"`
 }
+
+// SCIMTokenResponse is returned when generating or viewing SCIM tokens
+type SCIMTokenResponse struct {
+	Token       string `json:"token,omitempty"` // Only populated on generation (shown once)
+	TokenPrefix string `json:"token_prefix"`
+	Enabled     bool   `json:"enabled"`
+	CreatedAt   string `json:"created_at"`
+	LastUsedAt  string `json:"last_used_at,omitempty"`
+	SCIMBaseURL string `json:"scim_base_url"`
+}

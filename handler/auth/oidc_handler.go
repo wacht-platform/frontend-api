@@ -38,7 +38,8 @@ func (h *Handler) OIDCLogin(c *fiber.Ctx, connection *model.EnterpriseConnection
 		return handler.SendBadRequest(c, nil, "OIDC client ID not configured")
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	// Use OIDC Discovery to get proper endpoints
 	provider, err := oidc.NewProvider(ctx, *connection.OIDCIssuerURL)
@@ -191,7 +192,8 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Invalid enterprise connection")
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	// Use OIDC Discovery for proper endpoints
 	provider, err := oidc.NewProvider(ctx, *connection.OIDCIssuerURL)
@@ -285,7 +287,7 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 			First(&email).Error
 
 		if err == gorm.ErrRecordNotFound {
-			user, err = h.createOIDCUser(tx, userEmail, claims.GivenName, claims.FamilyName, connection, &deployment)
+			user, err = h.createOIDCUser(tx, userEmail, claims.GivenName, claims.FamilyName, &deployment)
 			if err != nil {
 				return err
 			}
@@ -396,7 +398,6 @@ func (h *Handler) createOIDCUser(
 	email string,
 	firstName string,
 	lastName string,
-	connection *model.EnterpriseConnection,
 	deployment *model.Deployment,
 ) (*model.User, error) {
 	primaryAddressID := snowflake.ID()

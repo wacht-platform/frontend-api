@@ -17,6 +17,7 @@ const (
 	OauthDiscord                      VerificationStrategy = "oauth_discord"
 	OauthApple                        VerificationStrategy = "oauth_apple"
 	VerificationStrategyEnterpriseSso VerificationStrategy = "enterprise_sso"
+	VerificationStrategySCIM          VerificationStrategy = "scim"
 )
 
 func (o *VerificationStrategy) Scan(value any) error {

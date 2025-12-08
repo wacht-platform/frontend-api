@@ -1612,3 +1612,161 @@ func (h *Handler) DeleteEnterpriseConnection(c *fiber.Ctx) error {
 		"success": true,
 	})
 }
+
+// GenerateSCIMToken creates a new SCIM bearer token for an enterprise connection
+func (h *Handler) GenerateSCIMToken(c *fiber.Ctx) error {
+	orgID := c.Params("id")
+	connectionID := c.Params("connectionId")
+	d := handler.GetDeployment(c)
+
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	var membership model.OrganizationMembership
+	if err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&membership).Error; err != nil {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	hasPermission := h.service.hasPermission(membership, orgManagementPermissions)
+	if !hasPermission {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	// Verify connection belongs to this org
+	connID := getuint64(connectionID)
+	orgIDInt := getuint64(orgID)
+
+	var connection model.EnterpriseConnection
+	if err := database.Connection.Where("id = ? AND organization_id = ?", connID, orgIDInt).
+		First(&connection).Error; err != nil {
+		return handler.SendNotFound(c, nil, "Enterprise connection not found")
+	}
+
+	// Generate new token
+	scimService := h.service.getSCIMService()
+	plainToken, token, err := scimService.GenerateToken(connID, d.ID, orgIDInt)
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to generate SCIM token")
+	}
+
+	baseURL := fmt.Sprintf("https://%s/scim/v2/%d", d.BackendHost, connID)
+
+	response := SCIMTokenResponse{
+		Token:       plainToken,
+		TokenPrefix: token.TokenPrefix,
+		Enabled:     token.Enabled,
+		CreatedAt:   token.CreatedAt.Format(time.RFC3339),
+		SCIMBaseURL: baseURL,
+	}
+
+	return handler.SendSuccess(c, response)
+}
+
+// GetSCIMToken retrieves SCIM token info for an enterprise connection (without the actual token)
+func (h *Handler) GetSCIMToken(c *fiber.Ctx) error {
+	orgID := c.Params("id")
+	connectionID := c.Params("connectionId")
+	d := handler.GetDeployment(c)
+
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	var membership model.OrganizationMembership
+	if err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&membership).Error; err != nil {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	hasPermission := h.service.hasPermission(membership, orgManagementPermissions)
+	if !hasPermission {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	connID := getuint64(connectionID)
+	orgIDInt := getuint64(orgID)
+
+	// Verify connection belongs to this org
+	var connection model.EnterpriseConnection
+	if err := database.Connection.Where("id = ? AND organization_id = ?", connID, orgIDInt).
+		First(&connection).Error; err != nil {
+		return handler.SendNotFound(c, nil, "Enterprise connection not found")
+	}
+
+	scimService := h.service.getSCIMService()
+	token, err := scimService.GetToken(connID)
+	if err != nil {
+		// No token exists yet
+		return handler.SendSuccess(c, fiber.Map{
+			"exists":        false,
+			"scim_base_url": fmt.Sprintf("https://%s/scim/v2/%d", d.BackendHost, connID),
+		})
+	}
+
+	response := SCIMTokenResponse{
+		TokenPrefix: token.TokenPrefix,
+		Enabled:     token.Enabled,
+		CreatedAt:   token.CreatedAt.Format(time.RFC3339),
+		SCIMBaseURL: fmt.Sprintf("https://%s/scim/v2/%d", d.BackendHost, connID),
+	}
+
+	if token.LastUsedAt != nil {
+		response.LastUsedAt = token.LastUsedAt.Format(time.RFC3339)
+	}
+
+	return handler.SendSuccess(c, fiber.Map{
+		"exists": true,
+		"token":  response,
+	})
+}
+
+// RevokeSCIMToken disables the SCIM token for an enterprise connection
+func (h *Handler) RevokeSCIMToken(c *fiber.Ctx) error {
+	orgID := c.Params("id")
+	connectionID := c.Params("connectionId")
+
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	var membership model.OrganizationMembership
+	if err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&membership).Error; err != nil {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	hasPermission := h.service.hasPermission(membership, orgManagementPermissions)
+	if !hasPermission {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	connID := getuint64(connectionID)
+	orgIDInt := getuint64(orgID)
+
+	// Verify connection belongs to this org
+	var connection model.EnterpriseConnection
+	if err := database.Connection.Where("id = ? AND organization_id = ?", connID, orgIDInt).
+		First(&connection).Error; err != nil {
+		return handler.SendNotFound(c, nil, "Enterprise connection not found")
+	}
+
+	scimService := h.service.getSCIMService()
+	if err := scimService.RevokeToken(connID); err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to revoke SCIM token")
+	}
+
+	return handler.SendSuccess(c, fiber.Map{
+		"success": true,
+	})
+}

@@ -31,6 +31,7 @@ func setupRoutes(app *fiber.App) {
 	setupWaitlistRoutes(app)
 	setupNotificationRoutes(app)
 	setupAgentRoutes(app)
+	setupSCIMRoutes(app)
 }
 
 func setupMiddleware(app *fiber.App) {

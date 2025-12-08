@@ -37,4 +37,9 @@ func setupOrganizationRoutes(
 	router.Post("/:id/enterprise-connections", orgHandler.CreateEnterpriseConnection)
 	router.Post("/:id/enterprise-connections/:connectionId/update", orgHandler.UpdateEnterpriseConnection)
 	router.Post("/:id/enterprise-connections/:connectionId/delete", orgHandler.DeleteEnterpriseConnection)
+
+	// SCIM token management
+	router.Post("/:id/enterprise-connections/:connectionId/scim/token", orgHandler.GenerateSCIMToken)
+	router.Get("/:id/enterprise-connections/:connectionId/scim/token", orgHandler.GetSCIMToken)
+	router.Post("/:id/enterprise-connections/:connectionId/scim/token/revoke", orgHandler.RevokeSCIMToken)
 }
