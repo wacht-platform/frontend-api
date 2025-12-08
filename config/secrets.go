@@ -63,4 +63,3 @@ func fetchSecret(ctx context.Context, client *secretmanager.Client, projectID, s
 
 	return string(result.Payload.Data), nil
 }
-

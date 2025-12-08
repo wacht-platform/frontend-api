@@ -95,28 +95,28 @@ func (e *EmailVerificationRecords) Value() (driver.Value, error) {
 
 type Deployment struct {
 	Model
-	MaintenanceMode           bool                         `json:"maintenance_mode"   gorm:"not null"`
-	BackendHost               string                       `json:"backend_host"       gorm:"not null"`
-	FrontendHost              string                       `json:"frontend_host"      gorm:"not null"`
-	MailFromHost              string                       `json:"mail_from_host"     gorm:"not null"`
-	PublishableKey            string                       `json:"publishable_key"    gorm:"not null"`
+	MaintenanceMode           bool                         `json:"maintenance_mode"            gorm:"not null"`
+	BackendHost               string                       `json:"backend_host"                gorm:"not null"`
+	FrontendHost              string                       `json:"frontend_host"               gorm:"not null"`
+	MailFromHost              string                       `json:"mail_from_host"              gorm:"not null"`
+	PublishableKey            string                       `json:"publishable_key"             gorm:"not null"`
 	UISettings                DeploymentUISettings         `json:"ui_settings"`
 	B2BSettings               DeploymentB2bSettings        `json:"b2b_settings"`
 	AuthSettings              DeploymentAuthSettings       `json:"auth_settings"`
 	Restrictions              DeploymentRestrictions       `json:"restrictions"`
-	SocialConnections         []DeploymentSocialConnection `json:"social_connections" gorm:"type:jsonb"`
+	SocialConnections         []DeploymentSocialConnection `json:"social_connections"          gorm:"type:jsonb"`
 	JwtTemplates              []DeploymentJwtTemplate      `json:"-"`
 	WorkspaceRoles            []WorkspaceRole              `json:"-"`
 	OrgRoles                  []OrganizationRole           `json:"-"`
 	EmailTemplates            *DeploymentEmailTemplate     `json:"email_templates"`
 	SmsTemplates              *DeploymentSmsTemplate       `json:"sms_templates"`
-	ProjectID                 uint64                       `json:"project_id"         gorm:"not null"`
+	ProjectID                 uint64                       `json:"project_id"                  gorm:"not null"`
 	Project                   Project                      `json:"-"`
-	Mode                      DeploymentMode               `json:"mode"               gorm:"not null"`
+	Mode                      DeploymentMode               `json:"mode"                        gorm:"not null"`
 	KepPair                   *DeploymentKeyPair           `json:"key_pair"`
 	DomainVerificationRecords *DomainVerificationRecords   `json:"domain_verification_records"`
 	EmailVerificationRecords  *EmailVerificationRecords    `json:"email_verification_records"`
-	DeletedAt                 gorm.DeletedAt               `gorm:"index" json:"-"`
+	DeletedAt                 gorm.DeletedAt               `json:"-"                           gorm:"index"`
 }
 
 func (d *Deployment) IsProduction() bool {

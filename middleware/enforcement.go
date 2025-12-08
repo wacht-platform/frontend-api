@@ -69,7 +69,12 @@ func EnforceB2BSettings(c *fiber.Ctx) error {
 				return c.Next()
 			}
 
-			return handler.SendForbidden(c, nil, "MFA is required for this organization/workspace", handler.ErrMfaRequired)
+			return handler.SendForbidden(
+				c,
+				nil,
+				"MFA is required for this organization/workspace",
+				handler.ErrMfaRequired,
+			)
 		}
 	}
 

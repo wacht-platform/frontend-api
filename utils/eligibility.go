@@ -142,7 +142,8 @@ func CalculateWorkspaceEligibility(
 	mfaRestricted := false
 
 	// Check IP allowlist if enabled
-	if deployment.B2BSettings.IpAllowlistPerWorkspaceEnabled && workspace.EnableIPRestriction && len(workspace.WhitelistedIPs) > 0 {
+	if deployment.B2BSettings.IpAllowlistPerWorkspaceEnabled && workspace.EnableIPRestriction &&
+		len(workspace.WhitelistedIPs) > 0 {
 		if !CheckIPAllowed(clientIP, workspace.WhitelistedIPs) {
 			ipRestricted = true
 		}

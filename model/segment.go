@@ -10,7 +10,7 @@ const (
 
 type Segment struct {
 	Model
-	DeploymentID uint64      `json:"-" gorm:"not null;index"`
+	DeploymentID uint64      `json:"-"    gorm:"not null;index"`
 	Name         string      `json:"name" gorm:"not null"`
 	Type         SegmentType `json:"type" gorm:"not null"`
 }

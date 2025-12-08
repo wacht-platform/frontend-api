@@ -44,51 +44,51 @@ func (u UserAvailability) Value() (driver.Value, error) {
 
 type User struct {
 	Model
-	FirstName                      string                  `json:"first_name"                      gorm:"not null"`
-	HasProfilePicture              bool                    `json:"has_profile_picture"             gorm:"not null"`
-	ProfilePictureURL              string                  `json:"profile_picture_url"             gorm:"not null"`
-	LastName                       string                  `json:"last_name"                       gorm:"not null"`
-	Username                       string                  `json:"username"                        gorm:"not null"`
-	Password                       string                  `json:"-" gorm:"select:false"`
-	Availability                   UserAvailability        `json:"availability"                    gorm:"default:away;not null"`
+	FirstName                      string                  `json:"first_name"                               gorm:"not null"`
+	HasProfilePicture              bool                    `json:"has_profile_picture"                      gorm:"not null"`
+	ProfilePictureURL              string                  `json:"profile_picture_url"                      gorm:"not null"`
+	LastName                       string                  `json:"last_name"                                gorm:"not null"`
+	Username                       string                  `json:"username"                                 gorm:"not null"`
+	Password                       string                  `json:"-"                                        gorm:"select:false"`
+	Availability                   UserAvailability        `json:"availability"                             gorm:"default:away;not null"`
 	LastPasswordResetAt            time.Time               `json:"last_password_reset_at"`
-	SchemaVersion                  SchemaVersion           `json:"schema_version"                  gorm:"not null"`
-	Disabled                       bool                    `json:"disabled"                        gorm:"not null"`
+	SchemaVersion                  SchemaVersion           `json:"schema_version"                           gorm:"not null"`
+	Disabled                       bool                    `json:"disabled"                                 gorm:"not null"`
 	PrimaryEmailAddressID          *uint64                 `json:"primary_email_address_id,string"`
 	PrimaryPhoneNumberID           *uint64                 `json:"primary_phone_number_id,string"`
-	PrimaryPhoneNumber             *UserPhoneNumber        `json:"primary_phone_number"            gorm:"-:migration;foreignKey:PrimaryPhoneNumberID;references:ID"`
-	PrimaryEmailAddress            *UserEmailAddress       `json:"primary_email_address"           gorm:"-:migration;foreignKey:PrimaryEmailAddressID;references:ID"`
-	SecondFactorPolicy             SecondFactorPolicy      `json:"second_factor_policy"            gorm:"not null"`
-	Segments                       []*Segment              `json:"segments"                        gorm:"many2many:user_segments;"`
-	UserEmailAddresses             []UserEmailAddress      `json:"user_email_addresses"            gorm:"constraint:OnDelete:CASCADE;"`
-	UserPhoneNumbers               []UserPhoneNumber       `json:"user_phone_numbers"              gorm:"constraint:OnDelete:CASCADE;"`
-	UserAuthenticator              *UserAuthenticator      `json:"user_authenticator"              gorm:"constraint:OnDelete:CASCADE;"`
-	SocialConnections              []SocialConnection      `json:"social_connections,omitempty"    gorm:"constraint:OnDelete:CASCADE;"`
-	SignIns                        []*Signin               `json:"-"                               gorm:"constraint:OnDelete:CASCADE;"`
+	PrimaryPhoneNumber             *UserPhoneNumber        `json:"primary_phone_number"                     gorm:"-:migration;foreignKey:PrimaryPhoneNumberID;references:ID"`
+	PrimaryEmailAddress            *UserEmailAddress       `json:"primary_email_address"                    gorm:"-:migration;foreignKey:PrimaryEmailAddressID;references:ID"`
+	SecondFactorPolicy             SecondFactorPolicy      `json:"second_factor_policy"                     gorm:"not null"`
+	Segments                       []*Segment              `json:"segments"                                 gorm:"many2many:user_segments;"`
+	UserEmailAddresses             []UserEmailAddress      `json:"user_email_addresses"                     gorm:"constraint:OnDelete:CASCADE;"`
+	UserPhoneNumbers               []UserPhoneNumber       `json:"user_phone_numbers"                       gorm:"constraint:OnDelete:CASCADE;"`
+	UserAuthenticator              *UserAuthenticator      `json:"user_authenticator"                       gorm:"constraint:OnDelete:CASCADE;"`
+	SocialConnections              []SocialConnection      `json:"social_connections,omitempty"             gorm:"constraint:OnDelete:CASCADE;"`
+	SignIns                        []*Signin               `json:"-"                                        gorm:"constraint:OnDelete:CASCADE;"`
 	ActiveOrganizationMembershipID *uint64                 `json:"active_organization_membership_id,string"`
-	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization"             gorm:"-:migration;foreignKey:ActiveOrganizationMembershipID;references:ID"`
+	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization"                      gorm:"-:migration;foreignKey:ActiveOrganizationMembershipID;references:ID"`
 	ActiveWorkspaceMembershipID    *uint64                 `json:"active_workspace_membership_id,string"`
-	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace"                gorm:"-:migration;foreignKey:ActiveWorkspaceMembershipID;references:ID"`
-	DeploymentID                   uint64                  `json:"-"                               gorm:"not null;select:false"`
-	PublicMetadata                 datatypes.JSONMap       `json:"public_metadata"                 gorm:"not null"`
-	PrivateMetadata                datatypes.JSONMap       `json:"-"                               gorm:"not null"`
-	BackupCodesGenerated           bool                    `json:"backup_codes_generated"          gorm:"not null"`
-	BackupCodes                    pq.StringArray          `json:"-"                               gorm:"type:text[]"`
-	DeletedAt                      gorm.DeletedAt          `json:"-" gorm:"index"`
+	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace"                         gorm:"-:migration;foreignKey:ActiveWorkspaceMembershipID;references:ID"`
+	DeploymentID                   uint64                  `json:"-"                                        gorm:"not null;select:false"`
+	PublicMetadata                 datatypes.JSONMap       `json:"public_metadata"                          gorm:"not null"`
+	PrivateMetadata                datatypes.JSONMap       `json:"-"                                        gorm:"not null"`
+	BackupCodesGenerated           bool                    `json:"backup_codes_generated"                   gorm:"not null"`
+	BackupCodes                    pq.StringArray          `json:"-"                                        gorm:"type:text[]"`
+	DeletedAt                      gorm.DeletedAt          `json:"-"                                        gorm:"index"`
 }
 
 type PublicUserData struct {
 	Model
-	FirstName             string            `json:"first_name"                      gorm:"not null"`
-	HasProfilePicture     bool              `json:"has_profile_picture"             gorm:"not null"`
-	ProfilePictureURL     string            `json:"profile_picture_url"             gorm:"not null"`
-	LastName              string            `json:"last_name"                       gorm:"not null"`
-	Username              string            `json:"username"                        gorm:"not null"`
-	Availability          UserAvailability  `json:"availability"                    gorm:"default:away;not null"`
+	FirstName             string            `json:"first_name"               gorm:"not null"`
+	HasProfilePicture     bool              `json:"has_profile_picture"      gorm:"not null"`
+	ProfilePictureURL     string            `json:"profile_picture_url"      gorm:"not null"`
+	LastName              string            `json:"last_name"                gorm:"not null"`
+	Username              string            `json:"username"                 gorm:"not null"`
+	Availability          UserAvailability  `json:"availability"             gorm:"default:away;not null"`
 	PrimaryEmailAddressID *uint64           `json:"primary_email_address_id"`
 	PrimaryPhoneNumberID  *uint64           `json:"-"`
-	PrimaryPhoneNumber    *UserPhoneNumber  `json:"primary_phone_number" gorm:"-:migration;foreignKey:PrimaryPhoneNumberID;references:ID"`
-	PrimaryEmailAddress   *UserEmailAddress `json:"primary_email_address" gorm:"-:migration;foreignKey:PrimaryEmailAddressID;references:ID"`
+	PrimaryPhoneNumber    *UserPhoneNumber  `json:"primary_phone_number"     gorm:"-:migration;foreignKey:PrimaryPhoneNumberID;references:ID"`
+	PrimaryEmailAddress   *UserEmailAddress `json:"primary_email_address"    gorm:"-:migration;foreignKey:PrimaryEmailAddressID;references:ID"`
 }
 
 func (PublicUserData) TableName() string {

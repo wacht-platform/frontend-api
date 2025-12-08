@@ -63,10 +63,20 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 	}
 }
 
-func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
+func (h *Handler) handleUsernameSignIn(
+	c *fiber.Ctx,
+	b SignInRequest,
+	d model.Deployment,
+	session *model.Session,
+) error {
 	blocked, _ := utils.CheckRateLimit(b.Username)
 	if blocked {
-		return handler.SendForbidden(c, nil, "Too many failed attempts. Please try again later.", handler.ErrTooManyRequests)
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Too many failed attempts. Please try again later.",
+			handler.ErrTooManyRequests,
+		)
 	}
 
 	user, err := h.service.FindUserByUsername(b.Username, d.ID)
@@ -231,10 +241,20 @@ func (h *Handler) handleUsernameSignIn(c *fiber.Ctx, b SignInRequest, d model.De
 	return handler.SendSuccess(c, session)
 }
 
-func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
+func (h *Handler) handleEmailPasswordSignIn(
+	c *fiber.Ctx,
+	b SignInRequest,
+	d model.Deployment,
+	session *model.Session,
+) error {
 	blocked, _ := utils.CheckRateLimit(b.Email)
 	if blocked {
-		return handler.SendForbidden(c, nil, "Too many failed attempts. Please try again later.", handler.ErrTooManyRequests)
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Too many failed attempts. Please try again later.",
+			handler.ErrTooManyRequests,
+		)
 	}
 
 	email, err := h.service.FindUserByEmail(b.Email, d.ID)
@@ -398,7 +418,12 @@ func (h *Handler) handleEmailPasswordSignIn(c *fiber.Ctx, b SignInRequest, d mod
 	return handler.SendSuccess(c, session)
 }
 
-func (h *Handler) handleImpersonationSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
+func (h *Handler) handleImpersonationSignIn(
+	c *fiber.Ctx,
+	b SignInRequest,
+	d model.Deployment,
+	session *model.Session,
+) error {
 	if b.Token == "" {
 		return handler.SendBadRequest(c, nil, "Impersonation token is required")
 	}
@@ -524,7 +549,12 @@ func (h *Handler) handleImpersonationSignIn(c *fiber.Ctx, b SignInRequest, d mod
 	return handler.SendSuccess(c, session)
 }
 
-func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.Session, method model.SignInMethod) error {
+func (h *Handler) handleOTPSignIn(
+	c *fiber.Ctx,
+	b SignInRequest,
+	session *model.Session,
+	method model.SignInMethod,
+) error {
 	var userID *uint64
 	var identifierID *uint64
 	var attempt *model.SignInAttempt
@@ -684,7 +714,12 @@ func (h *Handler) handleOTPSignIn(c *fiber.Ctx, b SignInRequest, session *model.
 	return handler.SendSuccess(c, session)
 }
 
-func (h *Handler) handleMagicLinkSignIn(c *fiber.Ctx, b SignInRequest, d model.Deployment, session *model.Session) error {
+func (h *Handler) handleMagicLinkSignIn(
+	c *fiber.Ctx,
+	b SignInRequest,
+	d model.Deployment,
+	session *model.Session,
+) error {
 	email, _ := h.service.FindUserByVerifiedEmail(b.Email, d.ID)
 
 	steps := []model.SignInAttemptStep{model.SignInAttemptStepVerifyEmailLink}
@@ -1283,7 +1318,9 @@ func (h *Handler) OAuth2Callback(c *fiber.Ctx) error {
 
 			if secondFactorEnforced {
 				attempt.SecondMethodAuthenticationRequired = true
-				attempt.Available2FAMethods = datatypes.NewJSONSlice(h.service.GetAvailable2FAMethods(u.ID, &deployment))
+				attempt.Available2FAMethods = datatypes.NewJSONSlice(
+					h.service.GetAvailable2FAMethods(u.ID, &deployment),
+				)
 			}
 
 			if requiresCompletion {
@@ -1445,7 +1482,8 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 			var emailAddress string
 			var userID uint64
 
-			if attempt.IdentifierID == nil && attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.Email != "" {
+			if attempt.IdentifierID == nil && attempt.ProfileCompletionData != nil &&
+				attempt.ProfileCompletionData.Email != "" {
 				emailAddress = attempt.ProfileCompletionData.Email
 				if attempt.UserID != nil {
 					userID = *attempt.UserID
@@ -1481,7 +1519,8 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 			var countryCode string
 			var userID uint64
 
-			if attempt.IdentifierID == nil && attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.PhoneNumber != "" {
+			if attempt.IdentifierID == nil && attempt.ProfileCompletionData != nil &&
+				attempt.ProfileCompletionData.PhoneNumber != "" {
 				phoneNumber = attempt.ProfileCompletionData.PhoneNumber
 				countryCode = attempt.ProfileCompletionData.PhoneCountryCode
 				if attempt.UserID != nil {
@@ -1742,7 +1781,11 @@ func (h *Handler) VerifyMagicLink(c *fiber.Ctx) error {
 
 	if deployment.AuthSettings.MagicLink.RequireSameDevice {
 		if attempt.SessionID != session.ID {
-			return handler.SendBadRequest(c, nil, "Magic link must be verified from the same device/browser where it was requested")
+			return handler.SendBadRequest(
+				c,
+				nil,
+				"Magic link must be verified from the same device/browser where it was requested",
+			)
 		}
 	}
 
@@ -1893,7 +1936,12 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				if len(attempt.RemainingSteps) == 1 {
 					attempt.Completed = true
 					attempt.RemainingSteps = nil
-					signin = h.service.CreateSignin(userID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
+					signin = h.service.CreateSignin(
+						userID,
+						session.ID,
+						c,
+						deployment.AuthSettings.SessionValidityPeriod,
+					)
 					session.Signins = append(session.Signins, *signin)
 					session.ActiveSigninID = &signin.ID
 
@@ -2450,7 +2498,9 @@ func (h *Handler) CompleteProfile(c *fiber.Ctx) error {
 
 	// Try to find a signin attempt first
 	var signinAttempt model.SignInAttempt
-	signinErr := database.Connection.Where("id = ? AND session_id = ? AND requires_completion = true", attemptID, session.ID).First(&signinAttempt).Error
+	signinErr := database.Connection.Where("id = ? AND session_id = ? AND requires_completion = true", attemptID, session.ID).
+		First(&signinAttempt).
+		Error
 
 	if signinErr == nil {
 		return h.handleSigninProfileCompletion(c, &signinAttempt, b, session, deployment)
@@ -2458,7 +2508,9 @@ func (h *Handler) CompleteProfile(c *fiber.Ctx) error {
 
 	// Try to find an OAuth signup attempt
 	var signupAttempt model.SignupAttempt
-	signupErr := database.Connection.Where("id = ? AND session_id = ? AND is_oauth_signup = true", attemptID, session.ID).First(&signupAttempt).Error
+	signupErr := database.Connection.Where("id = ? AND session_id = ? AND is_oauth_signup = true", attemptID, session.ID).
+		First(&signupAttempt).
+		Error
 
 	if signupErr == nil {
 		return h.handleOAuthSignupCompletion(c, &signupAttempt, b, session, deployment)
@@ -2676,7 +2728,12 @@ func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
 			if user.PrimaryEmailAddressID != nil {
 				for _, email := range user.UserEmailAddresses {
 					if email.ID == *user.PrimaryEmailAddressID {
-						_ = h.service.nats.SendSignInNotificationEmail(deployment.ID, user.ID, signIn.ID, email.EmailAddress)
+						_ = h.service.nats.SendSignInNotificationEmail(
+							deployment.ID,
+							user.ID,
+							signIn.ID,
+							email.EmailAddress,
+						)
 						break
 					}
 				}
@@ -2927,7 +2984,12 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 			if user.PrimaryEmailAddressID != nil {
 				for _, email := range user.UserEmailAddresses {
 					if email.ID == *user.PrimaryEmailAddressID {
-						_ = h.service.nats.SendSignInNotificationEmail(deployment.ID, user.ID, signIn.ID, email.EmailAddress)
+						_ = h.service.nats.SendSignInNotificationEmail(
+							deployment.ID,
+							user.ID,
+							signIn.ID,
+							email.EmailAddress,
+						)
 						break
 					}
 				}
@@ -2952,7 +3014,13 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, session)
 }
 
-func (h *Handler) handleOAuthSignupCompletion(c *fiber.Ctx, attempt *model.SignupAttempt, b *SignUpRequest, session *model.Session, deployment model.Deployment) error {
+func (h *Handler) handleOAuthSignupCompletion(
+	c *fiber.Ctx,
+	attempt *model.SignupAttempt,
+	b *SignUpRequest,
+	session *model.Session,
+	deployment model.Deployment,
+) error {
 	if b.FirstName != "" {
 		attempt.FirstName = b.FirstName
 	}
@@ -3053,7 +3121,13 @@ func (h *Handler) handleOAuthSignupCompletion(c *fiber.Ctx, attempt *model.Signu
 	})
 }
 
-func (h *Handler) handleSigninProfileCompletion(c *fiber.Ctx, attempt *model.SignInAttempt, b *SignUpRequest, session *model.Session, deployment model.Deployment) error {
+func (h *Handler) handleSigninProfileCompletion(
+	c *fiber.Ctx,
+	attempt *model.SignInAttempt,
+	b *SignUpRequest,
+	session *model.Session,
+	deployment model.Deployment,
+) error {
 	var user model.User
 	if err := database.Connection.Where("id = ?", attempt.UserID).First(&user).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Error finding user")
@@ -3094,7 +3168,11 @@ func (h *Handler) handleSigninProfileCompletion(c *fiber.Ctx, attempt *model.Sig
 	attempt.RequiresCompletion = false
 	attempt.MissingFields = datatypes.NewJSONSlice([]string{})
 
-	verificationSteps := h.service.DetermineVerificationStepsForProfileCompletion(*attempt.ProfileCompletionData, &user.ID, deployment.AuthSettings)
+	verificationSteps := h.service.DetermineVerificationStepsForProfileCompletion(
+		*attempt.ProfileCompletionData,
+		&user.ID,
+		deployment.AuthSettings,
+	)
 
 	steps := []model.SignInAttemptStep(attempt.RemainingSteps)
 	for _, step := range verificationSteps {
@@ -3147,7 +3225,12 @@ func (h *Handler) handleSigninProfileCompletion(c *fiber.Ctx, attempt *model.Sig
 			if user.PrimaryEmailAddressID != nil {
 				for _, email := range user.UserEmailAddresses {
 					if email.ID == *user.PrimaryEmailAddressID {
-						_ = h.service.nats.SendSignInNotificationEmail(deployment.ID, user.ID, signIn.ID, email.EmailAddress)
+						_ = h.service.nats.SendSignInNotificationEmail(
+							deployment.ID,
+							user.ID,
+							signIn.ID,
+							email.EmailAddress,
+						)
 						break
 					}
 				}

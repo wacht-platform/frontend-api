@@ -259,7 +259,10 @@ func (s *NatsService) publishTask(ctx context.Context, taskType string, payload 
 }
 
 // Email sending methods
-func (s *NatsService) SendVerificationEmail(deploymentID, userID uint64, recipient, verificationCode, ipAddress, userAgent string) error {
+func (s *NatsService) SendVerificationEmail(
+	deploymentID, userID uint64,
+	recipient, verificationCode, ipAddress, userAgent string,
+) error {
 	task := VerificationEmailTask{
 		DeploymentID:     deploymentID,
 		Recipient:        recipient,
@@ -271,7 +274,10 @@ func (s *NatsService) SendVerificationEmail(deploymentID, userID uint64, recipie
 	return s.publishTask(context.Background(), string(EmailVerification), task)
 }
 
-func (s *NatsService) SendPasswordResetEmail(deploymentID, userID uint64, recipient, resetCode, ipAddress, userAgent string) error {
+func (s *NatsService) SendPasswordResetEmail(
+	deploymentID, userID uint64,
+	recipient, resetCode, ipAddress, userAgent string,
+) error {
 	task := PasswordResetEmailTask{
 		DeploymentID: deploymentID,
 		Recipient:    recipient,
@@ -303,7 +309,10 @@ func (s *NatsService) SendSignInNotificationEmail(deploymentID, userID, signInID
 	return s.publishTask(context.Background(), string(EmailSignInNotification), task)
 }
 
-func (s *NatsService) SendPrimaryEmailChangeEmail(deploymentID, userID uint64, recipient, oldEmail, newEmail string) error {
+func (s *NatsService) SendPrimaryEmailChangeEmail(
+	deploymentID, userID uint64,
+	recipient, oldEmail, newEmail string,
+) error {
 	task := EmailChangeTask{
 		DeploymentID: deploymentID,
 		Recipient:    recipient,
@@ -342,7 +351,10 @@ func (s *NatsService) SendWaitlistSignupEmail(deploymentID uint64, recipient, fi
 	return s.publishTask(context.Background(), string(EmailWaitlistSignup), task)
 }
 
-func (s *NatsService) SendOrganizationInviteEmail(deploymentID uint64, recipient, inviterName, orgName, inviteLink string) error {
+func (s *NatsService) SendOrganizationInviteEmail(
+	deploymentID uint64,
+	recipient, inviterName, orgName, inviteLink string,
+) error {
 	task := OrganizationInviteTask{
 		DeploymentID:     deploymentID,
 		Recipient:        recipient,
@@ -353,7 +365,10 @@ func (s *NatsService) SendOrganizationInviteEmail(deploymentID uint64, recipient
 	return s.publishTask(context.Background(), string(EmailOrganizationInvite), task)
 }
 
-func (s *NatsService) SendWorkspaceInviteEmail(deploymentID uint64, recipient, inviterName, orgName, workspaceName, inviteLink string) error {
+func (s *NatsService) SendWorkspaceInviteEmail(
+	deploymentID uint64,
+	recipient, inviterName, orgName, workspaceName, inviteLink string,
+) error {
 	task := WorkspaceInviteTask{
 		DeploymentID:     deploymentID,
 		Recipient:        recipient,
@@ -404,7 +419,12 @@ func (s *NatsService) PublishWebhookEvent(deploymentID uint64, eventType string,
 	return s.publishTask(context.Background(), "webhook.event", task)
 }
 
-func (s *NatsService) PublishAnalyticsEvent(deploymentID uint64, userID *uint64, eventType string, userName, userIdentifier, authMethod, ipAddress *string) error {
+func (s *NatsService) PublishAnalyticsEvent(
+	deploymentID uint64,
+	userID *uint64,
+	eventType string,
+	userName, userIdentifier, authMethod, ipAddress *string,
+) error {
 	task := AnalyticsEventTask{
 		DeploymentID:   deploymentID,
 		UserID:         userID,

@@ -17,10 +17,10 @@ type TelesignService struct {
 type TelesignPhoneIDResponse struct {
 	ReferenceID string `json:"reference_id"`
 	PhoneType   struct {
-		Code               string `json:"code"`
-		OverrideReason     string `json:"override_reason"`
-		Description        string `json:"description"`
-		OverrideReasonID   int    `json:"override_reason_id"`
+		Code             string `json:"code"`
+		OverrideReason   string `json:"override_reason"`
+		Description      string `json:"description"`
+		OverrideReasonID int    `json:"override_reason_id"`
 	} `json:"phone_type"`
 	Blocklisting struct {
 		BlockCode        int    `json:"block_code"`
@@ -56,11 +56,11 @@ type TelesignPhoneIDResponse struct {
 		} `json:"cleansing"`
 	} `json:"numbering"`
 	Location struct {
-		City     string `json:"city"`
-		County   string `json:"county"`
-		State    string `json:"state"`
-		Zip      string `json:"zip"`
-		Country  struct {
+		City    string `json:"city"`
+		County  string `json:"county"`
+		State   string `json:"state"`
+		Zip     string `json:"zip"`
+		Country struct {
 			ISO2 string `json:"iso2"`
 			ISO3 string `json:"iso3"`
 			Name string `json:"name"`
@@ -85,16 +85,16 @@ type TelesignPhoneIDResponse struct {
 }
 
 type PhoneValidationResult struct {
-	IsValid        bool
-	PhoneType      string
-	PhoneTypeCode  string
-	IsBlocked      bool
-	IsVOIP         bool
-	IsPrepaid      bool
-	IsHighRisk     bool
-	CountryCode    string
-	CarrierName    string
-	ErrorMessage   string
+	IsValid       bool
+	PhoneType     string
+	PhoneTypeCode string
+	IsBlocked     bool
+	IsVOIP        bool
+	IsPrepaid     bool
+	IsHighRisk    bool
+	CountryCode   string
+	CarrierName   string
+	ErrorMessage  string
 }
 
 func NewTelesignService(customerID, apiKey string) *TelesignService {
@@ -161,27 +161,27 @@ func (t *TelesignService) ValidatePhoneNumber(phoneNumber string) (*PhoneValidat
 		result.IsHighRisk = false
 		result.IsVOIP = false
 		result.IsPrepaid = false
-	case "3": 
+	case "3":
 		result.IsHighRisk = true
 		result.IsVOIP = false
 		result.IsPrepaid = true
-	case "4": 
+	case "4":
 		result.IsHighRisk = true
 		result.IsVOIP = false
 		result.IsPrepaid = false
-	case "5": 
+	case "5":
 		result.IsHighRisk = true
 		result.IsVOIP = true
 		result.IsPrepaid = false
-	case "6": 
+	case "6":
 		result.IsHighRisk = true
 		result.IsVOIP = false
 		result.IsPrepaid = false
-	case "7": 
+	case "7":
 		result.IsHighRisk = true
 		result.IsVOIP = false
 		result.IsPrepaid = false
-	case "8": 
+	case "8":
 		result.IsHighRisk = true
 		result.IsValid = false
 		result.IsVOIP = false
@@ -198,7 +198,7 @@ func (t *TelesignService) ValidatePhoneNumber(phoneNumber string) (*PhoneValidat
 		result.IsHighRisk = true
 		result.IsVOIP = false
 		result.IsPrepaid = false
-	case "20": 
+	case "20":
 		result.IsHighRisk = true
 		result.IsVOIP = false
 		result.IsPrepaid = false

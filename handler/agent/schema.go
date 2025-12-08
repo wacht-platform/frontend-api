@@ -6,7 +6,7 @@ import (
 )
 
 type CreateContextRequest struct {
-	Title              string  `json:"title" validate:"required"`
+	Title              string  `json:"title"                         validate:"required"`
 	SystemInstructions *string `json:"system_instructions,omitempty"`
 }
 

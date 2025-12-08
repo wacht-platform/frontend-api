@@ -301,9 +301,23 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 			return err
 		}
 
-		signIn := h.service.CreateSignin(user.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
-		if err := tx.Create(signIn).Error; err != nil {
-			return err
+		var existingSignIn *model.Signin
+		for i := range session.Signins {
+			if session.Signins[i].UserID != nil && *session.Signins[i].UserID == user.ID {
+				existingSignIn = &session.Signins[i]
+				break
+			}
+		}
+
+		var signIn *model.Signin
+		if existingSignIn != nil {
+			signIn = existingSignIn
+		} else {
+			signIn = h.service.CreateSignin(user.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
+			if err := tx.Create(signIn).Error; err != nil {
+				return err
+			}
+			session.Signins = append(session.Signins, *signIn)
 		}
 
 		if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error; err != nil {
@@ -311,13 +325,10 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 		}
 
 		session.ActiveSigninID = &signIn.ID
-		session.Signins = append(session.Signins, *signIn)
 
-		// Mark attempt as completed (prevents state reuse)
 		attempt.Completed = true
 		attempt.UserID = &user.ID
 		attempt.FirstMethodAuthenticated = true
-		// Clear OIDC state to prevent any future use
 		attempt.OIDCState = nil
 		if err := tx.Save(&attempt).Error; err != nil {
 			return err
@@ -353,7 +364,13 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 		if !deployment.IsProduction() {
 			var keypair model.DeploymentKeyPair
 			if err := database.Connection.Where("deployment_id = ?", deployment.ID).First(&keypair).Error; err == nil {
-				token, err := utils.SignNewJWT(session.ID, deployment.BackendHost, time.Now().Add(6*time.Hour), keypair, database.Connection)
+				token, err := utils.SignNewJWT(
+					session.ID,
+					deployment.BackendHost,
+					time.Now().Add(6*time.Hour),
+					keypair,
+					database.Connection,
+				)
 				if err == nil {
 					parsedURL, parseErr := url.Parse(redirectURI)
 					if parseErr == nil {

@@ -68,7 +68,14 @@ func (h *Handler) CreateOrganization(
 		}
 
 		if d.B2BSettings.MaxOrgsPerUser > 0 && orgCount >= int64(d.B2BSettings.MaxOrgsPerUser) {
-			return handler.SendForbidden(c, nil, fmt.Sprintf("You have reached the maximum number of organizations allowed (%d)", d.B2BSettings.MaxOrgsPerUser))
+			return handler.SendForbidden(
+				c,
+				nil,
+				fmt.Sprintf(
+					"You have reached the maximum number of organizations allowed (%d)",
+					d.B2BSettings.MaxOrgsPerUser,
+				),
+			)
 		}
 	}
 
@@ -175,12 +182,19 @@ func (h *Handler) LeaveOrganization(
 				d.B2BSettings.DefaultOrgCreatorRoleID,
 				membership.ID).
 			Count(&adminCount).Error; err != nil {
-			log.Println("Error counting other admins using DefaultOrgCreatorRoleID on organization_membership_roles:", err)
+			log.Println(
+				"Error counting other admins using DefaultOrgCreatorRoleID on organization_membership_roles:",
+				err,
+			)
 			return handler.SendInternalServerError(c, err, "Failed to verify organization admin status")
 		}
 
 		if adminCount == 0 {
-			return handler.SendForbidden(c, nil, "Cannot leave organization as the sole admin. Please transfer ownership or assign this role to another member first.")
+			return handler.SendForbidden(
+				c,
+				nil,
+				"Cannot leave organization as the sole admin. Please transfer ownership or assign this role to another member first.",
+			)
 		}
 	}
 
@@ -203,7 +217,11 @@ func (h *Handler) LeaveOrganization(
 					"active_organization_membership_id": nil,
 					"active_workspace_membership_id":    nil,
 				}).Error; errDb != nil {
-					log.Printf("Failed to clear active organization ID for user %d: %v", session.ActiveSignin.UserID, errDb)
+					log.Printf(
+						"Failed to clear active organization ID for user %d: %v",
+						session.ActiveSignin.UserID,
+						errDb,
+					)
 				}
 			}
 
@@ -466,7 +484,14 @@ func (h *Handler) InviteMember(
 		}
 
 		if uint64(memberCount+inviteCount) >= d.B2BSettings.MaxAllowedOrgMembers {
-			return handler.SendForbidden(c, nil, fmt.Sprintf("Organization has reached the maximum number of members allowed (%d)", d.B2BSettings.MaxAllowedOrgMembers))
+			return handler.SendForbidden(
+				c,
+				nil,
+				fmt.Sprintf(
+					"Organization has reached the maximum number of members allowed (%d)",
+					d.B2BSettings.MaxAllowedOrgMembers,
+				),
+			)
 		}
 	}
 
@@ -528,7 +553,12 @@ func (h *Handler) InviteMember(
 		log.Printf("Failed to send invitation email: %v", err)
 	}
 
-	utils.PublishWebhookEvent(deployment.ID, "organization.invitation.created", invitation.ID, "organization_invitation")
+	utils.PublishWebhookEvent(
+		deployment.ID,
+		"organization.invitation.created",
+		invitation.ID,
+		"organization_invitation",
+	)
 
 	return handler.SendSuccess(c, invitation)
 }
@@ -554,7 +584,12 @@ func (h *Handler) DiscardInvitation(
 
 	invitationIDUint := getuint64(invitationID)
 	deployment := handler.GetDeployment(c)
-	utils.PublishWebhookEvent(deployment.ID, "organization.invitation.revoked", invitationIDUint, "organization_invitation")
+	utils.PublishWebhookEvent(
+		deployment.ID,
+		"organization.invitation.revoked",
+		invitationIDUint,
+		"organization_invitation",
+	)
 
 	if err := database.Connection.Delete(&model.OrganizationInvitation{
 		Model: model.Model{
@@ -748,7 +783,12 @@ func (h *Handler) AcceptInvitation(
 	}
 
 	deployment := handler.GetDeployment(c)
-	utils.PublishWebhookEvent(deployment.ID, "organization.invitation.accepted", invitation.ID, "organization_invitation")
+	utils.PublishWebhookEvent(
+		deployment.ID,
+		"organization.invitation.accepted",
+		invitation.ID,
+		"organization_invitation",
+	)
 	utils.PublishWebhookEvent(deployment.ID, "organization.member.added", membership.ID, "organization_membership")
 
 	return handler.SendSuccess(c, response)
@@ -783,7 +823,12 @@ func (h *Handler) RemoveMember(
 	}
 
 	deployment := handler.GetDeployment(c)
-	utils.PublishWebhookEvent(deployment.ID, "organization.member.removed", membershipToRemove.ID, "organization_membership")
+	utils.PublishWebhookEvent(
+		deployment.ID,
+		"organization.member.removed",
+		membershipToRemove.ID,
+		"organization_membership",
+	)
 
 	if err := database.Connection.Delete(&membershipToRemove).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to remove member")
@@ -850,7 +895,12 @@ func (h *Handler) AddMemberRole(
 	}
 
 	deployment := handler.GetDeployment(c)
-	utils.PublishWebhookEvent(deployment.ID, "organization.member.role.updated", assignedMember.ID, "organization_membership")
+	utils.PublishWebhookEvent(
+		deployment.ID,
+		"organization.member.role.updated",
+		assignedMember.ID,
+		"organization_membership",
+	)
 
 	return handler.SendSuccess(c, fiber.Map{
 		"success": true,
@@ -882,7 +932,11 @@ func (h *Handler) RemoveMemberRole(
 		First(&actingUserMembership).
 		Error; err != nil {
 		log.Printf("Permission check failed for user %d in org %d: %v", session.ActiveSignin.UserID, orgIDuint64, err)
-		return handler.SendForbidden(c, nil, "Insufficient permissions to manage roles (user not found in org or DB error).")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Insufficient permissions to manage roles (user not found in org or DB error).",
+		)
 	}
 
 	hasPermission := h.service.hasPermission(actingUserMembership, orgManagementPermissions)
@@ -912,7 +966,11 @@ func (h *Handler) RemoveMemberRole(
 		}
 
 		if otherAdminCount == 0 {
-			return handler.SendForbidden(c, nil, "Cannot remove your own admin role as you are the sole admin. Please assign this role to another member first.")
+			return handler.SendForbidden(
+				c,
+				nil,
+				"Cannot remove your own admin role as you are the sole admin. Please assign this role to another member first.",
+			)
 		}
 	}
 
@@ -925,7 +983,12 @@ func (h *Handler) RemoveMemberRole(
 		return handler.SendInternalServerError(c, err, "Failed to remove role.")
 	}
 
-	utils.PublishWebhookEvent(d.ID, "organization.member.role.updated", targetMembershipIDuint64, "organization_membership")
+	utils.PublishWebhookEvent(
+		d.ID,
+		"organization.member.role.updated",
+		targetMembershipIDuint64,
+		"organization_membership",
+	)
 
 	return handler.SendSuccess(c, fiber.Map{
 		"success": true,
@@ -950,7 +1013,8 @@ func (h *Handler) GetOrganizationMembers(
 			AND organization_memberships.deleted_at IS NULL
 		LIMIT 1
 	`
-	if err := database.Connection.Raw(checkSQL, orgID, session.ActiveSignin.UserID).Scan(&currentMembershipExists).Error; err != nil || currentMembershipExists == 0 {
+	if err := database.Connection.Raw(checkSQL, orgID, session.ActiveSignin.UserID).Scan(&currentMembershipExists).Error; err != nil ||
+		currentMembershipExists == 0 {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 

@@ -38,13 +38,13 @@ func (ct VerificationStrategy) GormDBDataType() string {
 
 type UserEmailAddress struct {
 	Model
-	DeploymentID         uint64               `json:"-" gorm:"index:idx_deployment_user_email_address_email,unique"`
-	Deployment           Deployment           `json:"-" gorm:"foreignKey:DeploymentID"`
-	UserID               *uint64              `json:"-" gorm:"index:idx_deployment_user_email_address_email,unique"`
-	User                 User                 `json:"-" gorm:"foreignKey:UserID"`
-	EmailAddress         string               `json:"email" gorm:"index:idx_user_email_address_email;index:idx_deployment_user_email_address_email,unique"`
-	IsPrimary            bool                 `json:"is_primary" gorm:"not null"`
-	Verified             bool                 `json:"verified" gorm:"not null"`
+	DeploymentID         uint64               `json:"-"                           gorm:"index:idx_deployment_user_email_address_email,unique"`
+	Deployment           Deployment           `json:"-"                           gorm:"foreignKey:DeploymentID"`
+	UserID               *uint64              `json:"-"                           gorm:"index:idx_deployment_user_email_address_email,unique"`
+	User                 User                 `json:"-"                           gorm:"foreignKey:UserID"`
+	EmailAddress         string               `json:"email"                       gorm:"index:idx_user_email_address_email;index:idx_deployment_user_email_address_email,unique"`
+	IsPrimary            bool                 `json:"is_primary"                  gorm:"not null"`
+	Verified             bool                 `json:"verified"                    gorm:"not null"`
 	VerifiedAt           time.Time            `json:"verified_at"`
 	VerificationStrategy VerificationStrategy `json:"verification_strategy"`
 	SocialConnection     *SocialConnection    `json:"social_connection,omitempty"`

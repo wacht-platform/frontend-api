@@ -7,22 +7,22 @@ import (
 
 type Workspace struct {
 	Model
-	DeploymentID        uint64                 `json:"-"               gorm:"not null;index"`
-	Deployment          Deployment             `json:"-" gorm:"foreignkey:DeploymentID"`
-	OrganizationID      uint64                 `json:"-"               gorm:"not null;index;"`
-	Name                string                 `json:"name"            gorm:"not null"`
-	ImageUrl            string                 `json:"image_url"       gorm:"not null"`
-	Description         string                 `json:"description"     gorm:"not null"`
-	InviteOnly          bool                   `json:"invite_only"     gorm:"not null;default:true"`
+	DeploymentID        uint64                 `json:"-"                     gorm:"not null;index"`
+	Deployment          Deployment             `json:"-"                     gorm:"foreignkey:DeploymentID"`
+	OrganizationID      uint64                 `json:"-"                     gorm:"not null;index;"`
+	Name                string                 `json:"name"                  gorm:"not null"`
+	ImageUrl            string                 `json:"image_url"             gorm:"not null"`
+	Description         string                 `json:"description"           gorm:"not null"`
+	InviteOnly          bool                   `json:"invite_only"           gorm:"not null;default:true"`
 	Roles               []*WorkspaceRole       `json:"roles"`
 	Members             []*WorkspaceMembership `json:"members"`
-	Segments            []*Segment             `json:"segments"        gorm:"many2many:workspace_segments;"`
-	EnforceMFASetup     bool                   `json:"enforce_2fa" gorm:"not null;default:false"`
+	Segments            []*Segment             `json:"segments"              gorm:"many2many:workspace_segments;"`
+	EnforceMFASetup     bool                   `json:"enforce_2fa"           gorm:"not null;default:false"`
 	EnableIPRestriction bool                   `json:"enable_ip_restriction" gorm:"not null;default:false"`
-	WhitelistedIPs      pq.StringArray         `json:"whitelisted_ips" gorm:"type:text[]"`
-	MemberCount         uint64                 `json:"member_count"    gorm:"not null"`
-	PublicMetadata      datatypes.JSONMap      `json:"public_metadata" gorm:"not null"`
-	PrivateMetadata     datatypes.JSONMap      `json:"-"               gorm:"not null"`
+	WhitelistedIPs      pq.StringArray         `json:"whitelisted_ips"       gorm:"type:text[]"`
+	MemberCount         uint64                 `json:"member_count"          gorm:"not null"`
+	PublicMetadata      datatypes.JSONMap      `json:"public_metadata"       gorm:"not null"`
+	PrivateMetadata     datatypes.JSONMap      `json:"-"                     gorm:"not null"`
 }
 
 type PublicWorkspaceData struct {
@@ -31,11 +31,11 @@ type PublicWorkspaceData struct {
 	ImageUrl            string            `json:"image_url"`
 	Description         string            `json:"description"`
 	MemberCount         uint64            `json:"member_count"`
-	WhitelistedIPs      pq.StringArray    `json:"whitelisted_ips" gorm:"type:text[]"`
-	EnforceMFASetup     bool              `json:"enforce_2fa" gorm:"not null;default:false"`
+	WhitelistedIPs      pq.StringArray    `json:"whitelisted_ips"       gorm:"type:text[]"`
+	EnforceMFASetup     bool              `json:"enforce_2fa"           gorm:"not null;default:false"`
 	EnableIPRestriction bool              `json:"enable_ip_restriction" gorm:"not null;default:false"`
-	PublicMetadata      datatypes.JSONMap `json:"public_metadata" gorm:"not null"`
-	Segments            []*Segment        `json:"segments" gorm:"many2many:workspace_segments;"`
+	PublicMetadata      datatypes.JSONMap `json:"public_metadata"       gorm:"not null"`
+	Segments            []*Segment        `json:"segments"              gorm:"many2many:workspace_segments;"`
 }
 
 func (PublicWorkspaceData) TableName() string {

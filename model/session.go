@@ -9,7 +9,7 @@ type SignInAttemptStep string
 const (
 	SignInAttemptStepVerifyEmail             SignInAttemptStep = "verify_email"
 	SignInAttemptStepVerifyEmailOTP          SignInAttemptStep = "verify_email_otp"
-	SignInAttemptStepVerifyEmailLink		 SignInAttemptStep = "verify_email_link"
+	SignInAttemptStepVerifyEmailLink         SignInAttemptStep = "verify_email_link"
 	SignInAttemptStepVerifySecondFactor      SignInAttemptStep = "verify_second_factor"
 	SignInAttemptStepVerifyPhone             SignInAttemptStep = "verify_phone"
 	SignInAttemptStepVerifyPhoneOTP          SignInAttemptStep = "verify_phone_otp"

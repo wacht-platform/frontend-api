@@ -15,16 +15,16 @@ func (WorkspaceMembershipRoleAssoc) TableName() string {
 
 type WorkspaceMembership struct {
 	Model
-	WorkspaceID              uint64                         `json:"-"    gorm:"not null;index"`
-	Workspace                PublicWorkspaceData            `json:"workspace"       gorm:"foreignKey:WorkspaceID"`
-	OrganizationID           uint64                         `json:"organization_id,string" gorm:"not null;index"`
-	Organization             PublicOrganizationData         `json:"organization" gorm:"foreignKey:OrganizationID"`
+	WorkspaceID              uint64                         `json:"-"                                 gorm:"not null;index"`
+	Workspace                PublicWorkspaceData            `json:"workspace"                         gorm:"foreignKey:WorkspaceID"`
+	OrganizationID           uint64                         `json:"organization_id,string"            gorm:"not null;index"`
+	Organization             PublicOrganizationData         `json:"organization"                      gorm:"foreignKey:OrganizationID"`
 	OrganizationMembershipID uint64                         `json:"organization_membership_id,string" gorm:"not null;index"`
-	OrganizationMembership   OrganizationMembership         `json:"organization_membership" gorm:"foreignKey:OrganizationMembershipID"`
-	UserID                   uint64                         `json:"user_id,string"         gorm:"not null;index"`
-	User                     PublicUserData                 `json:"public_user_data" gorm:"foreignKey:UserID"`
-	Roles                    []*WorkspaceRole               `json:"roles" gorm:"many2many:workspace_membership_roles;joinForeignKey:WorkspaceMembershipID;JoinReferences:WorkspaceRoleID;References:ID;foreignKey:ID"`
-	RoleAssociations         []WorkspaceMembershipRoleAssoc `json:"-" gorm:"foreignKey:WorkspaceMembershipID;references:ID"`
-	PublicMetadata           datatypes.JSONMap              `json:"public_metadata" gorm:"not null"`
+	OrganizationMembership   OrganizationMembership         `json:"organization_membership"           gorm:"foreignKey:OrganizationMembershipID"`
+	UserID                   uint64                         `json:"user_id,string"                    gorm:"not null;index"`
+	User                     PublicUserData                 `json:"public_user_data"                  gorm:"foreignKey:UserID"`
+	Roles                    []*WorkspaceRole               `json:"roles"                             gorm:"many2many:workspace_membership_roles;joinForeignKey:WorkspaceMembershipID;JoinReferences:WorkspaceRoleID;References:ID;foreignKey:ID"`
+	RoleAssociations         []WorkspaceMembershipRoleAssoc `json:"-"                                 gorm:"foreignKey:WorkspaceMembershipID;references:ID"`
+	PublicMetadata           datatypes.JSONMap              `json:"public_metadata"                   gorm:"not null"`
 	EligibilityRestriction   *EligibilityRestriction        `json:"eligibility_restriction,omitempty" gorm:"-"`
 }

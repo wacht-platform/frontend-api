@@ -434,7 +434,10 @@ func (h *Handler) GetToken(
 		}
 		permissions := slices.Collect(maps.Keys(permissionsMap))
 		tokenPermissions["organization"] = permissions
-		tok.Set("organization", strconv.FormatUint(session.ActiveSignin.ActiveOrganizationMembership.OrganizationID, 10))
+		tok.Set(
+			"organization",
+			strconv.FormatUint(session.ActiveSignin.ActiveOrganizationMembership.OrganizationID, 10),
+		)
 	}
 	if session.ActiveSignin.ActiveWorkspaceMembership != nil {
 		permissionsMap := map[string]bool{}

@@ -476,7 +476,9 @@ func ExchangeTokenForUser(
 		}
 
 		if email == "" {
-			return nil, fmt.Errorf("x email not available - ensure users.email scope is approved and user has verified email")
+			return nil, fmt.Errorf(
+				"x email not available - ensure users.email scope is approved and user has verified email",
+			)
 		}
 
 		return &OAuthUser{

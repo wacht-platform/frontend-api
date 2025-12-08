@@ -21,7 +21,11 @@ func NewService() *Service {
 	}
 }
 
-func (s *Service) CreateContext(deploymentID uint64, contextGroup *string, req CreateContextRequest) (*model.AgentExecutionContext, error) {
+func (s *Service) CreateContext(
+	deploymentID uint64,
+	contextGroup *string,
+	req CreateContextRequest,
+) (*model.AgentExecutionContext, error) {
 	context := &model.AgentExecutionContext{
 		Model: model.Model{
 			ID: snowflake.ID(),
@@ -41,7 +45,11 @@ func (s *Service) CreateContext(deploymentID uint64, contextGroup *string, req C
 	return context, nil
 }
 
-func (s *Service) ListContexts(deploymentID uint64, contextGroup *string, params ListContextsRequest) (*ListContextsResponse, error) {
+func (s *Service) ListContexts(
+	deploymentID uint64,
+	contextGroup *string,
+	params ListContextsRequest,
+) (*ListContextsResponse, error) {
 	query := s.db.Model(&model.AgentExecutionContext{}).
 		Where("deployment_id = ?", deploymentID)
 
@@ -96,7 +104,11 @@ func (s *Service) ListContexts(deploymentID uint64, contextGroup *string, params
 	}, nil
 }
 
-func (s *Service) GetContext(deploymentID uint64, contextGroup *string, contextID uint64) (*model.AgentExecutionContext, error) {
+func (s *Service) GetContext(
+	deploymentID uint64,
+	contextGroup *string,
+	contextID uint64,
+) (*model.AgentExecutionContext, error) {
 	query := s.db.Where("id = ? AND deployment_id = ?", contextID, deploymentID)
 
 	if contextGroup != nil && *contextGroup != "" {
@@ -134,7 +146,13 @@ func (s *Service) DeleteContext(deploymentID uint64, contextGroup *string, conte
 	return nil
 }
 
-func (s *Service) GetContextMessages(deploymentID uint64, contextGroup *string, contextID uint64, limit int, beforeID, afterID string) ([]ConversationMessage, bool, error) {
+func (s *Service) GetContextMessages(
+	deploymentID uint64,
+	contextGroup *string,
+	contextID uint64,
+	limit int,
+	beforeID, afterID string,
+) ([]ConversationMessage, bool, error) {
 	// First verify the context exists and user has access
 	var context model.AgentExecutionContext
 	query := s.db.Where("deployment_id = ? AND id = ?", deploymentID, contextID)

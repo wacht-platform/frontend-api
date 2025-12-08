@@ -8,9 +8,9 @@ import (
 
 type RotatingToken struct {
 	Model
-	SessionID   uint64  `json:"session_id"   gorm:"not null"`
-	ValidUntil  time.Time `json:"valid_until"  gorm:"not null"`
-	NextTokenID *uint64 `json:"next_token_id"`
+	SessionID   uint64    `json:"session_id"    gorm:"not null"`
+	ValidUntil  time.Time `json:"valid_until"   gorm:"not null"`
+	NextTokenID *uint64   `json:"next_token_id"`
 }
 
 func (r *RotatingToken) IsValid() bool {

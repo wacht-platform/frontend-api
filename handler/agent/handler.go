@@ -168,7 +168,14 @@ func (h *Handler) GetContextMessages(c *fiber.Ctx) error {
 
 	deployment := handler.GetDeployment(c)
 
-	messages, hasMore, err := h.service.GetContextMessages(deployment.ID, contextGroup, contextID, limit, beforeID, afterID)
+	messages, hasMore, err := h.service.GetContextMessages(
+		deployment.ID,
+		contextGroup,
+		contextID,
+		limit,
+		beforeID,
+		afterID,
+	)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, err.Error())
 	}

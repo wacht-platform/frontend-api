@@ -55,7 +55,10 @@ func GetOAuthCredentialsWithRedirectURI(name string, frontendHost string) model.
 	return creds
 }
 
-func GetDeploymentOAuthCredentials(deployment *model.Deployment, provider model.SocialConnectionProvider) (*model.OauthCredentials, error) {
+func GetDeploymentOAuthCredentials(
+	deployment *model.Deployment,
+	provider model.SocialConnectionProvider,
+) (*model.OauthCredentials, error) {
 	for _, conn := range deployment.SocialConnections {
 		if conn.Provider == provider && conn.Enabled && conn.Credentials != nil {
 			creds := *conn.Credentials

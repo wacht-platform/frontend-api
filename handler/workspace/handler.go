@@ -63,7 +63,14 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 		}
 
 		if d.B2BSettings.WorkspacesPerOrgCount > 0 && workspaceCount >= int64(d.B2BSettings.WorkspacesPerOrgCount) {
-			return handler.SendForbidden(c, nil, fmt.Sprintf("Organization has reached the maximum number of workspaces allowed (%d)", d.B2BSettings.WorkspacesPerOrgCount))
+			return handler.SendForbidden(
+				c,
+				nil,
+				fmt.Sprintf(
+					"Organization has reached the maximum number of workspaces allowed (%d)",
+					d.B2BSettings.WorkspacesPerOrgCount,
+				),
+			)
 		}
 	}
 
@@ -128,7 +135,12 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 				OrganizationID:        workspace.OrganizationID,
 			}
 			if err := tx.Create(&assoc).Error; err != nil {
-				log.Printf("Failed to assign default creator role to workspace %d for user %d: %v", workspace.ID, session.ActiveSignin.UserID, err)
+				log.Printf(
+					"Failed to assign default creator role to workspace %d for user %d: %v",
+					workspace.ID,
+					session.ActiveSignin.UserID,
+					err,
+				)
 			}
 		}
 
@@ -202,8 +214,13 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 			AND workspace_memberships.deleted_at IS NULL
 		LIMIT 1
 	`
-	if err := database.Connection.Raw(checkSQL, workspaceID, session.ActiveSignin.UserID).Scan(&actingUserMembershipExists).Error; err != nil || actingUserMembershipExists == 0 {
-		return handler.SendForbidden(c, nil, "Insufficient permissions to view members (not a member of the workspace).")
+	if err := database.Connection.Raw(checkSQL, workspaceID, session.ActiveSignin.UserID).Scan(&actingUserMembershipExists).Error; err != nil ||
+		actingUserMembershipExists == 0 {
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Insufficient permissions to view members (not a member of the workspace).",
+		)
 	}
 
 	log.Printf("Fetching workspace members for workspace %d", workspaceID)
@@ -446,7 +463,11 @@ func (h *Handler) DeleteWorkspaceRole(c *fiber.Ctx) error {
 		Count(&memberCount)
 
 	if memberCount > 0 {
-		return handler.SendBadRequest(c, nil, fmt.Sprintf("Cannot delete role - %d members still have this role assigned", memberCount))
+		return handler.SendBadRequest(
+			c,
+			nil,
+			fmt.Sprintf("Cannot delete role - %d members still have this role assigned", memberCount),
+		)
 	}
 
 	if err := database.Connection.Delete(&roleToDelete).Error; err != nil {
@@ -523,7 +544,12 @@ func (h *Handler) AddWorkspaceMemberRole(c *fiber.Ctx) error {
 	}
 
 	deployment := handler.GetDeployment(c)
-	utils.PublishWebhookEvent(deployment.ID, "workspace.member.role.updated", targetMembershipID, "workspace_membership")
+	utils.PublishWebhookEvent(
+		deployment.ID,
+		"workspace.member.role.updated",
+		targetMembershipID,
+		"workspace_membership",
+	)
 
 	return handler.SendSuccess(c, fiber.Map{"success": true})
 }
@@ -582,7 +608,11 @@ func (h *Handler) RemoveWorkspaceMemberRole(c *fiber.Ctx) error {
 			return handler.SendInternalServerError(c, errCount, "Failed to verify workspace owner status.")
 		}
 		if otherOwnerCount == 0 {
-			return handler.SendForbidden(c, nil, "Cannot remove your own owner role as you are the sole owner in this workspace. Please assign this role to another member first.")
+			return handler.SendForbidden(
+				c,
+				nil,
+				"Cannot remove your own owner role as you are the sole owner in this workspace. Please assign this role to another member first.",
+			)
 		}
 	}
 
@@ -591,7 +621,12 @@ func (h *Handler) RemoveWorkspaceMemberRole(c *fiber.Ctx) error {
 		Delete(&model.WorkspaceMembershipRoleAssoc{})
 
 	if result.Error != nil {
-		log.Printf("Error removing role %d from workspace membership %d: %v", roleIDToRemove, targetMembershipID, result.Error)
+		log.Printf(
+			"Error removing role %d from workspace membership %d: %v",
+			roleIDToRemove,
+			targetMembershipID,
+			result.Error,
+		)
 		return handler.SendInternalServerError(c, result.Error, "Failed to remove role from member.")
 	}
 	if result.RowsAffected == 0 {
@@ -716,7 +751,14 @@ func (h *Handler) DeleteWorkspace(c *fiber.Ctx) error {
 
 	var orgUsingThisAsAutoAssign model.Organization
 	if err := database.Connection.Where("auto_assigned_workspace_id = ?", workspaceID).First(&orgUsingThisAsAutoAssign).Error; err == nil {
-		return handler.SendForbidden(c, nil, fmt.Sprintf("Cannot delete workspace as it is configured as the auto-assigned workspace for organization '%s'. Please change that organization's settings first.", orgUsingThisAsAutoAssign.Name))
+		return handler.SendForbidden(
+			c,
+			nil,
+			fmt.Sprintf(
+				"Cannot delete workspace as it is configured as the auto-assigned workspace for organization '%s'. Please change that organization's settings first.",
+				orgUsingThisAsAutoAssign.Name,
+			),
+		)
 	} else if err != gorm.ErrRecordNotFound {
 		log.Printf("Error checking if workspace %d is an auto-assigned workspace: %v", workspaceID, err)
 		return handler.SendInternalServerError(c, err, "Failed to verify workspace status before deletion.")
@@ -760,7 +802,7 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 	}
 
 	type AddMemberToWorkspaceRequest struct {
-		Email  string `json:"email" validate:"required,email"`
+		Email  string `json:"email"   validate:"required,email"`
 		RoleID uint64 `json:"role_id" validate:"required"` // WorkspaceRoleID
 	}
 
@@ -779,7 +821,14 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 		}
 
 		if uint64(memberCount) >= d.B2BSettings.MaxAllowedWorkspaceMembers {
-			return handler.SendForbidden(c, nil, fmt.Sprintf("Workspace has reached the maximum number of members allowed (%d)", d.B2BSettings.MaxAllowedWorkspaceMembers))
+			return handler.SendForbidden(
+				c,
+				nil,
+				fmt.Sprintf(
+					"Workspace has reached the maximum number of members allowed (%d)",
+					d.B2BSettings.MaxAllowedWorkspaceMembers,
+				),
+			)
 		}
 	}
 
@@ -834,7 +883,12 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 		if err == gorm.ErrRecordNotFound {
 			return handler.SendBadRequest(c, nil, "User to be added is not a member of the workspace's organization.")
 		}
-		log.Printf("Error fetching organization membership for user %d in org %d: %v", userToInvite.ID, workspaceForOrgID.OrganizationID, err)
+		log.Printf(
+			"Error fetching organization membership for user %d in org %d: %v",
+			userToInvite.ID,
+			workspaceForOrgID.OrganizationID,
+			err,
+		)
 		return handler.SendInternalServerError(c, err, "Error verifying user's organization membership.")
 	}
 
@@ -872,7 +926,12 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 	database.Connection.Preload("User").Preload("Roles").First(&newWorkspaceMembership, newWorkspaceMembership.ID)
 
 	deployment := handler.GetDeployment(c)
-	utils.PublishWebhookEvent(deployment.ID, "workspace.member.added", newWorkspaceMembership.ID, "workspace_membership")
+	utils.PublishWebhookEvent(
+		deployment.ID,
+		"workspace.member.added",
+		newWorkspaceMembership.ID,
+		"workspace_membership",
+	)
 
 	return handler.SendSuccess(c, fiber.Map{"membership": newWorkspaceMembership})
 }
@@ -934,7 +993,11 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 	}
 
 	if isTargetLastOwner && targetMembership.UserID != *session.ActiveSignin.UserID {
-		return handler.SendForbidden(c, nil, "Cannot remove this member as they are the sole owner. Assign ownership to another member first or delete the workspace.")
+		return handler.SendForbidden(
+			c,
+			nil,
+			"Cannot remove this member as they are the sole owner. Assign ownership to another member first or delete the workspace.",
+		)
 	}
 
 	deployment := handler.GetDeployment(c)
@@ -951,7 +1014,13 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 	})
 
 	if txErr != nil {
-		log.Printf("Failed to remove member (User ID: %d, Membership ID: %d) from workspace %d: %v", targetUserID, targetMembership.ID, workspaceID, txErr)
+		log.Printf(
+			"Failed to remove member (User ID: %d, Membership ID: %d) from workspace %d: %v",
+			targetUserID,
+			targetMembership.ID,
+			workspaceID,
+			txErr,
+		)
 		return handler.SendInternalServerError(
 			c,
 			txErr,

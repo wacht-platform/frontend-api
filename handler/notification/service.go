@@ -74,7 +74,12 @@ func getUserWorkspaceIDs(userID uint64) []uint64 {
 	return wsIDs
 }
 
-func ApplyChannelFilters(db *gorm.DB, req *model.NotificationListRequest, userID uint64, session *model.Session) *gorm.DB {
+func ApplyChannelFilters(
+	db *gorm.DB,
+	req *model.NotificationListRequest,
+	userID uint64,
+	session *model.Session,
+) *gorm.DB {
 	db = db.Where("user_id = ?", userID)
 
 	channels := req.Channels

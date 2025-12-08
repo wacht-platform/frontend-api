@@ -192,7 +192,11 @@ func parseSocialConnectionsJSON(jsonStr string) []model.SocialConnection {
 
 		userEmailAddressID, err := strconv.ParseUint(jsonConn.UserEmailAddressID, 10, 64)
 		if err != nil {
-			log.Printf("Error parsing social connection user_email_address_id '%s': %v", jsonConn.UserEmailAddressID, err)
+			log.Printf(
+				"Error parsing social connection user_email_address_id '%s': %v",
+				jsonConn.UserEmailAddressID,
+				err,
+			)
 			continue
 		}
 
@@ -1928,8 +1932,20 @@ func (h *Handler) MakeEmailPrimary(c *fiber.Ctx) error {
 
 	deployment := handler.GetDeployment(c)
 	if oldPrimaryEmail != "" && oldPrimaryEmail != emailAddress.EmailAddress {
-		_ = h.service.nats.SendPrimaryEmailChangeEmail(deployment.ID, user.ID, oldPrimaryEmail, oldPrimaryEmail, emailAddress.EmailAddress)
-		_ = h.service.nats.SendPrimaryEmailChangeEmail(deployment.ID, user.ID, emailAddress.EmailAddress, oldPrimaryEmail, emailAddress.EmailAddress)
+		_ = h.service.nats.SendPrimaryEmailChangeEmail(
+			deployment.ID,
+			user.ID,
+			oldPrimaryEmail,
+			oldPrimaryEmail,
+			emailAddress.EmailAddress,
+		)
+		_ = h.service.nats.SendPrimaryEmailChangeEmail(
+			deployment.ID,
+			user.ID,
+			emailAddress.EmailAddress,
+			oldPrimaryEmail,
+			emailAddress.EmailAddress,
+		)
 	}
 
 	utils.PublishWebhookEvent(deployment.ID, "user.email.primary.changed", user.ID, "user")
@@ -2411,7 +2427,8 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 
 		if err := tx.Create(&socialConnection).Error; err != nil {
 			if pgErr, ok := err.(*pgconn.PgError); ok {
-				if strings.Contains(pgErr.ConstraintName, "provider") || strings.Contains(pgErr.ConstraintName, "social") {
+				if strings.Contains(pgErr.ConstraintName, "provider") ||
+					strings.Contains(pgErr.ConstraintName, "social") {
 					return handler.ErrSocialAccountAlreadyConnected
 				}
 			}

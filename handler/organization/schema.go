@@ -3,7 +3,7 @@ package organization
 import "github.com/ilabs/wacht-fe/model"
 
 type CreateOrgRequest struct {
-	Name        string `form:"name" validate:"required"`
+	Name        string `form:"name"        validate:"required"`
 	Description string `form:"description"`
 }
 
@@ -22,7 +22,7 @@ type CreateRoleRequest struct {
 }
 
 type InviteMemberRequest struct {
-	Email           string  `form:"email" validate:"required,email"`
+	Email           string  `form:"email"                    validate:"required,email"`
 	RoleID          *uint64 `form:"role_id,string"`
 	WorkspaceID     *uint64 `form:"workspace_id,string"`
 	WorkspaceRoleID *uint64 `form:"workspace_role_id,string"`
@@ -69,7 +69,7 @@ type WorkspaceInfo struct {
 
 type CreateEnterpriseConnectionRequest struct {
 	DomainID uint64 `form:"domain_id,string"`
-	Protocol string `form:"protocol" validate:"required,oneof=saml oidc"`
+	Protocol string `form:"protocol"         validate:"required,oneof=saml oidc"`
 
 	// SAML fields (required if protocol is saml)
 	IdpEntityID    string `form:"idp_entity_id"`

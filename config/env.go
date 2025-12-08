@@ -2,9 +2,9 @@ package config
 
 import (
 	"context"
+	"github.com/joho/godotenv"
 	"log"
 	"os"
-	"github.com/joho/godotenv"
 )
 
 func Init() {

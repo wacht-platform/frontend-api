@@ -906,8 +906,14 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		}
 
 		session.ActiveSignin.UserID = getOptionalUint64FromMap(rawResult, "ASI__user_id")
-		session.ActiveSignin.ActiveOrganizationMembershipID = getOptionalUint64FromMap(rawResult, "ASI__active_org_membership_id")
-		session.ActiveSignin.ActiveWorkspaceMembershipID = getOptionalUint64FromMap(rawResult, "ASI__active_ws_membership_id")
+		session.ActiveSignin.ActiveOrganizationMembershipID = getOptionalUint64FromMap(
+			rawResult,
+			"ASI__active_org_membership_id",
+		)
+		session.ActiveSignin.ActiveWorkspaceMembershipID = getOptionalUint64FromMap(
+			rawResult,
+			"ASI__active_ws_membership_id",
+		)
 
 		// Parse string fields
 		session.ActiveSignin.ExpiresAt = getTimeFromMap(rawResult, "ASI__expires_at")
@@ -939,7 +945,10 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			}
 
 			// Parse primary email address ID
-			session.ActiveSignin.User.PrimaryEmailAddressID = getOptionalUint64FromMap(rawResult, "ASI__User__primary_email_addr_id")
+			session.ActiveSignin.User.PrimaryEmailAddressID = getOptionalUint64FromMap(
+				rawResult,
+				"ASI__User__primary_email_addr_id",
+			)
 
 			// Parse primary email JSON
 			if primaryEmailJSON := getStringFromMap(rawResult, "ASI__User__primary_email_addr"); primaryEmailJSON != "" {
@@ -952,7 +961,10 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			}
 
 			// Parse primary phone number ID
-			session.ActiveSignin.User.PrimaryPhoneNumberID = getOptionalUint64FromMap(rawResult, "ASI__User__primary_phone_num_id")
+			session.ActiveSignin.User.PrimaryPhoneNumberID = getOptionalUint64FromMap(
+				rawResult,
+				"ASI__User__primary_phone_num_id",
+			)
 
 			// Parse primary phone JSON
 			if primaryPhoneJSON := getStringFromMap(rawResult, "ASI__User__primary_phone_num"); primaryPhoneJSON != "" {
@@ -974,7 +986,8 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			}
 
 			// Parse user segments
-			if segmentsJSON := getStringFromMap(rawResult, "user_segments"); segmentsJSON != "" && segmentsJSON != "[]" {
+			if segmentsJSON := getStringFromMap(rawResult, "user_segments"); segmentsJSON != "" &&
+				segmentsJSON != "[]" {
 				var segmentsArray []map[string]any
 				if err := json.Unmarshal([]byte(segmentsJSON), &segmentsArray); err == nil {
 					for _, segmentMap := range segmentsArray {
@@ -1007,11 +1020,26 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			}
 
 			// Parse organization details
-			session.ActiveSignin.ActiveOrganizationMembership.Organization.Name = getStringFromMap(rawResult, "ASI__AOM__Org__name")
-			session.ActiveSignin.ActiveOrganizationMembership.Organization.ImageUrl = getStringFromMap(rawResult, "ASI__AOM__Org__image_url")
-			session.ActiveSignin.ActiveOrganizationMembership.Organization.Description = getStringFromMap(rawResult, "ASI__AOM__Org__description")
-			session.ActiveSignin.ActiveOrganizationMembership.Organization.EnforceMFASetup = getBoolFromMap(rawResult, "ASI__AOM__Org__enforce_mfa")
-			session.ActiveSignin.ActiveOrganizationMembership.Organization.EnableIPRestriction = getBoolFromMap(rawResult, "ASI__AOM__Org__enable_ip_restrict")
+			session.ActiveSignin.ActiveOrganizationMembership.Organization.Name = getStringFromMap(
+				rawResult,
+				"ASI__AOM__Org__name",
+			)
+			session.ActiveSignin.ActiveOrganizationMembership.Organization.ImageUrl = getStringFromMap(
+				rawResult,
+				"ASI__AOM__Org__image_url",
+			)
+			session.ActiveSignin.ActiveOrganizationMembership.Organization.Description = getStringFromMap(
+				rawResult,
+				"ASI__AOM__Org__description",
+			)
+			session.ActiveSignin.ActiveOrganizationMembership.Organization.EnforceMFASetup = getBoolFromMap(
+				rawResult,
+				"ASI__AOM__Org__enforce_mfa",
+			)
+			session.ActiveSignin.ActiveOrganizationMembership.Organization.EnableIPRestriction = getBoolFromMap(
+				rawResult,
+				"ASI__AOM__Org__enable_ip_restrict",
+			)
 
 			if memberCount, err := parseUint64FromInterface(rawResult["ASI__AOM__Org__member_count"]); err == nil {
 				session.ActiveSignin.ActiveOrganizationMembership.Organization.MemberCount = uint32(memberCount)
@@ -1019,7 +1047,10 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 
 			if metadata, ok := rawResult["ASI__AOM__Org__public_metadata"]; ok && metadata != nil {
 				if metadataBytes, ok := metadata.([]byte); ok {
-					json.Unmarshal(metadataBytes, &session.ActiveSignin.ActiveOrganizationMembership.Organization.PublicMetadata)
+					json.Unmarshal(
+						metadataBytes,
+						&session.ActiveSignin.ActiveOrganizationMembership.Organization.PublicMetadata,
+					)
 				} else if metadataStr, ok := metadata.(string); ok {
 					json.Unmarshal([]byte(metadataStr), &session.ActiveSignin.ActiveOrganizationMembership.Organization.PublicMetadata)
 				}
@@ -1031,19 +1062,26 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 				if err := json.Unmarshal([]byte(rolesJSON), &rolesArray); err == nil {
 					for _, roleMap := range rolesArray {
 						if role, err := parseOrganizationRoleFromMap(roleMap); err == nil {
-							session.ActiveSignin.ActiveOrganizationMembership.Roles = append(session.ActiveSignin.ActiveOrganizationMembership.Roles, role)
+							session.ActiveSignin.ActiveOrganizationMembership.Roles = append(
+								session.ActiveSignin.ActiveOrganizationMembership.Roles,
+								role,
+							)
 						}
 					}
 				}
 			}
 
 			// Parse organization segments
-			if segmentsJSON := getStringFromMap(rawResult, "organization_segments"); segmentsJSON != "" && segmentsJSON != "[]" {
+			if segmentsJSON := getStringFromMap(rawResult, "organization_segments"); segmentsJSON != "" &&
+				segmentsJSON != "[]" {
 				var segmentsArray []map[string]any
 				if err := json.Unmarshal([]byte(segmentsJSON), &segmentsArray); err == nil {
 					for _, segmentMap := range segmentsArray {
 						if segment, err := parseSegmentFromMap(segmentMap); err == nil {
-							session.ActiveSignin.ActiveOrganizationMembership.Organization.Segments = append(session.ActiveSignin.ActiveOrganizationMembership.Organization.Segments, segment)
+							session.ActiveSignin.ActiveOrganizationMembership.Organization.Segments = append(
+								session.ActiveSignin.ActiveOrganizationMembership.Organization.Segments,
+								segment,
+							)
 						}
 					}
 				}
@@ -1074,11 +1112,26 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 			}
 
 			// Parse workspace details
-			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.Name = getStringFromMap(rawResult, "ASI__AWM__WS__name")
-			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.ImageUrl = getStringFromMap(rawResult, "ASI__AWM__WS__image_url")
-			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.Description = getStringFromMap(rawResult, "ASI__AWM__WS__description")
-			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.EnforceMFASetup = getBoolFromMap(rawResult, "ASI__AWM__WS__enforce_mfa")
-			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.EnableIPRestriction = getBoolFromMap(rawResult, "ASI__AWM__WS__enable_ip_restrict")
+			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.Name = getStringFromMap(
+				rawResult,
+				"ASI__AWM__WS__name",
+			)
+			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.ImageUrl = getStringFromMap(
+				rawResult,
+				"ASI__AWM__WS__image_url",
+			)
+			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.Description = getStringFromMap(
+				rawResult,
+				"ASI__AWM__WS__description",
+			)
+			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.EnforceMFASetup = getBoolFromMap(
+				rawResult,
+				"ASI__AWM__WS__enforce_mfa",
+			)
+			session.ActiveSignin.ActiveWorkspaceMembership.Workspace.EnableIPRestriction = getBoolFromMap(
+				rawResult,
+				"ASI__AWM__WS__enable_ip_restrict",
+			)
 
 			if memberCount, err := parseUint64FromInterface(rawResult["ASI__AWM__WS__member_count"]); err == nil {
 				session.ActiveSignin.ActiveWorkspaceMembership.Workspace.MemberCount = uint64(memberCount)
@@ -1086,7 +1139,10 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 
 			if metadata, ok := rawResult["ASI__AWM__WS__public_metadata"]; ok && metadata != nil {
 				if metadataBytes, ok := metadata.([]byte); ok {
-					json.Unmarshal(metadataBytes, &session.ActiveSignin.ActiveWorkspaceMembership.Workspace.PublicMetadata)
+					json.Unmarshal(
+						metadataBytes,
+						&session.ActiveSignin.ActiveWorkspaceMembership.Workspace.PublicMetadata,
+					)
 				} else if metadataStr, ok := metadata.(string); ok {
 					json.Unmarshal([]byte(metadataStr), &session.ActiveSignin.ActiveWorkspaceMembership.Workspace.PublicMetadata)
 				}
@@ -1098,19 +1154,26 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 				if err := json.Unmarshal([]byte(rolesJSON), &rolesArray); err == nil {
 					for _, roleMap := range rolesArray {
 						if role, err := parseWorkspaceRoleFromMap(roleMap); err == nil {
-							session.ActiveSignin.ActiveWorkspaceMembership.Roles = append(session.ActiveSignin.ActiveWorkspaceMembership.Roles, role)
+							session.ActiveSignin.ActiveWorkspaceMembership.Roles = append(
+								session.ActiveSignin.ActiveWorkspaceMembership.Roles,
+								role,
+							)
 						}
 					}
 				}
 			}
 
 			// Parse workspace segments
-			if segmentsJSON := getStringFromMap(rawResult, "workspace_segments"); segmentsJSON != "" && segmentsJSON != "[]" {
+			if segmentsJSON := getStringFromMap(rawResult, "workspace_segments"); segmentsJSON != "" &&
+				segmentsJSON != "[]" {
 				var segmentsArray []map[string]any
 				if err := json.Unmarshal([]byte(segmentsJSON), &segmentsArray); err == nil {
 					for _, segmentMap := range segmentsArray {
 						if segment, err := parseSegmentFromMap(segmentMap); err == nil {
-							session.ActiveSignin.ActiveWorkspaceMembership.Workspace.Segments = append(session.ActiveSignin.ActiveWorkspaceMembership.Workspace.Segments, segment)
+							session.ActiveSignin.ActiveWorkspaceMembership.Workspace.Segments = append(
+								session.ActiveSignin.ActiveWorkspaceMembership.Workspace.Segments,
+								segment,
+							)
 						}
 					}
 				}
@@ -1119,7 +1182,8 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 	}
 
 	// Parse signin attempts
-	if signinAttemptsJSON := getStringFromMap(rawResult, "signin_attempts"); signinAttemptsJSON != "" && signinAttemptsJSON != "[]" {
+	if signinAttemptsJSON := getStringFromMap(rawResult, "signin_attempts"); signinAttemptsJSON != "" &&
+		signinAttemptsJSON != "[]" {
 		var signinAttemptsArray []map[string]any
 		if err := json.Unmarshal([]byte(signinAttemptsJSON), &signinAttemptsArray); err != nil {
 			log.Printf("Error: failed to unmarshal signin attempts JSON: %v", err)
@@ -1136,7 +1200,8 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 	}
 
 	// Parse signup attempts
-	if signupAttemptsJSON := getStringFromMap(rawResult, "signup_attempts"); signupAttemptsJSON != "" && signupAttemptsJSON != "[]" {
+	if signupAttemptsJSON := getStringFromMap(rawResult, "signup_attempts"); signupAttemptsJSON != "" &&
+		signupAttemptsJSON != "[]" {
 		var signupAttemptsArray []map[string]any
 		if err := json.Unmarshal([]byte(signupAttemptsJSON), &signupAttemptsArray); err != nil {
 			log.Printf("Error: failed to unmarshal signup attempts JSON: %v", err)

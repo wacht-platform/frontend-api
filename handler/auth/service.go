@@ -544,7 +544,11 @@ func (s *AuthService) ValidatePassword(password string) error {
 	return nil
 }
 
-func (s *AuthService) SendVerificationEmail(deployment *model.Deployment, userID uint64, email, code, ip, userAgent string) error {
+func (s *AuthService) SendVerificationEmail(
+	deployment *model.Deployment,
+	userID uint64,
+	email, code, ip, userAgent string,
+) error {
 	if deployment == nil {
 		return fmt.Errorf("deployment is required")
 	}
@@ -579,7 +583,11 @@ func (s *AuthService) SendSigninVerificationEmail(
 	return s.nats.SendVerificationEmail(deployment.ID, userID, email, code, ip, userAgent)
 }
 
-func (s *AuthService) SendPasswordResetEmail(deployment *model.Deployment, userID uint64, email, code, ip, userAgent string) error {
+func (s *AuthService) SendPasswordResetEmail(
+	deployment *model.Deployment,
+	userID uint64,
+	email, code, ip, userAgent string,
+) error {
 	if deployment == nil {
 		return fmt.Errorf("deployment is required")
 	}
@@ -712,7 +720,10 @@ func (s *AuthService) CheckMissingRequiredFields(user *model.User, authSettings 
 	return missingFields
 }
 
-func (s *AuthService) CheckMissingFieldsFromData(data model.ProfileCompletionData, authSettings model.DeploymentAuthSettings) []string {
+func (s *AuthService) CheckMissingFieldsFromData(
+	data model.ProfileCompletionData,
+	authSettings model.DeploymentAuthSettings,
+) []string {
 	var missingFields []string
 
 	if authSettings.FirstName.Enabled && authSettings.FirstName.Required && data.FirstName == "" {

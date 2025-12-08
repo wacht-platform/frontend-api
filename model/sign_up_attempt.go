@@ -52,9 +52,9 @@ type SignupAttempt struct {
 	MissingFields    datatypes.JSONSlice[string]            `json:"missing_fields"`
 	CurrentStep      SignupAttemptStep                      `json:"current_step"`
 	RemainingSteps   datatypes.JSONSlice[SignupAttemptStep] `json:"remaining_steps"`
-	Completed        bool                                   `json:"completed" gorm:"not null;default:false"`
+	Completed        bool                                   `json:"completed"              gorm:"not null;default:false"`
 	SSOProvider      SocialConnectionProvider               `json:"sso_provider,omitempty"`
 	SSOAccessToken   string                                 `json:"-"`
 	SSORefreshToken  string                                 `json:"-"`
-	IsOAuthSignup    bool                                   `json:"is_oauth_signup" gorm:"is_oauth_signup"`
+	IsOAuthSignup    bool                                   `json:"is_oauth_signup"        gorm:"is_oauth_signup"`
 }

@@ -20,33 +20,33 @@ const (
 
 // Notification represents a user notification
 type Notification struct {
-	ID             uint64  `json:"id" gorm:"primaryKey"`
-	DeploymentID   uint64  `json:"deployment_id" gorm:"not null;index"`
-	UserID         uint64  `json:"user_id" gorm:"not null;index"`
+	ID             uint64  `json:"id"                        gorm:"primaryKey"`
+	DeploymentID   uint64  `json:"deployment_id"             gorm:"not null;index"`
+	UserID         uint64  `json:"user_id"                   gorm:"not null;index"`
 	OrganizationID *uint64 `json:"organization_id,omitempty" gorm:"index"`
-	WorkspaceID    *uint64 `json:"workspace_id,omitempty" gorm:"index"`
+	WorkspaceID    *uint64 `json:"workspace_id,omitempty"    gorm:"index"`
 
 	// Content
 	Title string `json:"title" gorm:"not null"`
-	Body  string `json:"body" gorm:"not null"`
+	Body  string `json:"body"  gorm:"not null"`
 
 	// Action
 	ActionURL   *string `json:"action_url,omitempty"`
 	ActionLabel *string `json:"action_label,omitempty"`
 
 	// Status
-	Severity   NotificationSeverity `json:"severity" gorm:"default:'info'"`
-	IsRead     bool                 `json:"is_read" gorm:"default:false;index"`
+	Severity   NotificationSeverity `json:"severity"              gorm:"default:'info'"`
+	IsRead     bool                 `json:"is_read"               gorm:"default:false;index"`
 	ReadAt     *time.Time           `json:"read_at,omitempty"`
-	IsArchived bool                 `json:"is_archived" gorm:"default:false;index"`
+	IsArchived bool                 `json:"is_archived"           gorm:"default:false;index"`
 	ArchivedAt *time.Time           `json:"archived_at,omitempty"`
 
 	// Metadata
 	Metadata json.RawMessage `json:"metadata,omitempty" gorm:"type:jsonb"`
 
 	// Timestamps
-	CreatedAt time.Time  `json:"created_at" gorm:"not null;index"`
-	UpdatedAt time.Time  `json:"updated_at" gorm:"not null"`
+	CreatedAt time.Time  `json:"created_at"           gorm:"not null;index"`
+	UpdatedAt time.Time  `json:"updated_at"           gorm:"not null"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty" gorm:"index"`
 }
 
@@ -56,14 +56,14 @@ func (Notification) TableName() string {
 }
 
 type NotificationListRequest struct {
-	Limit           int                   `json:"limit" form:"limit" validate:"min=1,max=100"`
-	Offset          int                   `json:"offset" form:"offset" validate:"min=0"`
-	Channels        []string              `json:"channels" form:"channels"`
-	OrganizationIDs []uint64              `json:"organization_ids" form:"organization_ids"`
-	WorkspaceIDs    []uint64              `json:"workspace_ids" form:"workspace_ids"`
-	IsRead          *bool                 `json:"is_read,omitempty" form:"is_read"`
+	Limit           int                   `json:"limit"                 form:"limit"            validate:"min=1,max=100"`
+	Offset          int                   `json:"offset"                form:"offset"           validate:"min=0"`
+	Channels        []string              `json:"channels"              form:"channels"`
+	OrganizationIDs []uint64              `json:"organization_ids"      form:"organization_ids"`
+	WorkspaceIDs    []uint64              `json:"workspace_ids"         form:"workspace_ids"`
+	IsRead          *bool                 `json:"is_read,omitempty"     form:"is_read"`
 	IsArchived      *bool                 `json:"is_archived,omitempty" form:"is_archived"`
-	Severity        *NotificationSeverity `json:"severity,omitempty" form:"severity"`
+	Severity        *NotificationSeverity `json:"severity,omitempty"    form:"severity"`
 }
 
 type ChannelCounts struct {
@@ -115,7 +115,6 @@ func (s NotificationSeverity) Value() (driver.Value, error) {
 	return string(s), nil
 }
 
-
 func (r *NotificationListRequest) ApplyFilters(db *gorm.DB) *gorm.DB {
 	if r.IsRead != nil {
 		db = db.Where("is_read = ?", *r.IsRead)
@@ -159,5 +158,3 @@ func (n *Notification) Archive() {
 	n.ArchivedAt = &now
 	n.UpdatedAt = now
 }
-
-

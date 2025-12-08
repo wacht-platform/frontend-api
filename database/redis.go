@@ -39,4 +39,3 @@ func InitRedisConnection() error {
 
 	return nil
 }
-
