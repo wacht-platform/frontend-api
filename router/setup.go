@@ -8,7 +8,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
-	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/middleware"
@@ -35,7 +34,6 @@ func setupRoutes(app *fiber.App) {
 }
 
 func setupMiddleware(app *fiber.App) {
-	app.Use(logger.New())
 	app.Use(recover.New())
 	natsService, _ := service.NewNatsService()
 	app.Use(limiter.New(limiter.Config{
