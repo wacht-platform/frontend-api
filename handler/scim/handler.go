@@ -11,19 +11,16 @@ import (
 	"gorm.io/gorm"
 )
 
-// Handler handles SCIM 2.0 API requests
 type Handler struct {
 	service *SCIMService
 }
 
-// NewHandler creates a new SCIM handler
 func NewHandler() *Handler {
 	return &Handler{
 		service: NewSCIMService(),
 	}
 }
 
-// AuthMiddleware validates SCIM bearer token authentication
 func (h *Handler) AuthMiddleware(c *fiber.Ctx) error {
 	connectionIDStr := c.Params("connectionId")
 	if connectionIDStr == "" {
@@ -70,11 +67,6 @@ func (h *Handler) AuthMiddleware(c *fiber.Ctx) error {
 	return c.Next()
 }
 
-// ================================
-// Discovery Endpoints
-// ================================
-
-// GetServiceProviderConfig returns SCIM service provider configuration
 func (h *Handler) GetServiceProviderConfig(c *fiber.Ctx) error {
 	connectionID := c.Locals("scim_connection_id").(uint64)
 	baseURL := h.getBaseURL(c)
@@ -122,7 +114,6 @@ func (h *Handler) GetServiceProviderConfig(c *fiber.Ctx) error {
 	return c.JSON(config)
 }
 
-// GetSchemas returns available SCIM schemas
 func (h *Handler) GetSchemas(c *fiber.Ctx) error {
 	// Simplified schema response - full schema definitions would be quite long
 	schemas := []any{
@@ -145,7 +136,6 @@ func (h *Handler) GetSchemas(c *fiber.Ctx) error {
 	return c.JSON(response)
 }
 
-// GetResourceTypes returns available resource types
 func (h *Handler) GetResourceTypes(c *fiber.Ctx) error {
 	connectionID := c.Locals("scim_connection_id").(uint64)
 	baseURL := h.getBaseURL(c)
@@ -182,11 +172,6 @@ func (h *Handler) GetResourceTypes(c *fiber.Ctx) error {
 	return c.JSON(response)
 }
 
-// ================================
-// User Endpoints
-// ================================
-
-// CreateUser creates a new user via SCIM
 func (h *Handler) CreateUser(c *fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
 	deploymentID := c.Locals("scim_deployment_id").(uint64)
@@ -240,7 +225,6 @@ func (h *Handler) CreateUser(c *fiber.Ctx) error {
 	return c.Status(201).JSON(result)
 }
 
-// ListUsers lists users with optional filtering
 func (h *Handler) ListUsers(c *fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
 	deploymentID := c.Locals("scim_deployment_id").(uint64)
@@ -265,7 +249,6 @@ func (h *Handler) ListUsers(c *fiber.Ctx) error {
 	return c.JSON(response)
 }
 
-// GetUser retrieves a single user by ID
 func (h *Handler) GetUser(c *fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
 	deploymentID := c.Locals("scim_deployment_id").(uint64)
@@ -286,7 +269,6 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-// ReplaceUser replaces a user (PUT)
 func (h *Handler) ReplaceUser(c *fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
 	deploymentID := c.Locals("scim_deployment_id").(uint64)
@@ -323,7 +305,6 @@ func (h *Handler) ReplaceUser(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-// PatchUser partially updates a user
 func (h *Handler) PatchUser(c *fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
 	deploymentID := c.Locals("scim_deployment_id").(uint64)
@@ -360,7 +341,6 @@ func (h *Handler) PatchUser(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-// DeleteUser deactivates a user (soft delete)
 func (h *Handler) DeleteUser(c *fiber.Ctx) error {
 	deploymentID := c.Locals("scim_deployment_id").(uint64)
 
@@ -386,11 +366,6 @@ func (h *Handler) DeleteUser(c *fiber.Ctx) error {
 	return c.SendStatus(204)
 }
 
-// ================================
-// Group Endpoints
-// ================================
-
-// CreateGroup creates a new group
 func (h *Handler) CreateGroup(c *fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
 	deploymentID := c.Locals("scim_deployment_id").(uint64)
@@ -435,7 +410,6 @@ func (h *Handler) CreateGroup(c *fiber.Ctx) error {
 	return c.Status(201).JSON(result)
 }
 
-// ListGroups lists groups with pagination
 func (h *Handler) ListGroups(c *fiber.Ctx) error {
 	connectionID := c.Locals("scim_connection_id").(uint64)
 
@@ -457,7 +431,6 @@ func (h *Handler) ListGroups(c *fiber.Ctx) error {
 	return c.JSON(response)
 }
 
-// GetGroup retrieves a single group
 func (h *Handler) GetGroup(c *fiber.Ctx) error {
 	connectionID := c.Locals("scim_connection_id").(uint64)
 
@@ -477,7 +450,6 @@ func (h *Handler) GetGroup(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-// PatchGroup partially updates a group (primarily for member management)
 func (h *Handler) PatchGroup(c *fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
 	connectionID := c.Locals("scim_connection_id").(uint64)
@@ -514,7 +486,6 @@ func (h *Handler) PatchGroup(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-// DeleteGroup removes a group
 func (h *Handler) DeleteGroup(c *fiber.Ctx) error {
 	connectionID := c.Locals("scim_connection_id").(uint64)
 
@@ -539,10 +510,6 @@ func (h *Handler) DeleteGroup(c *fiber.Ctx) error {
 
 	return c.SendStatus(204)
 }
-
-// ================================
-// Helper Methods
-// ================================
 
 func (h *Handler) sendSCIMError(c *fiber.Ctx, status int, detail, scimType string) error {
 	c.Set("Content-Type", ContentTypeSCIM)

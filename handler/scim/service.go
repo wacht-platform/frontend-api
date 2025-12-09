@@ -16,22 +16,16 @@ import (
 	"gorm.io/gorm"
 )
 
-// SCIMService handles SCIM business logic
 type SCIMService struct {
 	db *gorm.DB
 }
 
-// NewSCIMService creates a new SCIM service
 func NewSCIMService() *SCIMService {
 	return &SCIMService{
 		db: database.Connection,
 	}
 }
 
-// Token Management
-
-// GenerateToken generates a new SCIM bearer token for an enterprise connection
-// Returns the plain token (only shown once) and the token model
 func (s *SCIMService) GenerateToken(connectionID, deploymentID, organizationID uint64) (string, *model.SCIMToken, error) {
 	// Generate 48 bytes of random data -> 64 char base64 token
 	tokenBytes := make([]byte, 48)
@@ -63,7 +57,6 @@ func (s *SCIMService) GenerateToken(connectionID, deploymentID, organizationID u
 	return plainToken, token, nil
 }
 
-// ValidateToken validates a SCIM bearer token and returns the associated connection
 func (s *SCIMService) ValidateToken(connectionID uint64, bearerToken string) (*model.SCIMToken, *model.EnterpriseConnection, error) {
 	tokenHash := s.hashToken(bearerToken)
 
@@ -83,14 +76,10 @@ func (s *SCIMService) ValidateToken(connectionID uint64, bearerToken string) (*m
 	return &token, &connection, nil
 }
 
-// RevokeToken disables a SCIM token
 func (s *SCIMService) RevokeToken(connectionID uint64) error {
-	return s.db.Model(&model.SCIMToken{}).
-		Where("enterprise_connection_id = ?", connectionID).
-		Update("enabled", false).Error
+	return s.db.Where("enterprise_connection_id = ?", connectionID).Delete(&model.SCIMToken{}).Error
 }
 
-// GetToken retrieves token info (without the actual token) for a connection
 func (s *SCIMService) GetToken(connectionID uint64) (*model.SCIMToken, error) {
 	var token model.SCIMToken
 	if err := s.db.Where("enterprise_connection_id = ?", connectionID).First(&token).Error; err != nil {
@@ -104,9 +93,6 @@ func (s *SCIMService) hashToken(token string) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// User Management
-
-// FindUserByExternalID finds a user by their external IdP ID
 func (s *SCIMService) FindUserByExternalID(connectionID uint64, externalID string) (*model.User, *model.SCIMExternalID, error) {
 	var mapping model.SCIMExternalID
 	if err := s.db.Where("enterprise_connection_id = ? AND external_id = ?", connectionID, externalID).
@@ -117,7 +103,6 @@ func (s *SCIMService) FindUserByExternalID(connectionID uint64, externalID strin
 	return mapping.User, &mapping, nil
 }
 
-// FindUserByEmail finds a user by email within a deployment
 func (s *SCIMService) FindUserByEmail(email string, deploymentID uint64) (*model.User, error) {
 	var emailAddr model.UserEmailAddress
 	if err := s.db.Where("email_address = ? AND deployment_id = ?", strings.ToLower(email), deploymentID).
@@ -131,7 +116,6 @@ func (s *SCIMService) FindUserByEmail(email string, deploymentID uint64) (*model
 	return &emailAddr.User, nil
 }
 
-// CreateUser creates a new user via SCIM provisioning
 func (s *SCIMService) CreateUser(
 	tx *gorm.DB,
 	scimUser *SCIMUser,
@@ -227,7 +211,6 @@ func (s *SCIMService) CreateUser(
 	return &user, nil
 }
 
-// UpdateUser updates an existing user via SCIM
 func (s *SCIMService) UpdateUser(tx *gorm.DB, user *model.User, scimUser *SCIMUser) error {
 	updates := make(map[string]interface{})
 
@@ -268,12 +251,10 @@ func (s *SCIMService) UpdateUser(tx *gorm.DB, user *model.User, scimUser *SCIMUs
 	return nil
 }
 
-// DeactivateUser soft-deletes a user (sets disabled = true)
 func (s *SCIMService) DeactivateUser(tx *gorm.DB, userID uint64) error {
 	return tx.Model(&model.User{}).Where("id = ?", userID).Update("disabled", true).Error
 }
 
-// GetUserByID retrieves a user by Wacht ID
 func (s *SCIMService) GetUserByID(userID uint64, deploymentID uint64) (*model.User, error) {
 	var user model.User
 	if err := s.db.Where("id = ? AND deployment_id = ?", userID, deploymentID).
@@ -284,7 +265,6 @@ func (s *SCIMService) GetUserByID(userID uint64, deploymentID uint64) (*model.Us
 	return &user, nil
 }
 
-// ListUsers lists users in an organization with optional filtering
 func (s *SCIMService) ListUsers(organizationID, deploymentID uint64, startIndex, count int, filter string) ([]model.User, int, error) {
 	// Get membership IDs for this organization
 	var membershipUserIDs []uint64
@@ -331,9 +311,6 @@ func (s *SCIMService) ListUsers(organizationID, deploymentID uint64, startIndex,
 	return users, int(totalCount), nil
 }
 
-// Group Management
-
-// FindGroupByExternalID finds a SCIM group by external ID
 func (s *SCIMService) FindGroupByExternalID(connectionID uint64, externalID string) (*model.SCIMGroup, error) {
 	var group model.SCIMGroup
 	if err := s.db.Where("enterprise_connection_id = ? AND external_id = ?", connectionID, externalID).
@@ -345,7 +322,6 @@ func (s *SCIMService) FindGroupByExternalID(connectionID uint64, externalID stri
 	return &group, nil
 }
 
-// CreateGroup creates a new SCIM group
 func (s *SCIMService) CreateGroup(
 	tx *gorm.DB,
 	scimGroup *SCIMGroup,
@@ -391,7 +367,6 @@ func (s *SCIMService) CreateGroup(
 	return &group, nil
 }
 
-// UpdateGroupMembers updates the members of a SCIM group
 func (s *SCIMService) UpdateGroupMembers(tx *gorm.DB, group *model.SCIMGroup, members []SCIMMember, connection *model.EnterpriseConnection) error {
 	return s.updateGroupMembers(tx, group, members, connection)
 }
@@ -426,7 +401,6 @@ func (s *SCIMService) updateGroupMembers(tx *gorm.DB, group *model.SCIMGroup, me
 	return nil
 }
 
-// DeleteGroup removes a SCIM group
 func (s *SCIMService) DeleteGroup(tx *gorm.DB, groupID uint64) error {
 	// Remove group member role assignments first
 	var group model.SCIMGroup
@@ -444,7 +418,6 @@ func (s *SCIMService) DeleteGroup(tx *gorm.DB, groupID uint64) error {
 	return tx.Delete(&model.SCIMGroup{}, groupID).Error
 }
 
-// ListGroups lists SCIM groups for a connection
 func (s *SCIMService) ListGroups(connectionID uint64, startIndex, count int) ([]model.SCIMGroup, int, error) {
 	var totalCount int64
 	if err := s.db.Model(&model.SCIMGroup{}).
@@ -472,7 +445,6 @@ func (s *SCIMService) ListGroups(connectionID uint64, startIndex, count int) ([]
 	return groups, int(totalCount), nil
 }
 
-// GetGroupByID retrieves a SCIM group by ID
 func (s *SCIMService) GetGroupByID(groupID, connectionID uint64) (*model.SCIMGroup, error) {
 	var group model.SCIMGroup
 	if err := s.db.Where("id = ? AND enterprise_connection_id = ?", groupID, connectionID).
@@ -482,8 +454,6 @@ func (s *SCIMService) GetGroupByID(groupID, connectionID uint64) (*model.SCIMGro
 	}
 	return &group, nil
 }
-
-// Helper methods
 
 func (s *SCIMService) addUserToOrganization(tx *gorm.DB, userID, organizationID uint64) error {
 	// Check if already a member
