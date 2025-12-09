@@ -320,7 +320,7 @@ func (s *SCIMService) CreateGroup(
 		externalID = scimGroup.ID
 	}
 	if externalID == "" {
-		return nil, fmt.Errorf("group external ID is required")
+		externalID = scimGroup.DisplayName // Fallback to displayName
 	}
 
 	group := model.SCIMGroup{
