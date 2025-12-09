@@ -120,7 +120,7 @@ func (s *SCIMService) CreateUser(
 	tx *gorm.DB,
 	scimUser *SCIMUser,
 	connection *model.EnterpriseConnection,
-	deploymentID uint64,
+	deployment *model.Deployment,
 ) (*model.User, error) {
 	email := strings.ToLower(scimUser.GetPrimaryEmail())
 	if email == "" {
@@ -144,12 +144,6 @@ func (s *SCIMService) CreateUser(
 		}
 	}
 
-	// Get deployment for auth settings
-	var deployment model.Deployment
-	if err := tx.Where("id = ?", deploymentID).First(&deployment).Error; err != nil {
-		return nil, fmt.Errorf("deployment not found: %w", err)
-	}
-
 	user := model.User{
 		Model:                 model.Model{ID: userID},
 		FirstName:             firstName,
@@ -157,7 +151,7 @@ func (s *SCIMService) CreateUser(
 		Username:              scimUser.UserName,
 		SchemaVersion:         model.SchemaVersionV1,
 		SecondFactorPolicy:    deployment.AuthSettings.SecondFactorPolicy,
-		DeploymentID:          deploymentID,
+		DeploymentID:          deployment.ID,
 		PrimaryEmailAddressID: &primaryAddressID,
 		Disabled:              !scimUser.IsActive(),
 	}
@@ -169,7 +163,7 @@ func (s *SCIMService) CreateUser(
 	// Create email address
 	emailRecord := model.UserEmailAddress{
 		Model:                model.Model{ID: primaryAddressID},
-		DeploymentID:         deploymentID,
+		DeploymentID:         deployment.ID,
 		EmailAddress:         email,
 		IsPrimary:            true,
 		Verified:             true,
@@ -194,7 +188,7 @@ func (s *SCIMService) CreateUser(
 	mapping := model.SCIMExternalID{
 		ID:                     snowflake.ID(),
 		EnterpriseConnectionID: connection.ID,
-		DeploymentID:           deploymentID,
+		DeploymentID:           deployment.ID,
 		ExternalID:             externalID,
 		UserID:                 userID,
 	}
@@ -204,7 +198,7 @@ func (s *SCIMService) CreateUser(
 	}
 
 	// Add user to organization
-	if err := s.addUserToOrganization(tx, userID, connection.OrganizationID); err != nil {
+	if err := s.addUserToOrganization(tx, userID, connection.OrganizationID, deployment); err != nil {
 		return nil, fmt.Errorf("failed to add user to organization: %w", err)
 	}
 
@@ -442,7 +436,7 @@ func (s *SCIMService) GetGroupByID(groupID, connectionID uint64) (*model.SCIMGro
 	return &group, nil
 }
 
-func (s *SCIMService) addUserToOrganization(tx *gorm.DB, userID, organizationID uint64) error {
+func (s *SCIMService) addUserToOrganization(tx *gorm.DB, userID, organizationID uint64, deployment *model.Deployment) error {
 	// Check if already a member
 	var count int64
 	tx.Model(&model.OrganizationMembership{}).
@@ -453,13 +447,27 @@ func (s *SCIMService) addUserToOrganization(tx *gorm.DB, userID, organizationID 
 		return nil
 	}
 
+	membershipID := snowflake.ID()
 	membership := model.OrganizationMembership{
-		Model:          model.Model{ID: snowflake.ID()},
+		Model:          model.Model{ID: membershipID},
 		OrganizationID: organizationID,
 		UserID:         userID,
 	}
 
-	return tx.Create(&membership).Error
+	if err := tx.Create(&membership).Error; err != nil {
+		return err
+	}
+
+	// Assign default org member role from deployment B2B settings
+	if deployment != nil && deployment.B2BSettings.DefaultOrgMemberRoleID != 0 {
+		roleAssoc := model.OrgMembershipRoleAssoc{
+			OrganizationMembershipID: membershipID,
+			OrganizationRoleID:       deployment.B2BSettings.DefaultOrgMemberRoleID,
+		}
+		tx.Create(&roleAssoc)
+	}
+
+	return nil
 }
 
 func (s *SCIMService) resolveUserID(scimID string, connectionID, deploymentID uint64) (uint64, error) {

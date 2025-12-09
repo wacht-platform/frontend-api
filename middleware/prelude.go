@@ -34,9 +34,9 @@ func SetRequestPrelude(c *fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"message": "Deployment not found"})
 	}
 
-	isWellKnown := strings.HasPrefix(path, "/.well")
+	whitelisted := strings.HasPrefix(path, "/.well") || strings.HasPrefix(path, "/scim")
 
-	if isWellKnown || c.Context().IsOptions() {
+	if whitelisted || c.Context().IsOptions() {
 		return handleDeploymentOnly(c, host)
 	}
 

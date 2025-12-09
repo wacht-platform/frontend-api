@@ -8,6 +8,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/database"
+	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
 	"gorm.io/gorm"
 )
@@ -51,18 +52,15 @@ func (h *Handler) AuthMiddleware(c *fiber.Ctx) error {
 		return h.sendSCIMError(c, 401, "Invalid or expired token", "unauthorized")
 	}
 
-	// Load deployment
-	var deployment model.Deployment
-	if err := database.Connection.Where("id = ?", connection.DeploymentID).First(&deployment).Error; err != nil {
-		return h.sendSCIMError(c, 500, "Failed to load deployment", "")
-	}
+	// Use cached deployment from prelude middleware
+	deployment := handler.GetDeployment(c)
 
 	// Store in locals for handlers
 	c.Locals("scim_token", token)
 	c.Locals("scim_connection", connection)
-	c.Locals("scim_deployment", &deployment) // Store full deployment model
+	c.Locals("scim_deployment", &deployment)
 	c.Locals("scim_connection_id", connectionID)
-	c.Locals("scim_deployment_id", connection.DeploymentID)
+	c.Locals("scim_deployment_id", deployment.ID)
 	c.Locals("scim_organization_id", connection.OrganizationID)
 
 	return c.Next()
@@ -175,7 +173,7 @@ func (h *Handler) GetResourceTypes(c *fiber.Ctx) error {
 
 func (h *Handler) CreateUser(c *fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
-	deploymentID := c.Locals("scim_deployment_id").(uint64)
+	deployment := c.Locals("scim_deployment").(*model.Deployment)
 
 	var scimUser SCIMUser
 	if err := c.BodyParser(&scimUser); err != nil {
@@ -201,7 +199,7 @@ func (h *Handler) CreateUser(c *fiber.Ctx) error {
 	// Check by email
 	email := scimUser.GetPrimaryEmail()
 	if email != "" {
-		existingUser, _ := h.service.FindUserByEmail(email, deploymentID)
+		existingUser, _ := h.service.FindUserByEmail(email, deployment.ID)
 		if existingUser != nil {
 			return h.sendSCIMError(c, 409, "User with this email already exists", "uniqueness")
 		}
@@ -210,7 +208,7 @@ func (h *Handler) CreateUser(c *fiber.Ctx) error {
 	var user *model.User
 	err := database.Connection.Transaction(func(tx *gorm.DB) error {
 		var err error
-		user, err = h.service.CreateUser(tx, &scimUser, connection, deploymentID)
+		user, err = h.service.CreateUser(tx, &scimUser, connection, deployment)
 		return err
 	})
 
@@ -219,7 +217,7 @@ func (h *Handler) CreateUser(c *fiber.Ctx) error {
 	}
 
 	// Reload user with associations
-	user, _ = h.service.GetUserByID(user.ID, deploymentID)
+	user, _ = h.service.GetUserByID(user.ID, deployment.ID)
 
 	result := h.service.ConvertUserToSCIM(user, h.getBaseURL(c), connection.ID)
 	c.Set("Content-Type", ContentTypeSCIM)
