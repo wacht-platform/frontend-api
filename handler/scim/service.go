@@ -266,37 +266,24 @@ func (s *SCIMService) GetUserByID(userID uint64, deploymentID uint64) (*model.Us
 }
 
 func (s *SCIMService) ListUsers(organizationID, deploymentID uint64, startIndex, count int, filter string) ([]model.User, int, error) {
-	// Get membership IDs for this organization
-	var membershipUserIDs []uint64
-	if err := s.db.Model(&model.OrganizationMembership{}).
-		Where("organization_id = ?", organizationID).
-		Pluck("user_id", &membershipUserIDs).Error; err != nil {
-		return nil, 0, err
-	}
+	query := s.db.
+		Joins("JOIN organization_memberships ON organization_memberships.user_id = users.id").
+		Where("organization_memberships.organization_id = ? AND users.deployment_id = ?", organizationID, deploymentID)
 
-	if len(membershipUserIDs) == 0 {
-		return []model.User{}, 0, nil
-	}
-
-	query := s.db.Where("id IN ? AND deployment_id = ?", membershipUserIDs, deploymentID)
-
-	// Apply simple filtering
 	if filter != "" {
-		// Parse simple filter like: userName eq "john@example.com"
 		query = s.applyFilter(query, filter)
 	}
 
-	// Get total count
 	var totalCount int64
 	if err := query.Model(&model.User{}).Count(&totalCount).Error; err != nil {
 		return nil, 0, err
 	}
 
-	// Apply pagination (SCIM uses 1-based indexing)
-	offset := startIndex - 1
-	if offset < 0 {
-		offset = 0
+	if totalCount == 0 {
+		return []model.User{}, 0, nil
 	}
+
+	offset := max(startIndex-1, 0)
 	if count <= 0 {
 		count = 100
 	}
@@ -588,12 +575,41 @@ func (s *SCIMService) extractFilterValue(s2 string) string {
 
 // ConvertUserToSCIM converts a Wacht user to SCIM format
 func (s *SCIMService) ConvertUserToSCIM(user *model.User, baseURL string, connectionID uint64) *SCIMUser {
-	// Find external ID
-	var externalID string
-	var mapping model.SCIMExternalID
-	if err := s.db.Where("user_id = ? AND enterprise_connection_id = ?", user.ID, connectionID).
-		First(&mapping).Error; err == nil {
-		externalID = mapping.ExternalID
+	return s.convertUserToSCIMWithExternalID(user, baseURL, connectionID, "")
+}
+
+func (s *SCIMService) ConvertUsersToSCIM(users []model.User, baseURL string, connectionID uint64) []*SCIMUser {
+	if len(users) == 0 {
+		return []*SCIMUser{}
+	}
+
+	userIDs := make([]uint64, len(users))
+	for i, u := range users {
+		userIDs[i] = u.ID
+	}
+
+	var mappings []model.SCIMExternalID
+	s.db.Where("user_id IN ? AND enterprise_connection_id = ?", userIDs, connectionID).Find(&mappings)
+
+	externalIDMap := make(map[uint64]string)
+	for _, m := range mappings {
+		externalIDMap[m.UserID] = m.ExternalID
+	}
+
+	result := make([]*SCIMUser, len(users))
+	for i, user := range users {
+		result[i] = s.convertUserToSCIMWithExternalID(&user, baseURL, connectionID, externalIDMap[user.ID])
+	}
+	return result
+}
+
+func (s *SCIMService) convertUserToSCIMWithExternalID(user *model.User, baseURL string, connectionID uint64, externalID string) *SCIMUser {
+	if externalID == "" {
+		var mapping model.SCIMExternalID
+		if err := s.db.Where("user_id = ? AND enterprise_connection_id = ?", user.ID, connectionID).
+			First(&mapping).Error; err == nil {
+			externalID = mapping.ExternalID
+		}
 	}
 
 	scimUser := &SCIMUser{
@@ -616,17 +632,7 @@ func (s *SCIMService) ConvertUserToSCIM(user *model.User, baseURL string, connec
 		},
 	}
 
-	// Add emails
-	if user.PrimaryEmailAddressID != nil {
-		var emailAddr model.UserEmailAddress
-		if err := s.db.Where("id = ?", *user.PrimaryEmailAddressID).First(&emailAddr).Error; err == nil {
-			scimUser.Emails = []SCIMEmail{{
-				Value:   emailAddr.EmailAddress,
-				Type:    "work",
-				Primary: true,
-			}}
-		}
-	} else if len(user.UserEmailAddresses) > 0 {
+	if len(user.UserEmailAddresses) > 0 {
 		for _, email := range user.UserEmailAddresses {
 			scimUser.Emails = append(scimUser.Emails, SCIMEmail{
 				Value:   email.EmailAddress,

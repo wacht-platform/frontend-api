@@ -239,9 +239,10 @@ func (h *Handler) ListUsers(c *fiber.Ctx) error {
 		return h.sendSCIMError(c, 500, err.Error(), "")
 	}
 
-	resources := make([]any, len(users))
-	for i, user := range users {
-		resources[i] = h.service.ConvertUserToSCIM(&user, h.getBaseURL(c), connection.ID)
+	scimUsers := h.service.ConvertUsersToSCIM(users, h.getBaseURL(c), connection.ID)
+	resources := make([]any, len(scimUsers))
+	for i, u := range scimUsers {
+		resources[i] = u
 	}
 
 	response := NewSCIMListResponse(resources, total, startIndex, len(resources))
