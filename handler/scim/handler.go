@@ -451,6 +451,43 @@ func (h *Handler) GetGroup(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
+func (h *Handler) ReplaceGroup(c *fiber.Ctx) error {
+	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
+	connectionID := c.Locals("scim_connection_id").(uint64)
+
+	groupIDStr := c.Params("groupId")
+	groupID, err := strconv.ParseUint(groupIDStr, 10, 64)
+	if err != nil {
+		return h.sendSCIMError(c, 400, "Invalid group ID", "invalidValue")
+	}
+
+	group, err := h.service.GetGroupByID(groupID, connectionID)
+	if err != nil {
+		return h.sendSCIMError(c, 404, "Group not found", "noTarget")
+	}
+
+	var scimGroup SCIMGroup
+	if err := c.BodyParser(&scimGroup); err != nil {
+		return h.sendSCIMError(c, 400, "Invalid request body", "invalidSyntax")
+	}
+
+	err = database.Connection.Transaction(func(tx *gorm.DB) error {
+		if scimGroup.DisplayName != "" && scimGroup.DisplayName != group.DisplayName {
+			tx.Model(group).Update("display_name", scimGroup.DisplayName)
+		}
+		return h.service.UpdateGroupMembers(tx, group, scimGroup.Members, connection)
+	})
+
+	if err != nil {
+		return h.sendSCIMError(c, 500, err.Error(), "")
+	}
+
+	group, _ = h.service.GetGroupByID(groupID, connectionID)
+	result := h.service.ConvertGroupToSCIM(group, h.getBaseURL(c))
+	c.Set("Content-Type", ContentTypeSCIM)
+	return c.JSON(result)
+}
+
 func (h *Handler) PatchGroup(c *fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
 	connectionID := c.Locals("scim_connection_id").(uint64)

@@ -32,6 +32,7 @@ func setupSCIMRoutes(app *fiber.App) {
 	router.Post("/Groups", scimHandler.CreateGroup)
 	router.Get("/Groups", scimHandler.ListGroups)
 	router.Get("/Groups/:groupId", scimHandler.GetGroup)
+	router.Put("/Groups/:groupId", scimHandler.ReplaceGroup)
 	router.Patch("/Groups/:groupId", scimHandler.PatchGroup)
 	router.Delete("/Groups/:groupId", scimHandler.DeleteGroup)
 }

@@ -27,7 +27,6 @@ func NewSCIMService() *SCIMService {
 }
 
 func (s *SCIMService) GenerateToken(connectionID, deploymentID, organizationID uint64) (string, *model.SCIMToken, error) {
-	// Generate 48 bytes of random data -> 64 char base64 token
 	tokenBytes := make([]byte, 48)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		return "", nil, fmt.Errorf("failed to generate token: %w", err)
@@ -37,7 +36,6 @@ func (s *SCIMService) GenerateToken(connectionID, deploymentID, organizationID u
 	tokenHash := s.hashToken(plainToken)
 	tokenPrefix := plainToken[:12] // "scim_" + 7 chars
 
-	// Delete any existing token for this connection
 	s.db.Where("enterprise_connection_id = ?", connectionID).Delete(&model.SCIMToken{})
 
 	token := &model.SCIMToken{
@@ -65,7 +63,6 @@ func (s *SCIMService) ValidateToken(connectionID uint64, bearerToken string) (*m
 		return nil, nil, fmt.Errorf("invalid token")
 	}
 
-	// Update last used timestamp
 	s.db.Model(&token).Update("last_used_at", time.Now())
 
 	var connection model.EnterpriseConnection
@@ -160,7 +157,6 @@ func (s *SCIMService) CreateUser(
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
-	// Create email address
 	emailRecord := model.UserEmailAddress{
 		Model:                model.Model{ID: primaryAddressID},
 		DeploymentID:         deployment.ID,
@@ -176,7 +172,6 @@ func (s *SCIMService) CreateUser(
 		return nil, fmt.Errorf("failed to create email: %w", err)
 	}
 
-	// Create external ID mapping
 	externalID := scimUser.ExternalId
 	if externalID == "" {
 		externalID = scimUser.ID
@@ -197,7 +192,6 @@ func (s *SCIMService) CreateUser(
 		return nil, fmt.Errorf("failed to create external ID mapping: %w", err)
 	}
 
-	// Add user to organization
 	if err := s.addUserToOrganization(tx, userID, connection.OrganizationID, deployment); err != nil {
 		return nil, fmt.Errorf("failed to add user to organization: %w", err)
 	}
@@ -231,7 +225,6 @@ func (s *SCIMService) UpdateUser(tx *gorm.DB, user *model.User, scimUser *SCIMUs
 		}
 	}
 
-	// Update email if changed
 	newEmail := strings.ToLower(scimUser.GetPrimaryEmail())
 	if newEmail != "" && user.PrimaryEmailAddressID != nil {
 		var existingEmail model.UserEmailAddress
@@ -326,19 +319,29 @@ func (s *SCIMService) CreateGroup(
 		DisplayName:            scimGroup.DisplayName,
 	}
 
-	// Try to map to existing organization role by name
 	var role model.OrganizationRole
-	if err := tx.Where("deployment_id = ? AND (organization_id = ? OR organization_id IS NULL) AND LOWER(name) = LOWER(?)",
+	err := tx.Where("deployment_id = ? AND (organization_id = ? OR organization_id IS NULL) AND LOWER(name) = LOWER(?)",
 		deploymentID, connection.OrganizationID, scimGroup.DisplayName).
-		First(&role).Error; err == nil {
-		group.OrganizationRoleID = &role.ID
+		First(&role).Error
+
+	if err != nil {
+		role = model.OrganizationRole{
+			Model:          model.Model{ID: snowflake.ID()},
+			OrganizationID: &connection.OrganizationID,
+			Name:           scimGroup.DisplayName,
+			Permissions:    []string{"organization:member"},
+			DeploymentID:   deploymentID,
+		}
+		if createErr := tx.Create(&role).Error; createErr != nil {
+			return nil, fmt.Errorf("failed to create role for group: %w", createErr)
+		}
 	}
+	group.OrganizationRoleID = &role.ID
 
 	if err := tx.Create(&group).Error; err != nil {
 		return nil, fmt.Errorf("failed to create group: %w", err)
 	}
 
-	// Add members if provided
 	if len(scimGroup.Members) > 0 {
 		if err := s.updateGroupMembers(tx, &group, scimGroup.Members, connection); err != nil {
 			return nil, err
@@ -353,12 +356,9 @@ func (s *SCIMService) UpdateGroupMembers(tx *gorm.DB, group *model.SCIMGroup, me
 }
 
 func (s *SCIMService) updateGroupMembers(tx *gorm.DB, group *model.SCIMGroup, members []SCIMMember, connection *model.EnterpriseConnection) error {
-	// Clear existing members
 	tx.Where("scim_group_id = ?", group.ID).Delete(&model.SCIMGroupMember{})
 
-	// Add new members
 	for _, member := range members {
-		// Find user by SCIM ID (which maps to Wacht user ID via external mapping)
 		userID, err := s.resolveUserID(member.Value, connection.ID, connection.DeploymentID)
 		if err != nil {
 			continue // Skip members we can't resolve
@@ -373,7 +373,6 @@ func (s *SCIMService) updateGroupMembers(tx *gorm.DB, group *model.SCIMGroup, me
 			continue // Skip on duplicate
 		}
 
-		// If group is mapped to a role, assign the role to the user
 		if group.OrganizationRoleID != nil {
 			s.assignRoleToUser(tx, userID, group.OrganizationID, *group.OrganizationRoleID)
 		}
@@ -383,7 +382,6 @@ func (s *SCIMService) updateGroupMembers(tx *gorm.DB, group *model.SCIMGroup, me
 }
 
 func (s *SCIMService) DeleteGroup(tx *gorm.DB, groupID uint64) error {
-	// Remove group member role assignments first
 	var group model.SCIMGroup
 	if err := tx.Preload("Members").Where("id = ?", groupID).First(&group).Error; err != nil {
 		return err
@@ -395,7 +393,6 @@ func (s *SCIMService) DeleteGroup(tx *gorm.DB, groupID uint64) error {
 		}
 	}
 
-	// Delete the group (cascade deletes members)
 	return tx.Delete(&model.SCIMGroup{}, groupID).Error
 }
 
@@ -437,7 +434,6 @@ func (s *SCIMService) GetGroupByID(groupID, connectionID uint64) (*model.SCIMGro
 }
 
 func (s *SCIMService) addUserToOrganization(tx *gorm.DB, userID, organizationID uint64, deployment *model.Deployment) error {
-	// Check if already a member
 	var count int64
 	tx.Model(&model.OrganizationMembership{}).
 		Where("organization_id = ? AND user_id = ?", organizationID, userID).
@@ -458,7 +454,6 @@ func (s *SCIMService) addUserToOrganization(tx *gorm.DB, userID, organizationID 
 		return err
 	}
 
-	// Assign default org member role from deployment B2B settings
 	if deployment != nil && deployment.B2BSettings.DefaultOrgMemberRoleID != 0 {
 		roleAssoc := model.OrgMembershipRoleAssoc{
 			OrganizationMembershipID: membershipID,
@@ -471,7 +466,6 @@ func (s *SCIMService) addUserToOrganization(tx *gorm.DB, userID, organizationID 
 }
 
 func (s *SCIMService) resolveUserID(scimID string, connectionID, deploymentID uint64) (uint64, error) {
-	// First try to parse as Wacht user ID directly
 	if userID, err := strconv.ParseUint(scimID, 10, 64); err == nil {
 		var user model.User
 		if err := s.db.Where("id = ? AND deployment_id = ?", userID, deploymentID).First(&user).Error; err == nil {
@@ -528,11 +522,8 @@ func (s *SCIMService) removeRoleFromUser(tx *gorm.DB, userID, organizationID, ro
 }
 
 func (s *SCIMService) applyFilter(query *gorm.DB, filter string) *gorm.DB {
-	// Parse simple SCIM filters like: userName eq "john@example.com"
-	// This is a basic implementation - full SCIM filter support is complex
 	filter = strings.TrimSpace(filter)
 
-	// Handle userName eq "value"
 	if strings.HasPrefix(strings.ToLower(filter), "username eq ") {
 		value := s.extractFilterValue(filter[12:])
 		if value != "" {
@@ -540,7 +531,6 @@ func (s *SCIMService) applyFilter(query *gorm.DB, filter string) *gorm.DB {
 		}
 	}
 
-	// Handle emails.value eq "value"
 	if strings.HasPrefix(strings.ToLower(filter), "emails.value eq ") {
 		value := s.extractFilterValue(filter[16:])
 		if value != "" {
@@ -555,7 +545,6 @@ func (s *SCIMService) applyFilter(query *gorm.DB, filter string) *gorm.DB {
 		}
 	}
 
-	// Handle externalId eq "value"
 	if strings.HasPrefix(strings.ToLower(filter), "externalid eq ") {
 		value := s.extractFilterValue(filter[14:])
 		if value != "" {
@@ -581,7 +570,6 @@ func (s *SCIMService) extractFilterValue(s2 string) string {
 	return s2
 }
 
-// ConvertUserToSCIM converts a Wacht user to SCIM format
 func (s *SCIMService) ConvertUserToSCIM(user *model.User, baseURL string, connectionID uint64) *SCIMUser {
 	return s.convertUserToSCIMWithExternalID(user, baseURL, connectionID, "")
 }
