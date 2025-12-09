@@ -2,6 +2,7 @@ package scim
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 
@@ -400,6 +401,7 @@ func (h *Handler) CreateGroup(c *fiber.Ctx) error {
 	})
 
 	if err != nil {
+		log.Println(err)
 		return h.sendSCIMError(c, 500, err.Error(), "")
 	}
 
