@@ -35,8 +35,10 @@ func setupOrganizationRoutes(
 	router.Post("/:id/domains/:domainId/delete", orgHandler.DeleteOrganizationDomain)
 	router.Get("/:id/enterprise-connections", orgHandler.GetEnterpriseConnections)
 	router.Post("/:id/enterprise-connections", orgHandler.CreateEnterpriseConnection)
+	router.Post("/:id/enterprise-connections/test", orgHandler.TestEnterpriseConnectionConfig)
 	router.Post("/:id/enterprise-connections/:connectionId/update", orgHandler.UpdateEnterpriseConnection)
 	router.Post("/:id/enterprise-connections/:connectionId/delete", orgHandler.DeleteEnterpriseConnection)
+	router.Post("/:id/enterprise-connections/:connectionId/test", orgHandler.TestEnterpriseConnection)
 
 	// SCIM token management
 	router.Post("/:id/enterprise-connections/:connectionId/scim/token", orgHandler.GenerateSCIMToken)

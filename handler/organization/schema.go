@@ -107,3 +107,26 @@ type SCIMTokenResponse struct {
 	LastUsedAt  string `json:"last_used_at,omitempty"`
 	SCIMBaseURL string `json:"scim_base_url"`
 }
+
+// TestEnterpriseConnectionRequest for pre-validation testing (before saving)
+type TestEnterpriseConnectionRequest struct {
+	Protocol string `form:"protocol" validate:"required,oneof=saml oidc"`
+
+	// SAML fields
+	IdpEntityID    string `form:"idp_entity_id"`
+	IdpSSOURL      string `form:"idp_sso_url"`
+	IdpCertificate string `form:"idp_certificate"`
+
+	// OIDC fields
+	OIDCIssuerURL    string `form:"oidc_issuer_url"`
+	OIDCClientID     string `form:"oidc_client_id"`
+	OIDCClientSecret string `form:"oidc_client_secret"`
+}
+
+// TestConnectionResult contains the results of testing an IdP connection
+type TestConnectionResult struct {
+	Success  bool              `json:"success"`
+	Protocol string            `json:"protocol"`
+	Checks   map[string]bool   `json:"checks"`
+	Errors   map[string]string `json:"errors,omitempty"`
+}

@@ -1,12 +1,17 @@
 package organization
 
 import (
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"io"
 	"log"
 	"net"
+	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 
 	"time"
 
@@ -1611,6 +1616,212 @@ func (h *Handler) DeleteEnterpriseConnection(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, fiber.Map{
 		"success": true,
 	})
+}
+
+// TestEnterpriseConnectionConfig validates IdP configuration before saving (pre-validation)
+func (h *Handler) TestEnterpriseConnectionConfig(c *fiber.Ctx) error {
+	orgID := c.Params("id")
+
+	b, validation := handler.Validate[TestEnterpriseConnectionRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
+	}
+
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	var membership model.OrganizationMembership
+	if err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&membership).Error; err != nil {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	result := TestConnectionResult{
+		Protocol: b.Protocol,
+		Checks:   make(map[string]bool),
+		Errors:   make(map[string]string),
+	}
+
+	if b.Protocol == "saml" {
+		result = validateSAMLConfig(b.IdpCertificate, b.IdpSSOURL, result)
+	} else if b.Protocol == "oidc" {
+		result = validateOIDCConfig(b.OIDCIssuerURL, result)
+	}
+
+	// Check if all checks passed
+	result.Success = len(result.Errors) == 0
+	if result.Success {
+		result.Errors = nil
+	}
+
+	return handler.SendSuccess(c, result)
+}
+
+// TestEnterpriseConnection validates an existing connection (post-validation)
+func (h *Handler) TestEnterpriseConnection(c *fiber.Ctx) error {
+	orgID := c.Params("id")
+	connectionID := c.Params("connectionId")
+
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	var membership model.OrganizationMembership
+	if err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&membership).Error; err != nil {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	var connection model.EnterpriseConnection
+	if err := database.Connection.
+		Where("id = ? AND organization_id = ?", connectionID, orgID).
+		First(&connection).Error; err != nil {
+		return handler.SendNotFound(c, nil, "Enterprise connection not found")
+	}
+
+	result := TestConnectionResult{
+		Protocol: connection.Protocol,
+		Checks:   make(map[string]bool),
+		Errors:   make(map[string]string),
+	}
+
+	if connection.Protocol == "saml" {
+		result = validateSAMLConfig(connection.IdpCertificate, connection.IdpSSOURL, result)
+	} else if connection.Protocol == "oidc" {
+		issuerURL := ""
+		if connection.OIDCIssuerURL != nil {
+			issuerURL = *connection.OIDCIssuerURL
+		}
+		result = validateOIDCConfig(issuerURL, result)
+	}
+
+	// Check if all checks passed
+	result.Success = len(result.Errors) == 0
+	if result.Success {
+		result.Errors = nil
+	}
+
+	return handler.SendSuccess(c, result)
+}
+
+// validateSAMLConfig validates SAML IdP configuration
+func validateSAMLConfig(certificate string, ssoURL string, result TestConnectionResult) TestConnectionResult {
+	// Validate certificate
+	if certificate != "" {
+		certPEM := certificate
+		// Handle certificate that might have BEGIN/END markers or just the base64
+		if !strings.Contains(certPEM, "BEGIN CERTIFICATE") {
+			certPEM = "-----BEGIN CERTIFICATE-----\n" + certPEM + "\n-----END CERTIFICATE-----"
+		}
+
+		block, _ := pem.Decode([]byte(certPEM))
+		if block != nil {
+			_, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				result.Checks["certificate_valid"] = false
+				result.Errors["certificate_valid"] = "Invalid X.509 certificate: " + err.Error()
+			} else {
+				result.Checks["certificate_valid"] = true
+			}
+		} else {
+			result.Checks["certificate_valid"] = false
+			result.Errors["certificate_valid"] = "Certificate is not valid PEM format"
+		}
+	} else {
+		result.Checks["certificate_valid"] = false
+		result.Errors["certificate_valid"] = "Certificate is required"
+	}
+
+	// Validate SSO URL is reachable
+	if ssoURL != "" {
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Get(ssoURL)
+		if err != nil {
+			result.Checks["sso_url_reachable"] = false
+			result.Errors["sso_url_reachable"] = "SSO URL is not reachable: " + err.Error()
+		} else {
+			resp.Body.Close()
+			// IdP SSO URLs typically return 200 or redirect
+			result.Checks["sso_url_reachable"] = resp.StatusCode < 500
+			if resp.StatusCode >= 500 {
+				result.Errors["sso_url_reachable"] = fmt.Sprintf("SSO URL returned server error: %d", resp.StatusCode)
+			}
+		}
+	} else {
+		result.Checks["sso_url_reachable"] = false
+		result.Errors["sso_url_reachable"] = "SSO URL is required"
+	}
+
+	return result
+}
+
+// validateOIDCConfig validates OIDC IdP configuration
+func validateOIDCConfig(issuerURL string, result TestConnectionResult) TestConnectionResult {
+	if issuerURL == "" {
+		result.Checks["issuer_valid"] = false
+		result.Errors["issuer_valid"] = "Issuer URL is required"
+		return result
+	}
+
+	// Fetch OIDC discovery document
+	discoveryURL := strings.TrimSuffix(issuerURL, "/") + "/.well-known/openid-configuration"
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(discoveryURL)
+	if err != nil {
+		result.Checks["discovery_reachable"] = false
+		result.Errors["discovery_reachable"] = "Failed to fetch OIDC discovery document: " + err.Error()
+		return result
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		result.Checks["discovery_reachable"] = false
+		result.Errors["discovery_reachable"] = fmt.Sprintf("OIDC discovery returned status %d", resp.StatusCode)
+		return result
+	}
+
+	result.Checks["discovery_reachable"] = true
+
+	// Parse discovery document
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		result.Checks["discovery_valid"] = false
+		result.Errors["discovery_valid"] = "Failed to read discovery document"
+		return result
+	}
+
+	var discovery map[string]interface{}
+	if err := json.Unmarshal(body, &discovery); err != nil {
+		result.Checks["discovery_valid"] = false
+		result.Errors["discovery_valid"] = "Invalid JSON in discovery document"
+		return result
+	}
+
+	// Check required endpoints
+	if _, ok := discovery["authorization_endpoint"]; ok {
+		result.Checks["authorization_endpoint"] = true
+	} else {
+		result.Checks["authorization_endpoint"] = false
+		result.Errors["authorization_endpoint"] = "Missing authorization_endpoint"
+	}
+
+	if _, ok := discovery["token_endpoint"]; ok {
+		result.Checks["token_endpoint"] = true
+	} else {
+		result.Checks["token_endpoint"] = false
+		result.Errors["token_endpoint"] = "Missing token_endpoint"
+	}
+
+	result.Checks["discovery_valid"] = true
+
+	return result
 }
 
 // GenerateSCIMToken creates a new SCIM bearer token for an enterprise connection
