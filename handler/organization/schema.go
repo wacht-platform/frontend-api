@@ -68,34 +68,30 @@ type WorkspaceInfo struct {
 }
 
 type CreateEnterpriseConnectionRequest struct {
-	DomainID uint64 `form:"domain_id,string"`
-	Protocol string `form:"protocol"         validate:"required,oneof=saml oidc"`
-
-	// SAML fields (required if protocol is saml)
-	IdpEntityID    string `form:"idp_entity_id"`
-	IdpSSOURL      string `form:"idp_sso_url"`
-	IdpCertificate string `form:"idp_certificate"`
-
-	// OIDC fields (required if protocol is oidc)
+	DomainID         uint64 `form:"domain_id,string"`
+	Protocol         string `form:"protocol"         validate:"required,oneof=saml oidc"`
+	IdpEntityID      string `form:"idp_entity_id"`
+	IdpSSOURL        string `form:"idp_sso_url"`
+	IdpCertificate   string `form:"idp_certificate"`
 	OIDCClientID     string `form:"oidc_client_id"`
 	OIDCClientSecret string `form:"oidc_client_secret"`
 	OIDCIssuerURL    string `form:"oidc_issuer_url"`
 	OIDCScopes       string `form:"oidc_scopes"`
+	JitEnabled       *bool  `form:"jit_enabled"`
+	AttributeMapping string `form:"attribute_mapping"`
 }
 
 type UpdateEnterpriseConnectionRequest struct {
-	DomainID *uint64 `form:"domain_id,string"`
-
-	// SAML fields
-	IdpEntityID    *string `form:"idp_entity_id"`
-	IdpSSOURL      *string `form:"idp_sso_url"`
-	IdpCertificate *string `form:"idp_certificate"`
-
-	// OIDC fields
+	DomainID         *uint64 `form:"domain_id,string"`
+	IdpEntityID      *string `form:"idp_entity_id"`
+	IdpSSOURL        *string `form:"idp_sso_url"`
+	IdpCertificate   *string `form:"idp_certificate"`
 	OIDCClientID     *string `form:"oidc_client_id"`
 	OIDCClientSecret *string `form:"oidc_client_secret"`
 	OIDCIssuerURL    *string `form:"oidc_issuer_url"`
 	OIDCScopes       *string `form:"oidc_scopes"`
+	JitEnabled       *bool   `form:"jit_enabled"`
+	AttributeMapping *string `form:"attribute_mapping"`
 }
 
 // SCIMTokenResponse is returned when generating or viewing SCIM tokens
@@ -110,14 +106,10 @@ type SCIMTokenResponse struct {
 
 // TestEnterpriseConnectionRequest for pre-validation testing (before saving)
 type TestEnterpriseConnectionRequest struct {
-	Protocol string `form:"protocol" validate:"required,oneof=saml oidc"`
-
-	// SAML fields
-	IdpEntityID    string `form:"idp_entity_id"`
-	IdpSSOURL      string `form:"idp_sso_url"`
-	IdpCertificate string `form:"idp_certificate"`
-
-	// OIDC fields
+	Protocol         string `form:"protocol" validate:"required,oneof=saml oidc"`
+	IdpEntityID      string `form:"idp_entity_id"`
+	IdpSSOURL        string `form:"idp_sso_url"`
+	IdpCertificate   string `form:"idp_certificate"`
 	OIDCIssuerURL    string `form:"oidc_issuer_url"`
 	OIDCClientID     string `form:"oidc_client_id"`
 	OIDCClientSecret string `form:"oidc_client_secret"`

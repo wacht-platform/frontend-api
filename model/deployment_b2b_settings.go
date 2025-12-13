@@ -33,4 +33,5 @@ type DeploymentB2bSettings struct {
 	IpAllowlistPerWorkspaceEnabled bool              `json:"ip_allowlist_per_workspace_enabled"       gorm:"not null"`
 	EnforceMfaPerOrgEnabled        bool              `json:"enforce_mfa_per_org_enabled"              gorm:"not null"`
 	EnforceMfaPerWorkspaceEnabled  bool              `json:"enforce_mfa_per_workspace_enabled"        gorm:"not null"`
+	EnterpriseSsoEnabled           bool              `json:"enterprise_sso_enabled"                   gorm:"not null;default:false"`
 }

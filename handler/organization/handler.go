@@ -1251,6 +1251,11 @@ func (h *Handler) AddOrganizationDomain(
 ) error {
 	orgID := c.Params("id")
 	d := handler.GetDeployment(c)
+
+	if !d.B2BSettings.EnterpriseSsoEnabled {
+		return handler.SendForbidden(c, nil, "Enterprise SSO is not enabled for this deployment")
+	}
+
 	b, validation := handler.Validate[AddDomainRequest](c)
 	if validation != nil {
 		return handler.SendBadRequest(c, validation, "Bad request body")
@@ -1417,6 +1422,12 @@ func (h *Handler) DeleteOrganizationDomain(
 
 func (h *Handler) GetEnterpriseConnections(c *fiber.Ctx) error {
 	orgID := c.Params("id")
+	d := handler.GetDeployment(c)
+
+	if !d.B2BSettings.EnterpriseSsoEnabled {
+		return handler.SendForbidden(c, nil, "Enterprise SSO is not enabled for this deployment")
+	}
+
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
@@ -1443,6 +1454,11 @@ func (h *Handler) GetEnterpriseConnections(c *fiber.Ctx) error {
 func (h *Handler) CreateEnterpriseConnection(c *fiber.Ctx) error {
 	orgID := c.Params("id")
 	d := handler.GetDeployment(c)
+
+	if !d.B2BSettings.EnterpriseSsoEnabled {
+		return handler.SendForbidden(c, nil, "Enterprise SSO is not enabled for this deployment")
+	}
+
 	b, validation := handler.Validate[CreateEnterpriseConnectionRequest](c)
 	if validation != nil {
 		return handler.SendBadRequest(c, validation, "Bad request body")
@@ -1508,6 +1524,19 @@ func (h *Handler) CreateEnterpriseConnection(c *fiber.Ctx) error {
 		}
 	}
 
+	if b.JitEnabled != nil {
+		connection.JitEnabled = *b.JitEnabled
+	} else {
+		connection.JitEnabled = true
+	}
+
+	if b.AttributeMapping != "" {
+		var attrMap map[string]interface{}
+		if err := json.Unmarshal([]byte(b.AttributeMapping), &attrMap); err == nil {
+			connection.AttributeMapping = attrMap
+		}
+	}
+
 	if err := database.Connection.Create(&connection).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to create enterprise connection")
 	}
@@ -1518,6 +1547,12 @@ func (h *Handler) CreateEnterpriseConnection(c *fiber.Ctx) error {
 func (h *Handler) UpdateEnterpriseConnection(c *fiber.Ctx) error {
 	orgID := c.Params("id")
 	connectionID := c.Params("connectionId")
+	d := handler.GetDeployment(c)
+
+	if !d.B2BSettings.EnterpriseSsoEnabled {
+		return handler.SendForbidden(c, nil, "Enterprise SSO is not enabled for this deployment")
+	}
+
 	b, validation := handler.Validate[UpdateEnterpriseConnectionRequest](c)
 	if validation != nil {
 		return handler.SendBadRequest(c, validation, "Bad request body")
@@ -1548,12 +1583,9 @@ func (h *Handler) UpdateEnterpriseConnection(c *fiber.Ctx) error {
 		return handler.SendNotFound(c, nil, "Enterprise connection not found")
 	}
 
-	// Common fields
 	if b.DomainID != nil {
 		connection.DomainID = b.DomainID
 	}
-
-	// SAML fields
 	if b.IdpEntityID != nil {
 		connection.IdpEntityID = *b.IdpEntityID
 	}
@@ -1564,7 +1596,6 @@ func (h *Handler) UpdateEnterpriseConnection(c *fiber.Ctx) error {
 		connection.IdpCertificate = *b.IdpCertificate
 	}
 
-	// OIDC fields
 	if b.OIDCClientID != nil {
 		connection.OIDCClientID = b.OIDCClientID
 	}
@@ -1577,6 +1608,15 @@ func (h *Handler) UpdateEnterpriseConnection(c *fiber.Ctx) error {
 	if b.OIDCScopes != nil {
 		connection.OIDCScopes = b.OIDCScopes
 	}
+	if b.JitEnabled != nil {
+		connection.JitEnabled = *b.JitEnabled
+	}
+	if b.AttributeMapping != nil && *b.AttributeMapping != "" {
+		var attrMap map[string]interface{}
+		if err := json.Unmarshal([]byte(*b.AttributeMapping), &attrMap); err == nil {
+			connection.AttributeMapping = attrMap
+		}
+	}
 
 	if err := database.Connection.Save(&connection).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to update enterprise connection")
@@ -1588,6 +1628,11 @@ func (h *Handler) UpdateEnterpriseConnection(c *fiber.Ctx) error {
 func (h *Handler) DeleteEnterpriseConnection(c *fiber.Ctx) error {
 	orgID := c.Params("id")
 	connectionID := c.Params("connectionId")
+	d := handler.GetDeployment(c)
+
+	if !d.B2BSettings.EnterpriseSsoEnabled {
+		return handler.SendForbidden(c, nil, "Enterprise SSO is not enabled for this deployment")
+	}
 
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
@@ -1618,9 +1663,14 @@ func (h *Handler) DeleteEnterpriseConnection(c *fiber.Ctx) error {
 	})
 }
 
-// TestEnterpriseConnectionConfig validates IdP configuration before saving (pre-validation)
+// TestEnterpriseConnectionConfig validates partial connection details (pre-validation)
 func (h *Handler) TestEnterpriseConnectionConfig(c *fiber.Ctx) error {
 	orgID := c.Params("id")
+	d := handler.GetDeployment(c)
+
+	if !d.B2BSettings.EnterpriseSsoEnabled {
+		return handler.SendForbidden(c, nil, "Enterprise SSO is not enabled for this deployment")
+	}
 
 	b, validation := handler.Validate[TestEnterpriseConnectionRequest](c)
 	if validation != nil {
@@ -1646,9 +1696,10 @@ func (h *Handler) TestEnterpriseConnectionConfig(c *fiber.Ctx) error {
 		Errors:   make(map[string]string),
 	}
 
-	if b.Protocol == "saml" {
+	switch b.Protocol {
+	case "saml":
 		result = validateSAMLConfig(b.IdpCertificate, b.IdpSSOURL, result)
-	} else if b.Protocol == "oidc" {
+	case "oidc":
 		result = validateOIDCConfig(b.OIDCIssuerURL, result)
 	}
 
@@ -1692,9 +1743,10 @@ func (h *Handler) TestEnterpriseConnection(c *fiber.Ctx) error {
 		Errors:   make(map[string]string),
 	}
 
-	if connection.Protocol == "saml" {
+	switch connection.Protocol {
+	case "saml":
 		result = validateSAMLConfig(connection.IdpCertificate, connection.IdpSSOURL, result)
-	} else if connection.Protocol == "oidc" {
+	case "oidc":
 		issuerURL := ""
 		if connection.OIDCIssuerURL != nil {
 			issuerURL = *connection.OIDCIssuerURL
@@ -1739,8 +1791,13 @@ func validateSAMLConfig(certificate string, ssoURL string, result TestConnection
 		result.Errors["certificate_valid"] = "Certificate is required"
 	}
 
-	// Validate SSO URL is reachable
 	if ssoURL != "" {
+		if strings.Contains(ssoURL, "{") || strings.Contains(ssoURL, "}") {
+			result.Checks["sso_url_reachable"] = false
+			result.Errors["sso_url_reachable"] = "SSO URL contains placeholder values (e.g., {appId}) - please replace with actual values"
+			return result
+		}
+
 		client := &http.Client{Timeout: 10 * time.Second}
 		resp, err := client.Get(ssoURL)
 		if err != nil {
@@ -1748,7 +1805,6 @@ func validateSAMLConfig(certificate string, ssoURL string, result TestConnection
 			result.Errors["sso_url_reachable"] = "SSO URL is not reachable: " + err.Error()
 		} else {
 			resp.Body.Close()
-			// IdP SSO URLs typically return 200 or redirect
 			result.Checks["sso_url_reachable"] = resp.StatusCode < 500
 			if resp.StatusCode >= 500 {
 				result.Errors["sso_url_reachable"] = fmt.Sprintf("SSO URL returned server error: %d", resp.StatusCode)

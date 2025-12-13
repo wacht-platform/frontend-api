@@ -41,41 +41,34 @@ func (h *Handler) OIDCLogin(c *fiber.Ctx, connection *model.EnterpriseConnection
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Use OIDC Discovery to get proper endpoints
 	provider, err := oidc.NewProvider(ctx, *connection.OIDCIssuerURL)
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to discover OIDC provider")
 	}
 
-	// Generate random state for CSRF protection (32 bytes for security)
 	stateBytes := make([]byte, 32)
 	if _, err := rand.Read(stateBytes); err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to generate state")
 	}
 	state := base64.RawURLEncoding.EncodeToString(stateBytes)
 
-	// Generate nonce for ID token replay protection (32 bytes)
 	nonceBytes := make([]byte, 32)
 	if _, err := rand.Read(nonceBytes); err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to generate nonce")
 	}
 	nonce := base64.RawURLEncoding.EncodeToString(nonceBytes)
 
-	// Generate PKCE code verifier (43-128 chars, we use 64 bytes = 86 chars base64)
 	codeVerifierBytes := make([]byte, 64)
 	if _, err := rand.Read(codeVerifierBytes); err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to generate code verifier")
 	}
 	codeVerifier := base64.RawURLEncoding.EncodeToString(codeVerifierBytes)
 
-	// Generate PKCE code challenge (SHA256 hash of verifier, base64url encoded)
 	codeChallenge := generateCodeChallenge(codeVerifier)
 
-	// Create sign-in attempt and store security parameters
 	attempt := model.NewSignInAttempt(model.SignInMethodEnterpriseSso)
 	attempt.SessionID = session.ID
 	attempt.EnterpriseConnectionID = &connection.ID
-	// Store state, nonce, and code verifier as pipe-separated string
 	oidcData := fmt.Sprintf("%s|%s|%s", state, nonce, codeVerifier)
 	attempt.OIDCState = &oidcData
 
@@ -83,7 +76,6 @@ func (h *Handler) OIDCLogin(c *fiber.Ctx, connection *model.EnterpriseConnection
 		return handler.SendInternalServerError(c, err, "Failed to create sign-in attempt")
 	}
 
-	// Build OAuth2 config using discovered endpoints
 	callbackURL := fmt.Sprintf("https://%s/auth/sso/oidc/callback", deployment.BackendHost)
 	scopes := []string{oidc.ScopeOpenID, "profile", "email"}
 	if connection.OIDCScopes != nil && *connection.OIDCScopes != "" {
@@ -102,10 +94,8 @@ func (h *Handler) OIDCLogin(c *fiber.Ctx, connection *model.EnterpriseConnection
 		oauth2Config.ClientSecret = *connection.OIDCClientSecret
 	}
 
-	// Encode attempt ID, redirect URI and deployment ID in state parameter
 	relayData := encodeOIDCRelayState(attempt.ID, redirectURI, deployment.ID, state)
 
-	// Build auth URL with PKCE and nonce
 	authURL := oauth2Config.AuthCodeURL(
 		relayData,
 		oauth2.SetAuthURLParam("nonce", nonce),
@@ -136,19 +126,16 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 
 	deployment := handler.GetDeployment(c)
 
-	// Decode relay state
 	attemptID, redirectURI, state, err := decodeOIDCRelayState(stateParam, deployment.ID)
 	if err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid state parameter")
 	}
 
-	// Find the sign-in attempt
 	var attempt model.SignInAttempt
 	if err := database.Connection.Where("id = ?", attemptID).First(&attempt).Error; err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid or expired authentication attempt")
 	}
 
-	// Validate CSRF state and extract stored parameters
 	if attempt.OIDCState == nil {
 		return handler.SendBadRequest(c, nil, "Invalid state - missing OIDC data")
 	}
@@ -162,17 +149,14 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Invalid state - possible CSRF attack")
 	}
 
-	// Check if state was already used (prevent replay)
 	if attempt.Completed {
 		return handler.SendBadRequest(c, nil, "Authentication attempt already completed")
 	}
 
-	// Check expiry
 	if time.Since(attempt.CreatedAt) > 10*time.Minute {
 		return handler.SendBadRequest(c, nil, "Authentication attempt has expired")
 	}
 
-	// Get session
 	var session model.Session
 	if err := database.Connection.Where("id = ?", attempt.SessionID).
 		Preload("Signins").
@@ -181,7 +165,6 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Session not found")
 	}
 
-	// Get enterprise connection
 	if attempt.EnterpriseConnectionID == nil {
 		return handler.SendBadRequest(c, nil, "Invalid sign-in attempt")
 	}
@@ -195,13 +178,11 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Use OIDC Discovery for proper endpoints
 	provider, err := oidc.NewProvider(ctx, *connection.OIDCIssuerURL)
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to discover OIDC provider")
 	}
 
-	// Build OAuth2 config using discovered endpoints
 	callbackURL := fmt.Sprintf("https://%s/auth/sso/oidc/callback", deployment.BackendHost)
 	scopes := []string{oidc.ScopeOpenID, "profile", "email"}
 	if connection.OIDCScopes != nil && *connection.OIDCScopes != "" {
@@ -220,7 +201,6 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 		oauth2Config.ClientSecret = *connection.OIDCClientSecret
 	}
 
-	// Exchange code for tokens with PKCE verifier
 	token, err := oauth2Config.Exchange(
 		ctx,
 		code,
@@ -230,12 +210,10 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, fmt.Sprintf("Failed to exchange code: %v", err))
 	}
 
-	// Create verifier with nonce validation
 	verifier := provider.Verifier(&oidc.Config{
 		ClientID: *connection.OIDCClientID,
 	})
 
-	// Extract and verify ID token
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok {
 		return handler.SendBadRequest(c, nil, "No id_token in token response")
@@ -246,15 +224,13 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, fmt.Sprintf("Failed to verify ID token: %v", err))
 	}
 
-	// Validate nonce to prevent replay attacks
 	if idToken.Nonce != storedNonce {
 		return handler.SendBadRequest(c, nil, "Invalid nonce - possible replay attack")
 	}
 
-	// Extract claims
 	var claims struct {
 		Email         string `json:"email"`
-		EmailVerified *bool  `json:"email_verified"` // Pointer to detect missing claim
+		EmailVerified *bool  `json:"email_verified"`
 		Name          string `json:"name"`
 		GivenName     string `json:"given_name"`
 		FamilyName    string `json:"family_name"`
@@ -265,18 +241,38 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Failed to parse ID token claims")
 	}
 
+	var rawClaims map[string]interface{}
+	idToken.Claims(&rawClaims)
+
 	userEmail := strings.ToLower(claims.Email)
 	if userEmail == "" {
 		return handler.SendBadRequest(c, nil, "No email found in ID token")
 	}
 
-	// Check email_verified claim (industry standard)
-	// Some IdPs don't include this claim, so we only reject if explicitly false
 	if claims.EmailVerified != nil && !*claims.EmailVerified {
 		return handler.SendBadRequest(c, nil, "Email address not verified by identity provider")
 	}
 
-	// Find or create user
+	firstName := claims.GivenName
+	lastName := claims.FamilyName
+
+	if connection.AttributeMapping != nil {
+		if customAttr, ok := connection.AttributeMapping["first_name"].(string); ok && customAttr != "" {
+			if val, exists := rawClaims[customAttr]; exists {
+				if strVal, ok := val.(string); ok {
+					firstName = strVal
+				}
+			}
+		}
+		if customAttr, ok := connection.AttributeMapping["last_name"].(string); ok && customAttr != "" {
+			if val, exists := rawClaims[customAttr]; exists {
+				if strVal, ok := val.(string); ok {
+					lastName = strVal
+				}
+			}
+		}
+	}
+
 	var user *model.User
 	var created bool
 
@@ -287,7 +283,10 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 			First(&email).Error
 
 		if err == gorm.ErrRecordNotFound {
-			user, err = h.createOIDCUser(tx, userEmail, claims.GivenName, claims.FamilyName, &deployment)
+			if !connection.JitEnabled {
+				return fmt.Errorf("user not found and JIT provisioning is disabled - please contact your administrator")
+			}
+			user, err = h.createOIDCUser(tx, userEmail, firstName, lastName, &deployment)
 			if err != nil {
 				return err
 			}
@@ -347,13 +346,31 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 	})
 
 	if err != nil {
+		// Check if this is a JIT provisioning error - redirect with error params to sign-in page
+		if strings.Contains(err.Error(), "JIT provisioning is disabled") {
+			// Redirect to sign-in page (not app root) so the error can be displayed
+			errorRedirectURI := deployment.UISettings.SignInPageURL
+			if errorRedirectURI == "" && deployment.FrontendHost != "" {
+				errorRedirectURI = fmt.Sprintf("https://%s/sign-in", deployment.FrontendHost)
+			}
+			if errorRedirectURI != "" {
+				parsedURL, parseErr := url.Parse(errorRedirectURI)
+				if parseErr == nil {
+					q := parsedURL.Query()
+					q.Set("error", "access_denied")
+					q.Set("error_description", "User not found and automatic provisioning is disabled. Please contact your administrator.")
+					parsedURL.RawQuery = q.Encode()
+					return c.Redirect(parsedURL.String(), fiber.StatusFound)
+				}
+			}
+			return handler.SendForbidden(c, nil, "User not found and JIT provisioning is disabled - please contact your administrator")
+		}
 		return handler.SendInternalServerError(c, err, "Failed to complete OIDC authentication")
 	}
 
 	h.service.TrackMAU(deployment.ID, user.ID)
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
-	// Determine redirect URI
 	if redirectURI == "" {
 		redirectURI = deployment.UISettings.AfterSigninRedirectURL
 	}

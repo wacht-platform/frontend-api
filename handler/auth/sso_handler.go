@@ -52,12 +52,10 @@ func (h *Handler) SSOLogin(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Invalid enterprise connection for this deployment")
 	}
 
-	// Route to OIDC handler if protocol is OIDC
 	if connection.Protocol == "oidc" {
 		return h.OIDCLogin(c, connection)
 	}
 
-	// SAML flow (default)
 	var keypair model.DeploymentKeyPair
 	if err := database.Connection.Where("deployment_id = ?", deployment.ID).First(&keypair).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to get deployment keypair")
@@ -165,7 +163,11 @@ func (h *Handler) EnterpriseSSOCallback(c *fiber.Ctx) error {
 			First(&email).Error
 
 		if err == gorm.ErrRecordNotFound {
-			user, err = h.createSSOUser(tx, userEmail, assertion, &deployment)
+			// Check if JIT provisioning is enabled for this connection
+			if !connection.JitEnabled {
+				return fmt.Errorf("user not found and JIT provisioning is disabled - please contact your administrator")
+			}
+			user, err = h.createSSOUser(tx, userEmail, assertion, &deployment, connection)
 			if err != nil {
 				return err
 			}
@@ -224,6 +226,25 @@ func (h *Handler) EnterpriseSSOCallback(c *fiber.Ctx) error {
 	})
 
 	if err != nil {
+		// Check if this is a JIT provisioning error - redirect with error params to sign-in page
+		if strings.Contains(err.Error(), "JIT provisioning is disabled") {
+			// Redirect to sign-in page (not app root) so the error can be displayed
+			errorRedirectURI := deployment.UISettings.SignInPageURL
+			if errorRedirectURI == "" && deployment.FrontendHost != "" {
+				errorRedirectURI = fmt.Sprintf("https://%s/sign-in", deployment.FrontendHost)
+			}
+			if errorRedirectURI != "" {
+				parsedURL, parseErr := url.Parse(errorRedirectURI)
+				if parseErr == nil {
+					q := parsedURL.Query()
+					q.Set("error", "access_denied")
+					q.Set("error_description", "User not found and automatic provisioning is disabled. Please contact your administrator.")
+					parsedURL.RawQuery = q.Encode()
+					return c.Redirect(parsedURL.String(), fiber.StatusFound)
+				}
+			}
+			return handler.SendForbidden(c, nil, "User not found and JIT provisioning is disabled - please contact your administrator")
+		}
 		return handler.SendInternalServerError(c, err, "Failed to complete SSO authentication")
 	}
 
@@ -273,21 +294,41 @@ func (h *Handler) createSSOUser(
 	email string,
 	assertion *saml.Assertion,
 	deployment *model.Deployment,
+	connection *model.EnterpriseConnection,
 ) (*model.User, error) {
 	primaryAddressID := snowflake.ID()
+
+	firstNameAttrs := []string{"firstname", "first_name", "givenname"}
+	lastNameAttrs := []string{"lastname", "last_name", "surname", "familyname"}
+
+	if connection != nil && connection.AttributeMapping != nil {
+		if customFirstName, ok := connection.AttributeMapping["first_name"].(string); ok && customFirstName != "" {
+			firstNameAttrs = []string{strings.ToLower(customFirstName)}
+		}
+		if customLastName, ok := connection.AttributeMapping["last_name"].(string); ok && customLastName != "" {
+			lastNameAttrs = []string{strings.ToLower(customLastName)}
+		}
+	}
 
 	firstName := ""
 	lastName := ""
 	for _, stmt := range assertion.AttributeStatements {
 		for _, attr := range stmt.Attributes {
-			switch strings.ToLower(attr.Name) {
-			case "firstname", "first_name", "givenname":
-				if len(attr.Values) > 0 {
-					firstName = attr.Values[0].Value
+			attrNameLower := strings.ToLower(attr.Name)
+			for _, fn := range firstNameAttrs {
+				if attrNameLower == fn {
+					if len(attr.Values) > 0 {
+						firstName = attr.Values[0].Value
+					}
+					break
 				}
-			case "lastname", "last_name", "surname", "familyname":
-				if len(attr.Values) > 0 {
-					lastName = attr.Values[0].Value
+			}
+			for _, ln := range lastNameAttrs {
+				if attrNameLower == ln {
+					if len(attr.Values) > 0 {
+						lastName = attr.Values[0].Value
+					}
+					break
 				}
 			}
 		}
@@ -336,7 +377,6 @@ func buildServiceProvider(
 	deployment *model.Deployment,
 	keypair model.DeploymentKeyPair,
 ) (*saml.ServiceProvider, error) {
-	// Use SAML RSA key (not ECDSA used for JWT)
 	if keypair.SamlPrivateKey == nil {
 		return nil, fmt.Errorf("SAML private key not configured")
 	}
@@ -361,7 +401,6 @@ func buildServiceProvider(
 		}
 	}
 
-	// Generate self-signed certificate from RSA key
 	certTemplate := &x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject: pkix.Name{
