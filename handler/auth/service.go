@@ -1213,47 +1213,7 @@ func (s *AuthService) getIPLocation(ip string) IPLocation {
 		Timeout: 5 * time.Second,
 	}
 
-	resp, err := client.Get(
-		"http://ip-api.com/json/" + ip + "?fields=status,message,continent,continentCode,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query",
-	)
-	if err != nil {
-		return s.getIPLocationFallback(ip, client)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return s.getIPLocationFallback(ip, client)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return s.getIPLocationFallback(ip, client)
-	}
-
-	var ipLocation IPLocation
-	err = json.Unmarshal(body, &ipLocation)
-	if err != nil {
-		return s.getIPLocationFallback(ip, client)
-	}
-
-	if ipLocation.Status != "success" {
-		return s.getIPLocationFallback(ip, client)
-	}
-
-	return ipLocation
-}
-
-func (s *AuthService) getIPLocationFallback(ip string, client *http.Client) IPLocation {
-	defaultLocation := IPLocation{
-		Status:      "fail",
-		Country:     "Unknown",
-		CountryCode: "XX",
-		City:        "Unknown",
-		RegionName:  "Unknown",
-		Region:      "Unknown",
-	}
-
-	resp, err := client.Get("https://ipapi.co/" + ip + "/json/")
+	resp, err := client.Get("https://freeipapi.com/api/json/" + ip)
 	if err != nil {
 		return defaultLocation
 	}
@@ -1268,36 +1228,54 @@ func (s *AuthService) getIPLocationFallback(ip string, client *http.Client) IPLo
 		return defaultLocation
 	}
 
-	var fallbackResponse struct {
-		IP          string  `json:"ip"`
-		City        string  `json:"city"`
-		Region      string  `json:"region"`
-		RegionCode  string  `json:"region_code"`
-		Country     string  `json:"country_name"`
-		CountryCode string  `json:"country_code"`
-		Continent   string  `json:"continent_code"`
-		Latitude    float64 `json:"latitude"`
-		Longitude   float64 `json:"longitude"`
-		Timezone    string  `json:"timezone"`
-		Error       bool    `json:"error"`
+	var response struct {
+		IPVersion     int      `json:"ipVersion"`
+		IPAddress     string   `json:"ipAddress"`
+		Latitude      float64  `json:"latitude"`
+		Longitude     float64  `json:"longitude"`
+		CountryName   string   `json:"countryName"`
+		CountryCode   string   `json:"countryCode"`
+		Capital       string   `json:"capital"`
+		PhoneCodes    []int    `json:"phoneCodes"`
+		TimeZones     []string `json:"timeZones"`
+		ZipCode       string   `json:"zipCode"`
+		CityName      string   `json:"cityName"`
+		RegionName    string   `json:"regionName"`
+		Continent     string   `json:"continent"`
+		ContinentCode string   `json:"continentCode"`
+		Currencies    []string `json:"currencies"`
+		Languages     []string `json:"languages"`
+		IsProxy       bool     `json:"isProxy"`
 	}
 
-	err = json.Unmarshal(body, &fallbackResponse)
-	if err != nil || fallbackResponse.Error {
+	err = json.Unmarshal(body, &response)
+	if err != nil {
 		return defaultLocation
+	}
+
+	// Basic validation to consider it a success
+	if response.CountryCode == "" {
+		return defaultLocation
+	}
+
+	timezone := ""
+	if len(response.TimeZones) > 0 {
+		timezone = response.TimeZones[0]
 	}
 
 	return IPLocation{
 		Status:        "success",
-		Country:       fallbackResponse.Country,
-		CountryCode:   fallbackResponse.CountryCode,
-		Region:        fallbackResponse.RegionCode,
-		RegionName:    fallbackResponse.Region,
-		City:          fallbackResponse.City,
-		ContinentCode: fallbackResponse.Continent,
-		Lat:           fallbackResponse.Latitude,
-		Long:          fallbackResponse.Longitude,
-		Timezone:      fallbackResponse.Timezone,
+		Country:       response.CountryName,
+		CountryCode:   response.CountryCode,
+		Region:        response.RegionName, // freeipapi doesn't provide region code in main response
+		RegionName:    response.RegionName,
+		City:          response.CityName,
+		Zip:           response.ZipCode,
+		Lat:           response.Latitude,
+		Long:          response.Longitude,
+		Timezone:      timezone,
+		Continent:     response.Continent,
+		ContinentCode: response.ContinentCode,
 	}
 }
 
