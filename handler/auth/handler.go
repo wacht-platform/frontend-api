@@ -1221,6 +1221,7 @@ func (h *Handler) OAuth2Callback(c *fiber.Ctx) error {
 				&attempt,
 				&deployment,
 				session,
+				c,
 			)
 			if err != nil {
 				return err

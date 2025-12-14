@@ -342,6 +342,7 @@ func (s *AuthService) HandleExistingUser(
 	attempt *model.SignInAttempt,
 	deployment *model.Deployment,
 	session *model.Session,
+	ctx *fiber.Ctx,
 ) (*model.Signin, error) {
 	deploymentSettings := deployment.AuthSettings
 	var connection model.SocialConnection
@@ -408,11 +409,7 @@ func (s *AuthService) HandleExistingUser(
 		}
 	}
 
-	signIn := model.NewSignIn(
-		attempt.SessionID,
-		email.User.ID,
-		deploymentSettings.SessionValidityPeriod,
-	)
+	signIn := s.CreateSignin(email.User.ID, attempt.SessionID, ctx, deploymentSettings.SessionValidityPeriod)
 	if err := tx.Create(&signIn).Error; err != nil {
 		return nil, err
 	}
