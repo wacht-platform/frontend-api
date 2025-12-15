@@ -913,6 +913,27 @@ func (h *Handler) RemoveMember(
 		"organization_membership",
 	)
 
+	if err := database.Connection.Exec(
+		"DELETE FROM organization_membership_roles WHERE organization_membership_id = ?",
+		membershipToRemove.ID,
+	).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to remove member roles")
+	}
+
+	if err := database.Connection.Exec(
+		"DELETE FROM workspace_membership_roles WHERE workspace_membership_id IN (SELECT id FROM workspace_memberships WHERE organization_id = ? AND user_id = ?)",
+		membershipToRemove.OrganizationID, membershipToRemove.UserID,
+	).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to remove workspace member roles")
+	}
+
+	if err := database.Connection.Exec(
+		"DELETE FROM workspace_memberships WHERE organization_id = ? AND user_id = ?",
+		membershipToRemove.OrganizationID, membershipToRemove.UserID,
+	).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to remove workspace memberships")
+	}
+
 	if err := database.Connection.Delete(&membershipToRemove).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to remove member")
 	}
