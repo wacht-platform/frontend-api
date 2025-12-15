@@ -25,6 +25,7 @@ func setupOrganizationRoutes(
 	router.Get("/:id/invitations", orgHandler.GetOrganizationInvitations)
 	router.Post("/:id/invitations", orgHandler.InviteMember)
 	router.Post("/:id/invitations/:invitationId/discard", orgHandler.DiscardInvitation)
+	router.Post("/:id/invitations/:invitationId/resend", orgHandler.ResendInvitation)
 	router.Post("/invitations/accept", orgHandler.AcceptInvitation)
 	router.Post("/:id/roles", orgHandler.CreateOrganizationRole)
 	router.Get("/:id/roles", orgHandler.GetOrganizationRoles)

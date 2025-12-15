@@ -610,6 +610,84 @@ func (h *Handler) DiscardInvitation(
 	})
 }
 
+func (h *Handler) ResendInvitation(
+	c *fiber.Ctx,
+) error {
+	orgID := c.Params("id")
+	invitationID := c.Params("invitationId")
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	var membership model.OrganizationMembership
+	if err := database.Connection.
+		Where("organization_id = ? AND user_id = ?", orgID, session.ActiveSignin.UserID).
+		Preload("Roles").
+		First(&membership).
+		Error; err != nil {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	hasPermission := h.service.hasPermission(membership, orgManagementPermissions)
+	if !hasPermission {
+		return handler.SendForbidden(c, nil, "Insufficient permissions")
+	}
+
+	invitationIDUint := getuint64(invitationID)
+	var invitation model.OrganizationInvitation
+	if err := database.Connection.
+		Where("id = ? AND organization_id = ?", invitationIDUint, getuint64(orgID)).
+		First(&invitation).Error; err != nil {
+		return handler.SendNotFound(c, nil, "Invitation not found")
+	}
+
+	// Generate new token and reset expiry
+	tokenBase, err := utils.GenerateSecureToken(32)
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to generate invitation token")
+	}
+	invitation.Token = fmt.Sprintf("org.%s", tokenBase)
+	invitation.Expiry = time.Now().Add(10 * 24 * time.Hour)
+
+	if err := database.Connection.Save(&invitation).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to update invitation")
+	}
+
+	// Get deployment and organization details for email
+	deployment := handler.GetDeployment(c)
+	var organization model.Organization
+	database.Connection.First(&organization, invitation.OrganizationID)
+
+	// Get inviter details
+	var inviterMembership model.OrganizationMembership
+	database.Connection.Preload("User").First(&inviterMembership, invitation.InviterID)
+	inviterUser := inviterMembership.User
+
+	// Build invitation link
+	inviteLink := fmt.Sprintf("https://%s/invite?token=%s", deployment.FrontendHost, invitation.Token)
+
+	// Send invitation email via NATS
+	inviterName := fmt.Sprintf("%s %s", inviterUser.FirstName, inviterUser.LastName)
+	if inviterName == " " {
+		inviterName = inviterUser.Username
+	}
+
+	err = h.service.nats.SendOrganizationInviteEmail(
+		deployment.ID,
+		invitation.Email,
+		inviterName,
+		organization.Name,
+		inviteLink,
+	)
+
+	if err != nil {
+		log.Printf("Failed to send invitation email: %v", err)
+	}
+
+	return handler.SendSuccess(c, invitation)
+}
+
 func (h *Handler) AcceptInvitation(
 	c *fiber.Ctx,
 ) error {
