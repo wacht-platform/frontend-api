@@ -1,6 +1,11 @@
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+
+	"gorm.io/gorm"
+)
 
 type OrganizationInvitation struct {
 	Model
@@ -16,4 +21,9 @@ type OrganizationInvitation struct {
 	InitialWorkspaceRoleID    *uint64                `json:"initial_workspace_role_id,string,omitempty"`
 	InitialWorkspaceRole      WorkspaceRole          `json:"initial_workspace_role"                        gorm:"foreignKey:InitialWorkspaceRoleID"`
 	Expiry                    time.Time              `json:"expiry"                                        gorm:"default:CURRENT_TIMESTAMP + INTERVAL '10 DAY'"`
+}
+
+func (o *OrganizationInvitation) BeforeSave(tx *gorm.DB) error {
+	o.Email = strings.ToLower(strings.TrimSpace(o.Email))
+	return nil
 }

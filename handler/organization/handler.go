@@ -649,9 +649,15 @@ func (h *Handler) AcceptInvitation(
 		return handler.SendSuccess(c, response)
 	}
 
+	var org model.Organization
+	if err := database.Connection.First(&org, invitation.OrganizationID).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to fetch organization")
+	}
+
 	var emailAddress model.UserEmailAddress
+	invitedEmail := strings.ToLower(strings.TrimSpace(invitation.Email))
 	if err := database.Connection.
-		Where("email_address = ?", invitation.Email).
+		Where("email_address = ? AND deployment_id = ?", invitedEmail, org.DeploymentID).
 		Preload("User").
 		First(&emailAddress).Error; err != nil {
 		response := AcceptInvitationResponse{
@@ -688,9 +694,6 @@ func (h *Handler) AcceptInvitation(
 
 	if err == nil {
 		database.Connection.Delete(&invitation)
-
-		var org model.Organization
-		database.Connection.First(&org, invitation.OrganizationID)
 
 		response := AcceptInvitationResponse{
 			Organization: OrganizationInfo{
@@ -765,9 +768,6 @@ func (h *Handler) AcceptInvitation(
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to accept invitation")
 	}
-
-	var org model.Organization
-	database.Connection.First(&org, invitation.OrganizationID)
 
 	response := AcceptInvitationResponse{
 		Organization: OrganizationInfo{

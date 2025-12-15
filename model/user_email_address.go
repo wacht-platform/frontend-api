@@ -2,7 +2,10 @@ package model
 
 import (
 	"database/sql/driver"
+	"strings"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type VerificationStrategy string
@@ -49,4 +52,10 @@ type UserEmailAddress struct {
 	VerifiedAt           time.Time            `json:"verified_at"`
 	VerificationStrategy VerificationStrategy `json:"verification_strategy"`
 	SocialConnection     *SocialConnection    `json:"social_connection,omitempty"`
+}
+
+// BeforeSave normalizes email address to lowercase before saving
+func (u *UserEmailAddress) BeforeSave(tx *gorm.DB) error {
+	u.EmailAddress = strings.ToLower(strings.TrimSpace(u.EmailAddress))
+	return nil
 }
