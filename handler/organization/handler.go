@@ -901,7 +901,7 @@ func (h *Handler) RemoveMember(
 	}
 
 	var membershipToRemove model.OrganizationMembership
-	if err := database.Connection.Where("organization_id = ? AND user_id = ?", orgID, memberID).First(&membershipToRemove).Error; err != nil {
+	if err := database.Connection.Where("organization_id = ? AND id = ?", orgID, memberID).First(&membershipToRemove).Error; err != nil {
 		return handler.SendNotFound(c, nil, "Member not found")
 	}
 
