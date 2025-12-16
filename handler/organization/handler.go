@@ -516,6 +516,34 @@ func (h *Handler) InviteMember(
 
 	if b.WorkspaceID != nil {
 		invitation.WorkspaceID = b.WorkspaceID
+
+		invitedEmail := strings.ToLower(strings.TrimSpace(b.Email))
+		d := handler.GetDeployment(c)
+
+		var checkResult struct {
+			HasPendingInvite bool
+			IsMember         bool
+		}
+		database.Connection.Raw(`
+			SELECT 
+				EXISTS(
+					SELECT 1 FROM organization_invitations 
+					WHERE email = ? AND workspace_id = ? AND organization_id = ? AND deleted_at IS NULL
+				) as has_pending_invite,
+				EXISTS(
+					SELECT 1 FROM workspace_memberships wm
+					JOIN user_email_addresses uea ON uea.user_id = wm.user_id
+					WHERE uea.email_address = ? AND uea.deployment_id = ? 
+					AND wm.workspace_id = ? AND wm.deleted_at IS NULL
+				) as is_member
+		`, invitedEmail, *b.WorkspaceID, getuint64(orgID), invitedEmail, d.ID, *b.WorkspaceID).Scan(&checkResult)
+
+		if checkResult.HasPendingInvite {
+			return handler.SendBadRequest(c, nil, "An invitation for this email and workspace is already pending")
+		}
+		if checkResult.IsMember {
+			return handler.SendBadRequest(c, nil, "User is already a member of this workspace")
+		}
 	}
 
 	if b.WorkspaceRoleID != nil {
