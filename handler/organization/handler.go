@@ -514,13 +514,40 @@ func (h *Handler) InviteMember(
 		invitation.InitialOrganizationRoleID = b.RoleID
 	}
 
+	d := handler.GetDeployment(c)
+	invitedEmail := strings.ToLower(strings.TrimSpace(b.Email))
+
+	if b.WorkspaceID == nil {
+		var checkResult struct {
+			HasPendingInvite bool
+			IsMember         bool
+		}
+		database.Connection.Raw(`
+			SELECT 
+				EXISTS(
+					SELECT 1 FROM organization_invitations 
+					WHERE email = ? AND organization_id = ? AND workspace_id IS NULL AND deleted_at IS NULL
+				) as has_pending_invite,
+				EXISTS(
+					SELECT 1 FROM organization_memberships om
+					JOIN user_email_addresses uea ON uea.user_id = om.user_id
+					WHERE uea.email_address = ? AND uea.deployment_id = ? 
+					AND om.organization_id = ? AND om.deleted_at IS NULL
+				) as is_member
+		`, invitedEmail, getuint64(orgID), invitedEmail, d.ID, getuint64(orgID)).Scan(&checkResult)
+
+		if checkResult.HasPendingInvite {
+			return handler.SendBadRequest(c, nil, "An invitation for this email is already pending")
+		}
+		if checkResult.IsMember {
+			return handler.SendBadRequest(c, nil, "User is already a member of this organization")
+		}
+	}
+
 	if b.WorkspaceID != nil {
 		invitation.WorkspaceID = b.WorkspaceID
 
-		invitedEmail := strings.ToLower(strings.TrimSpace(b.Email))
-		d := handler.GetDeployment(c)
-
-		var checkResult struct {
+		var wsCheckResult struct {
 			HasPendingInvite bool
 			IsMember         bool
 		}
@@ -536,12 +563,12 @@ func (h *Handler) InviteMember(
 					WHERE uea.email_address = ? AND uea.deployment_id = ? 
 					AND wm.workspace_id = ? AND wm.deleted_at IS NULL
 				) as is_member
-		`, invitedEmail, *b.WorkspaceID, getuint64(orgID), invitedEmail, d.ID, *b.WorkspaceID).Scan(&checkResult)
+		`, invitedEmail, *b.WorkspaceID, getuint64(orgID), invitedEmail, d.ID, *b.WorkspaceID).Scan(&wsCheckResult)
 
-		if checkResult.HasPendingInvite {
+		if wsCheckResult.HasPendingInvite {
 			return handler.SendBadRequest(c, nil, "An invitation for this email and workspace is already pending")
 		}
-		if checkResult.IsMember {
+		if wsCheckResult.IsMember {
 			return handler.SendBadRequest(c, nil, "User is already a member of this workspace")
 		}
 	}
@@ -554,21 +581,17 @@ func (h *Handler) InviteMember(
 		return handler.SendInternalServerError(c, err, "Failed to invite member")
 	}
 
-	// Get deployment and organization details for email
 	deployment := handler.GetDeployment(c)
 	var organization model.Organization
 	database.Connection.First(&organization, getuint64(orgID))
 
-	// Get inviter details
 	var inviterUser model.User
 	if membership.UserID != 0 {
 		database.Connection.First(&inviterUser, membership.UserID)
 	}
 
-	// Build invitation link
 	inviteLink := fmt.Sprintf("https://%s/invite?token=%s", deployment.FrontendHost, token)
 
-	// Send invitation email via NATS
 	inviterName := fmt.Sprintf("%s %s", inviterUser.FirstName, inviterUser.LastName)
 	if inviterName == " " {
 		inviterName = inviterUser.Username
@@ -799,6 +822,74 @@ func (h *Handler) AcceptInvitation(
 		First(&existingMembership).Error
 
 	if err == nil {
+		if invitation.WorkspaceID != nil {
+			var existingWorkspaceMembership model.WorkspaceMembership
+			if database.Connection.
+				Where("workspace_id = ? AND user_id = ?", *invitation.WorkspaceID, *emailAddress.UserID).
+				First(&existingWorkspaceMembership).Error == nil {
+				database.Connection.Delete(&invitation)
+				return handler.SendSuccess(c, AcceptInvitationResponse{
+					Organization: OrganizationInfo{
+						ID:   fmt.Sprintf("%d", org.ID),
+						Name: org.Name,
+					},
+					SigninID:      fmt.Sprintf("%d", matchingSignin.ID),
+					AlreadyMember: true,
+					Message:       "You are already a member of this workspace",
+				})
+			}
+
+			var workspace model.Workspace
+			database.Connection.First(&workspace, *invitation.WorkspaceID)
+
+			txErr := database.Connection.Transaction(func(tx *gorm.DB) error {
+				workspaceMembership := model.WorkspaceMembership{
+					Model: model.Model{
+						ID: snowflake.ID(),
+					},
+					WorkspaceID:              *invitation.WorkspaceID,
+					UserID:                   *emailAddress.UserID,
+					OrganizationID:           invitation.OrganizationID,
+					OrganizationMembershipID: existingMembership.ID,
+				}
+
+				if err := tx.Create(&workspaceMembership).Error; err != nil {
+					return err
+				}
+
+				if invitation.InitialWorkspaceRoleID != nil {
+					if err := tx.Exec(
+						"INSERT INTO workspace_membership_roles (workspace_membership_id, workspace_role_id, workspace_id, organization_id) VALUES (?, ?, ?, ?)",
+						workspaceMembership.ID,
+						*invitation.InitialWorkspaceRoleID,
+						*invitation.WorkspaceID,
+						invitation.OrganizationID,
+					).Error; err != nil {
+						return err
+					}
+				}
+
+				return tx.Delete(&invitation).Error
+			})
+
+			if txErr != nil {
+				return handler.SendInternalServerError(c, txErr, "Failed to accept invitation")
+			}
+
+			return handler.SendSuccess(c, AcceptInvitationResponse{
+				Organization: OrganizationInfo{
+					ID:   fmt.Sprintf("%d", org.ID),
+					Name: org.Name,
+				},
+				Workspace: &WorkspaceInfo{
+					ID:   fmt.Sprintf("%d", workspace.ID),
+					Name: workspace.Name,
+				},
+				SigninID: fmt.Sprintf("%d", matchingSignin.ID),
+				Message:  "You have been added to the workspace",
+			})
+		}
+
 		database.Connection.Delete(&invitation)
 
 		response := AcceptInvitationResponse{
