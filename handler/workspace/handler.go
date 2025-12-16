@@ -942,7 +942,7 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, err, "Invalid workspace ID: "+err.Error())
 	}
 
-	targetUserID, err := getuint64Param(c, "memberId")
+	targetMembershipID, err := getuint64Param(c, "memberId")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid member ID: "+err.Error())
 	}
@@ -966,12 +966,12 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 
 	var targetMembership model.WorkspaceMembership
 	if err := database.Connection.
-		Where("workspace_id = ? AND user_id = ?", workspaceID, targetUserID).
+		Where("workspace_id = ? AND id = ?", workspaceID, targetMembershipID).
 		First(&targetMembership).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return handler.SendNotFound(c, nil, "Member not found in this workspace.")
 		}
-		log.Printf("Error finding membership for user %d in workspace %d: %v", targetUserID, workspaceID, err)
+		log.Printf("Error finding membership %d in workspace %d: %v", targetMembershipID, workspaceID, err)
 		return handler.SendInternalServerError(c, err, "Error finding member to remove.")
 	}
 
@@ -1015,9 +1015,8 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 
 	if txErr != nil {
 		log.Printf(
-			"Failed to remove member (User ID: %d, Membership ID: %d) from workspace %d: %v",
-			targetUserID,
-			targetMembership.ID,
+			"Failed to remove member (Membership ID: %d) from workspace %d: %v",
+			targetMembershipID,
 			workspaceID,
 			txErr,
 		)
