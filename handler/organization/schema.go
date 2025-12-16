@@ -22,10 +22,10 @@ type CreateRoleRequest struct {
 }
 
 type InviteMemberRequest struct {
-	Email           string  `form:"email"             json:"email"             validate:"required,email"`
-	RoleID          *uint64 `form:"role_id,string"    json:"role_id,string"`
-	WorkspaceID     *uint64 `form:"workspace_id,string" json:"workspace_id,string"`
-	WorkspaceRoleID *uint64 `form:"workspace_role_id,string" json:"workspace_role_id,string"`
+	Email           string  `form:"email"                    validate:"required,email"`
+	RoleID          *uint64 `form:"role_id,string"`
+	WorkspaceID     *uint64 `form:"workspace_id,string"`
+	WorkspaceRoleID *uint64 `form:"workspace_role_id,string"`
 }
 
 type AddDomainRequest struct {

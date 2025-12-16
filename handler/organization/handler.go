@@ -815,9 +815,10 @@ func (h *Handler) AcceptInvitation(
 				Model: model.Model{
 					ID: snowflake.ID(),
 				},
-				WorkspaceID:    *invitation.WorkspaceID,
-				UserID:         *emailAddress.UserID,
-				OrganizationID: invitation.OrganizationID,
+				WorkspaceID:              *invitation.WorkspaceID,
+				UserID:                   *emailAddress.UserID,
+				OrganizationID:           invitation.OrganizationID,
+				OrganizationMembershipID: membership.ID,
 			}
 
 			if err := tx.Create(&workspaceMembership).Error; err != nil {
