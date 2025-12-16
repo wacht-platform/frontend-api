@@ -857,11 +857,16 @@ func (h *Handler) AcceptInvitation(
 					return err
 				}
 
-				if invitation.InitialWorkspaceRoleID != nil {
+				deployment := handler.GetDeployment(c)
+				wsRoleID := invitation.InitialWorkspaceRoleID
+				if wsRoleID == nil && deployment.B2BSettings.DefaultWorkspaceMemberRoleID != 0 {
+					wsRoleID = &deployment.B2BSettings.DefaultWorkspaceMemberRoleID
+				}
+				if wsRoleID != nil {
 					if err := tx.Exec(
 						"INSERT INTO workspace_membership_roles (workspace_membership_id, workspace_role_id, workspace_id, organization_id) VALUES (?, ?, ?, ?)",
 						workspaceMembership.ID,
-						*invitation.InitialWorkspaceRoleID,
+						*wsRoleID,
 						*invitation.WorkspaceID,
 						invitation.OrganizationID,
 					).Error; err != nil {
@@ -918,11 +923,16 @@ func (h *Handler) AcceptInvitation(
 			return err
 		}
 
-		if invitation.InitialOrganizationRoleID != nil {
+		deployment := handler.GetDeployment(c)
+		orgRoleID := invitation.InitialOrganizationRoleID
+		if orgRoleID == nil && deployment.B2BSettings.DefaultOrgMemberRoleID != 0 {
+			orgRoleID = &deployment.B2BSettings.DefaultOrgMemberRoleID
+		}
+		if orgRoleID != nil {
 			if err := tx.Exec(
 				"INSERT INTO organization_membership_roles (organization_membership_id, organization_role_id, organization_id) VALUES (?, ?, ?)",
 				membership.ID,
-				*invitation.InitialOrganizationRoleID,
+				*orgRoleID,
 				invitation.OrganizationID,
 			).Error; err != nil {
 				return err
@@ -944,11 +954,15 @@ func (h *Handler) AcceptInvitation(
 				return err
 			}
 
-			if invitation.InitialWorkspaceRoleID != nil {
+			wsRoleID := invitation.InitialWorkspaceRoleID
+			if wsRoleID == nil && deployment.B2BSettings.DefaultWorkspaceMemberRoleID != 0 {
+				wsRoleID = &deployment.B2BSettings.DefaultWorkspaceMemberRoleID
+			}
+			if wsRoleID != nil {
 				if err := tx.Exec(
 					"INSERT INTO workspace_membership_roles (workspace_membership_id, workspace_role_id, workspace_id, organization_id) VALUES (?, ?, ?, ?)",
 					workspaceMembership.ID,
-					*invitation.InitialWorkspaceRoleID,
+					*wsRoleID,
 					*invitation.WorkspaceID,
 					invitation.OrganizationID,
 				).Error; err != nil {
