@@ -827,10 +827,11 @@ func (h *Handler) AcceptInvitation(
 
 			if invitation.InitialWorkspaceRoleID != nil {
 				if err := tx.Exec(
-					"INSERT INTO workspace_membership_roles (workspace_membership_id, workspace_role_id, workspace_id) VALUES (?, ?, ?)",
+					"INSERT INTO workspace_membership_roles (workspace_membership_id, workspace_role_id, workspace_id, organization_id) VALUES (?, ?, ?, ?)",
 					workspaceMembership.ID,
 					*invitation.InitialWorkspaceRoleID,
 					*invitation.WorkspaceID,
+					invitation.OrganizationID,
 				).Error; err != nil {
 					return err
 				}
