@@ -18,7 +18,6 @@ func setupWorkspaceRoutes(app *fiber.App) {
 
 	// Member management
 	router.Get("/:id/members", workspaceHandler.GetWorkspaceMembers)
-	router.Post("/:id/members", workspaceHandler.InviteMember)
 	router.Post("/:id/members/:memberId/remove", workspaceHandler.RemoveMember)
 
 	// Role management
