@@ -43,7 +43,7 @@ type OrganizationMemberQueryResult struct {
 }
 
 type AcceptInvitationRequest struct {
-	Token string `json:"token" validate:"required"`
+	Token string `json:"token" form:"token" validate:"required"`
 }
 
 type AcceptInvitationResponse struct {

@@ -383,8 +383,8 @@ func (h *Handler) CreateWorkspaceRole(c *fiber.Ctx) error {
 
 	// Validate request body
 	var body struct {
-		Name        string   `json:"name" validate:"required,min=2,max=100"`
-		Permissions []string `json:"permissions"`
+		Name        string   `json:"name" form:"name" validate:"required,min=2,max=100"`
+		Permissions []string `json:"permissions" form:"permissions"`
 	}
 
 	if err := c.BodyParser(&body); err != nil {
@@ -802,8 +802,8 @@ func (h *Handler) InviteMember(c *fiber.Ctx) error {
 	}
 
 	type AddMemberToWorkspaceRequest struct {
-		Email  string `json:"email"   validate:"required,email"`
-		RoleID uint64 `json:"role_id" validate:"required"` // WorkspaceRoleID
+		Email  string `json:"email" form:"email" validate:"required,email"`
+		RoleID uint64 `json:"role_id" form:"role_id" validate:"required"` // WorkspaceRoleID
 	}
 
 	b, validation := handler.Validate[AddMemberToWorkspaceRequest](c)
