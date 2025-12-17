@@ -381,7 +381,10 @@ func (h *Handler) CreateWorkspaceRole(c *fiber.Ctx) error {
 		return handler.SendForbidden(c, nil, "Insufficient permissions to manage workspace roles.")
 	}
 
-	// Validate request body
+	if !d.B2BSettings.CustomWorkspaceRoleEnabled {
+		return handler.SendForbidden(c, nil, "Custom workspace roles are disabled for this deployment.")
+	}
+
 	var body struct {
 		Name        string   `json:"name" form:"name" validate:"required,min=2,max=100"`
 		Permissions []string `json:"permissions" form:"permissions"`
@@ -389,6 +392,12 @@ func (h *Handler) CreateWorkspaceRole(c *fiber.Ctx) error {
 
 	if err := c.BodyParser(&body); err != nil {
 		return handler.SendBadRequest(c, err, "Invalid request body")
+	}
+
+	for _, permission := range body.Permissions {
+		if slices.Contains(d.B2BSettings.WorkspacePermissions, permission) {
+			return handler.SendForbidden(c, nil, "Insufficient permissions to assign the specified permission.")
+		}
 	}
 
 	// Create the role
