@@ -768,29 +768,48 @@ func (h *Handler) AcceptInvitation(
 		return handler.SendSuccess(c, response)
 	}
 
-	if session.ActiveSignin == nil || len(session.Signins) == 0 {
-		response := AcceptInvitationResponse{
-			Message:        "Please sign in to accept this invitation",
-			RequiresSignin: true,
-			InvitedEmail:   invitation.Email,
-			ErrorCode:      handler.ErrCodeInvitationRequiresSignin,
-		}
-		return handler.SendSuccess(c, response)
-	}
-
+	// First fetch the org to get deployment ID
 	var org model.Organization
 	if err := database.Connection.First(&org, invitation.OrganizationID).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to fetch organization")
 	}
 
+	// Check if user with invited email exists
 	var emailAddress model.UserEmailAddress
 	invitedEmail := strings.ToLower(strings.TrimSpace(invitation.Email))
+	userExists := true
 	if err := database.Connection.
 		Where("email_address = ? AND deployment_id = ?", invitedEmail, org.DeploymentID).
 		Preload("User").
 		First(&emailAddress).Error; err != nil {
+		userExists = false
+	}
+
+	// Now check signin status with appropriate message
+	if session.ActiveSignin == nil || len(session.Signins) == 0 {
+		if userExists {
+			response := AcceptInvitationResponse{
+				Message:        "Please sign in to accept this invitation",
+				RequiresSignin: true,
+				InvitedEmail:   invitation.Email,
+				ErrorCode:      handler.ErrCodeInvitationRequiresSignin,
+			}
+			return handler.SendSuccess(c, response)
+		} else {
+			response := AcceptInvitationResponse{
+				Message:        "Please sign up to accept this invitation",
+				RequiresSignin: true,
+				InvitedEmail:   invitation.Email,
+				ErrorCode:      handler.ErrCodeInvitationRequiresSignup,
+			}
+			return handler.SendSuccess(c, response)
+		}
+	}
+
+	// User is signed in but no account exists with the invited email
+	if !userExists {
 		response := AcceptInvitationResponse{
-			Message:        fmt.Sprintf("No account exists with email %s. Please sign up first.", invitation.Email),
+			Message:        fmt.Sprintf("No account exists with email %s. Please sign up with that email first.", invitation.Email),
 			RequiresSignin: true,
 			InvitedEmail:   invitation.Email,
 			ErrorCode:      handler.ErrCodeInvitationRequiresSignup,
