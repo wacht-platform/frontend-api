@@ -773,29 +773,42 @@ func (h *Handler) DeleteWorkspace(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to verify workspace status before deletion.")
 	}
 
-	if err := database.Connection.Where("workspace_id = ?", workspaceID).Delete(&model.WorkspaceMembershipRoleAssoc{}).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to delete organization")
-	}
-
-	if err := database.Connection.Where("workspace_id = ?", workspaceID).Delete(&model.WorkspaceMembership{}).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to delete workspace memberships")
-	}
-
-	if err := database.Connection.Where("workspace_id = ?", workspaceID).Delete(&model.WorkspaceRole{}).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to delete workspace roles")
-	}
-
 	deployment := handler.GetDeployment(c)
-	utils.PublishWebhookEvent(deployment.ID, "workspace.deleted", workspaceID, "workspace")
 
-	if err := database.Connection.Delete(&model.Workspace{}, workspaceID).Error; err != nil {
-		log.Printf("Failed to delete workspace %d: %v", workspaceID, err)
+	txErr := database.Connection.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("workspace_id = ?", workspaceID).Delete(&model.WorkspaceMembershipRoleAssoc{}).Error; err != nil {
+			return fmt.Errorf("failed to delete workspace membership role associations: %w", err)
+		}
+
+		if err := tx.Where("workspace_id = ?", workspaceID).Delete(&model.WorkspaceMembership{}).Error; err != nil {
+			return fmt.Errorf("failed to delete workspace memberships: %w", err)
+		}
+
+		if err := tx.Where("workspace_id = ?", workspaceID).Delete(&model.WorkspaceRole{}).Error; err != nil {
+			return fmt.Errorf("failed to delete workspace roles: %w", err)
+		}
+
+		if err := tx.Where("workspace_id = ?", workspaceID).Delete(&model.OrganizationInvitation{}).Error; err != nil {
+			return fmt.Errorf("failed to delete workspace invitations: %w", err)
+		}
+
+		if err := tx.Delete(&model.Workspace{}, workspaceID).Error; err != nil {
+			return fmt.Errorf("failed to delete workspace: %w", err)
+		}
+
+		return nil
+	})
+
+	if txErr != nil {
+		log.Printf("Failed to delete workspace %d: %v", workspaceID, txErr)
 		return handler.SendInternalServerError(
 			c,
-			err,
+			txErr,
 			"Failed to delete workspace",
 		)
 	}
+
+	utils.PublishWebhookEvent(deployment.ID, "workspace.deleted", workspaceID, "workspace")
 
 	utils.RemoveCachedSession(session.ID)
 

@@ -348,45 +348,75 @@ func (h *Handler) DeleteOrganization(
 		return handler.SendForbidden(c, nil, "Only organization owner can delete the organization")
 	}
 
-	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.WorkspaceMembershipRoleAssoc{}).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to delete organization")
-	}
-
-	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.WorkspaceMembership{}).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to delete organization workspace memberships")
-	}
-
-	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.WorkspaceRole{}).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to delete organization workspace invitations")
-	}
-
-	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.Workspace{}).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to delete organization workspace invitations")
-	}
-
-	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.OrgMembershipRoleAssoc{}).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to delete organization membership role associations")
-	}
-
-	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.OrganizationMembership{}).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to delete organization memberships")
-	}
-
-	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.OrganizationInvitation{}).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to delete organization invitations")
-	}
-
-	if err := database.Connection.Where("organization_id = ?", orgID).Delete(&model.OrganizationRole{}).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to delete organization workspace roles")
-	}
-
 	orgIDUint, _ := strconv.ParseUint(orgID, 10, 64)
 	deployment := handler.GetDeployment(c)
-	utils.PublishWebhookEvent(deployment.ID, "organization.deleted", orgIDUint, "organization")
 
-	if err := database.Connection.Delete(&model.Organization{}, orgID).Error; err != nil {
+	err := database.Connection.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("organization_id = ?", orgID).Delete(&model.WorkspaceMembershipRoleAssoc{}).Error; err != nil {
+			return fmt.Errorf("failed to delete workspace membership role associations: %w", err)
+		}
+
+		if err := tx.Where("organization_id = ?", orgID).Delete(&model.WorkspaceMembership{}).Error; err != nil {
+			return fmt.Errorf("failed to delete workspace memberships: %w", err)
+		}
+
+		if err := tx.Where("organization_id = ?", orgID).Delete(&model.WorkspaceRole{}).Error; err != nil {
+			return fmt.Errorf("failed to delete workspace roles: %w", err)
+		}
+
+		if err := tx.Where("organization_id = ?", orgID).Delete(&model.Workspace{}).Error; err != nil {
+			return fmt.Errorf("failed to delete workspaces: %w", err)
+		}
+
+		if err := tx.Where("organization_id = ?", orgID).Delete(&model.OrgMembershipRoleAssoc{}).Error; err != nil {
+			return fmt.Errorf("failed to delete organization membership role associations: %w", err)
+		}
+
+		if err := tx.Where("organization_id = ?", orgID).Delete(&model.OrganizationMembership{}).Error; err != nil {
+			return fmt.Errorf("failed to delete organization memberships: %w", err)
+		}
+
+		if err := tx.Where("organization_id = ?", orgID).Delete(&model.OrganizationInvitation{}).Error; err != nil {
+			return fmt.Errorf("failed to delete organization invitations: %w", err)
+		}
+
+		if err := tx.Where("scim_group_id IN (SELECT id FROM scim_groups WHERE organization_id = ?)", orgID).Delete(&model.SCIMGroupMember{}).Error; err != nil {
+			return fmt.Errorf("failed to delete SCIM group members: %w", err)
+		}
+
+		if err := tx.Where("organization_id = ?", orgID).Delete(&model.SCIMGroup{}).Error; err != nil {
+			return fmt.Errorf("failed to delete SCIM groups: %w", err)
+		}
+
+		if err := tx.Where("organization_id = ?", orgID).Delete(&model.SCIMToken{}).Error; err != nil {
+			return fmt.Errorf("failed to delete SCIM tokens: %w", err)
+		}
+
+		if err := tx.Where("organization_id = ?", orgID).Delete(&model.EnterpriseConnection{}).Error; err != nil {
+			return fmt.Errorf("failed to delete enterprise connections: %w", err)
+		}
+
+		if err := tx.Where("organization_id = ?", orgID).Delete(&model.OrganizationDomain{}).Error; err != nil {
+			return fmt.Errorf("failed to delete organization domains: %w", err)
+		}
+
+		if err := tx.Where("organization_id = ?", orgID).Delete(&model.OrganizationRole{}).Error; err != nil {
+			return fmt.Errorf("failed to delete organization roles: %w", err)
+		}
+
+		if err := tx.Delete(&model.Organization{}, orgID).Error; err != nil {
+			return fmt.Errorf("failed to delete organization: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		log.Printf("Failed to delete organization %s: %v", orgID, err)
 		return handler.SendInternalServerError(c, err, "Failed to delete organization")
 	}
+
+	utils.PublishWebhookEvent(deployment.ID, "organization.deleted", orgIDUint, "organization")
 
 	utils.RemoveCachedSession(session.ID)
 
