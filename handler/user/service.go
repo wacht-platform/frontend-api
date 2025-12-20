@@ -22,7 +22,6 @@ const otpExpirationTime = 5 * time.Minute
 
 type UserService struct {
 	db   *gorm.DB
-	sns  *service.SnsService
 	s3   *service.S3Service
 	nats *service.NatsService
 }
@@ -35,7 +34,6 @@ func NewUserService() *UserService {
 
 	return &UserService{
 		db:   database.Connection,
-		sns:  service.NewSnsService(),
 		s3:   service.NewS3Service(),
 		nats: natsService,
 	}
