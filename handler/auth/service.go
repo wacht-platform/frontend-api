@@ -474,7 +474,7 @@ func (s *AuthService) GetSignInAttempt(
 	return attempt, nil
 }
 
-func (s *AuthService) PawnedPassword(password string) (bool, error) {
+func (s *AuthService) PwnedPassword(password string) (bool, error) {
 	hasher := sha1.New()
 	hasher.Write([]byte(password))
 	hash := hex.EncodeToString(hasher.Sum(nil))
@@ -504,8 +504,8 @@ func (s *AuthService) PawnedPassword(password string) (bool, error) {
 		)
 	}
 
-	hashes := strings.Split(string(body), "\n")
-	for _, line := range hashes {
+	hashes := strings.SplitSeq(string(body), "\n")
+	for line := range hashes {
 		parts := strings.Split(line, ":")
 		if len(parts) != 2 {
 			continue

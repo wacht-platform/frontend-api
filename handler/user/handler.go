@@ -1511,6 +1511,7 @@ func (h *Handler) UploadProfilePicture(c *fiber.Ctx) error {
 
 	url, err := h.service.uploadProfilePicture(*session.ActiveSignin.UserID, file)
 	if err != nil {
+		log.Println(err)
 		return handler.SendInternalServerError(
 			c,
 			nil,
@@ -1519,7 +1520,7 @@ func (h *Handler) UploadProfilePicture(c *fiber.Ctx) error {
 		)
 	}
 
-	if err := database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Updates(map[string]interface{}{
+	if err := database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Updates(map[string]any{
 		"profile_picture_url": url,
 		"has_profile_picture": true,
 	}).Error; err != nil {
