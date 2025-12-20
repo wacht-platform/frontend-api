@@ -13,16 +13,17 @@ func getSSOConfig() map[string]model.OauthCredentials {
 			ClientSecret: GetEnv("GOOGLE_CLIENT_SECRET", ""),
 			Scopes:       []string{"openid", "email", "profile"},
 		},
-		"microsoft_oauth": {
-			ClientID:     GetEnv("MICROSOFT_CLIENT_ID", ""),
-			ClientSecret: GetEnv("MICROSOFT_CLIENT_SECRET", ""),
-			Scopes: []string{
-				"openid",
-				"email",
-				"profile",
-				"https://graph.microsoft.com/User.Read",
-			},
-		},
+		// Microsoft OAuth temporarily disabled - unverified credentials
+		// "microsoft_oauth": {
+		// 	ClientID:     GetEnv("MICROSOFT_CLIENT_ID", ""),
+		// 	ClientSecret: GetEnv("MICROSOFT_CLIENT_SECRET", ""),
+		// 	Scopes: []string{
+		// 		"openid",
+		// 		"email",
+		// 		"profile",
+		// 		"https://graph.microsoft.com/User.Read",
+		// 	},
+		// },
 		"github_oauth": {
 			ClientID:     GetEnv("GITHUB_CLIENT_ID", ""),
 			ClientSecret: GetEnv("GITHUB_CLIENT_SECRET", ""),

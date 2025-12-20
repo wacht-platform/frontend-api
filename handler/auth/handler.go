@@ -829,7 +829,7 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 
 	if d.AuthSettings.Password.Enabled && b.Password != "" {
-		if err := h.service.ValidatePassword(b.Password); err != nil {
+		if err := h.service.ValidatePasswordWithSettings(b.Password, d.AuthSettings.Password); err != nil {
 			return handler.SendBadRequest(c, nil, err.Error())
 		}
 	}
@@ -2871,7 +2871,7 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, validation, "Bad request body")
 	}
 
-	if err := h.service.ValidatePassword(b.Password); err != nil {
+	if err := h.service.ValidatePasswordWithSettings(b.Password, deployment.AuthSettings.Password); err != nil {
 		return handler.SendBadRequest(c, nil, err.Error())
 	}
 

@@ -520,24 +520,56 @@ func (s *AuthService) PawnedPassword(password string) (bool, error) {
 }
 
 func (s *AuthService) ValidatePassword(password string) error {
-	ErrInvalidPassword := errors.New(
-		"password must be 6-125 characters long, contain at least one number, and one symbol",
-	)
-
+	// Basic validation with minimal requirements for backwards compatibility
+	// Use ValidatePasswordWithSettings for full deployment-aware validation
 	if len(password) < 6 || len(password) > 125 {
-		return ErrInvalidPassword
+		return errors.New("password must be between 6 and 125 characters")
+	}
+	return nil
+}
+
+func (s *AuthService) ValidatePasswordWithSettings(password string, settings model.PasswordSettings) error {
+	minLength := settings.MinLength
+	if minLength == 0 {
+		minLength = 6
 	}
 
-	hasNumber := regexp.MustCompile(`[0-9]`).MatchString(password)
-	if !hasNumber {
-		return ErrInvalidPassword
+	if uint64(len(password)) < minLength {
+		return fmt.Errorf("password must be at least %d characters long", minLength)
 	}
 
-	hasSymbol := regexp.MustCompile(`[!@#$%^&*(),.?":{}|<>]`).
-		MatchString(password)
-	if !hasSymbol {
-		return ErrInvalidPassword
+	if len(password) > 125 {
+		return errors.New("password must be at most 125 characters long")
 	}
+
+	if settings.RequireLowercase {
+		hasLowercase := regexp.MustCompile(`[a-z]`).MatchString(password)
+		if !hasLowercase {
+			return errors.New("password must contain at least one lowercase letter")
+		}
+	}
+
+	if settings.RequireUppercase {
+		hasUppercase := regexp.MustCompile(`[A-Z]`).MatchString(password)
+		if !hasUppercase {
+			return errors.New("password must contain at least one uppercase letter")
+		}
+	}
+
+	if settings.RequireNumber {
+		hasNumber := regexp.MustCompile(`[0-9]`).MatchString(password)
+		if !hasNumber {
+			return errors.New("password must contain at least one number")
+		}
+	}
+
+	if settings.RequireSpecialChar {
+		hasSymbol := regexp.MustCompile(`[!@#$%^&*(),.?":{}|<>]`).MatchString(password)
+		if !hasSymbol {
+			return errors.New("password must contain at least one special character")
+		}
+	}
+
 	return nil
 }
 
@@ -1301,7 +1333,7 @@ func (s *AuthService) ValidateEmailRestrictions(email string, restrictions model
 	}
 
 	if restrictions.BlockDisposableEmails {
-		if s.isDisposableEmail(email) {
+		if service.IsDisposableEmailDomain(email) {
 			return handler.ErrDisposableEmail
 		}
 	}
@@ -1314,13 +1346,12 @@ func (s *AuthService) ValidateEmailRestrictions(email string, restrictions model
 }
 
 func (s *AuthService) ValidatePhoneRestrictions(phoneNumber string, restrictions model.DeploymentRestrictions) error {
-	telesignService := service.NewTelesignService(
-		config.GetEnv("TELESIGN_CUSTOMER_ID", ""),
-		config.GetEnv("TELESIGN_API_KEY", ""),
+	abstractAPIService := service.NewAbstractAPIService(
+		config.GetEnv("ABSTRACT_API_KEY", ""),
 	)
 
-	if telesignService.CustomerID != "" && telesignService.APIKey != "" {
-		result, err := telesignService.ValidatePhoneNumber(phoneNumber)
+	if abstractAPIService.APIKey != "" {
+		result, err := abstractAPIService.ValidatePhoneNumber(phoneNumber)
 		if err != nil {
 			return s.validatePhoneBasic(phoneNumber, restrictions)
 		}
@@ -1412,183 +1443,6 @@ func (s *AuthService) ValidateIPCountryRestrictions(ctx *fiber.Ctx, restrictions
 	}
 
 	return nil
-}
-
-func (s *AuthService) isDisposableEmail(email string) bool {
-	domain := strings.ToLower(strings.Split(email, "@")[1])
-
-	disposableDomains := []string{
-		"10minutemail.com", "10minutemail.net", "10minutemail.org", "guerrillamail.com",
-		"guerrillamail.net", "guerrillamail.org", "guerrillamail.biz", "guerrillamail.de",
-		"mailinator.com", "mailinator.net", "mailinator.org", "tempmail.org", "temp-mail.org",
-		"throwaway.email", "yopmail.com", "yopmail.fr", "yopmail.net", "maildrop.cc",
-		"sharklasers.com", "grr.la", "guerrillamailblock.com", "pokemail.net", "spam4.me",
-		"bccto.me", "chacuo.net", "dispostable.com", "fakeinbox.com", "filzmail.com",
-		"get-mail.tk", "getairmail.com", "getnada.com", "harakirimail.com", "inboxkitten.com",
-		"koszmail.pl", "kurzepost.de", "lroid.com", "mohmal.com", "mytemp.email",
-		"nada.email", "temp.email", "tempail.com", "tempemail.net", "tempinbox.com",
-		"tempr.email", "trashmail.com", "wegwerfmail.de", "zehnminutenmail.de",
-		"0-mail.com", "0815.ru", "0clickemail.com", "0wnd.net", "0wnd.org", "10mail.org",
-		"20email.eu", "20mail.it", "20minutemail.com", "2prong.com", "30minutemail.com",
-		"33mail.com", "3d-painting.com", "4warding.com", "4warding.net", "4warding.org",
-		"60minutemail.com", "675hosting.com", "675hosting.net", "675hosting.org", "6url.com",
-		"75hosting.com", "75hosting.net", "75hosting.org", "7tags.com", "9ox.net",
-		"a-bc.net", "a45.in", "abyssmail.com", "ac20mail.in", "acentri.com", "advantimo.com",
-		"afrobacon.com", "ajaxapp.net", "ama-trade.de", "ama-trans.de", "amiri.net",
-		"amiriindustrial.com", "anonbox.net", "anonmails.de", "anonymbox.com", "antichef.com",
-		"antichef.net", "antireg.ru", "antispam.de", "antispammail.de", "armyspy.com",
-		"artman-conception.com", "azmeil.tk", "baxomale.ht.cx", "beefmilk.com", "bigstring.com",
-		"binkmail.com", "bio-muesli.net", "bobmail.info", "bodhi.lawlita.com", "bofthew.com",
-		"bootybay.de", "boun.cr", "bouncr.com", "boxformail.in", "br.mintemail.com",
-		"breakthru.com", "brefmail.com", "brennendesreich.de", "broadbandninja.com",
-		"bsnow.net", "bspamfree.org", "bugmenot.com", "bumpymail.com", "burnthespam.info",
-		"burstmail.info", "buymoreplays.com", "byom.de", "c2.hu", "card.zp.ua",
-		"casualdx.com", "cek.pm", "centermail.com", "centermail.net", "chammy.info",
-		"childsavetrust.org", "chogmail.com", "choicemail1.com", "clixser.com", "cmail.net",
-		"cmail.org", "coldemail.info", "cool.fr.nf", "correo.blogos.net", "cosmorph.com",
-		"courriel.fr.nf", "courrieltemporaire.com", "crapmail.org", "crazymailing.com",
-		"cubiclink.com", "curryworld.de", "cust.in", "cuvox.de", "d3p.dk", "dacoolest.com",
-		"dandikmail.com", "dayrep.com", "dcemail.com", "deadaddress.com", "deadspam.com",
-		"delikkt.de", "despam.it", "despammed.com", "devnullmail.com", "dfgh.net",
-		"digitalsanctuary.com", "dingbone.com", "disposableaddress.com", "disposableemailaddresses.com",
-		"disposableinbox.com", "dispose.it", "dispostable.com", "dm.w3internet.com",
-		"dodgeit.com", "dodgit.com", "dodgit.org", "donemail.ru", "dontreg.com",
-		"dontsendmespam.de", "drdrb.net", "dump-email.info", "dumpandjunk.com", "dumpmail.de",
-		"dumpyemail.com", "e-mail.com", "e-mail.org", "e4ward.com", "easytrashmail.com",
-		"einrot.com", "einrot.de", "email60.com", "emaildienst.de", "emailgo.de",
-		"emailias.com", "emailinfive.com", "emailmiser.com", "emailsensei.com", "emailtemporanea.com",
-		"emailtemporanea.net", "emailtemporar.ro", "emailtemporario.com.br", "emailthe.net",
-		"emailtmp.com", "emailto.de", "emailwarden.com", "emailx.at.hm", "emailxfer.com",
-		"emeil.in", "emeil.ir", "emz.net", "enterto.com", "ephemail.net", "etranquil.com",
-		"etranquil.net", "etranquil.org", "evopo.com", "explodemail.com", "express.net.ua",
-		"eyepaste.com", "facebook-email.cf", "facebook-email.ga", "facebook-email.ml",
-		"fakedemail.com", "fakeinformation.com", "fakemail.fr", "fakemailz.com", "fammix.com",
-		"fansworldwide.de", "fantasymail.de", "fastacura.com", "fastchevy.com", "fastchrysler.com",
-		"fastkawasaki.com", "fastmazda.com", "fastmitsubishi.com", "fastnissan.com", "fastsubaru.com",
-		"fastsuzuki.com", "fasttoyota.com", "fastyamaha.com", "fatflap.com", "fdfdsfds.com",
-		"fightallspam.com", "fiifke.de", "filzmail.com", "fixmail.tk", "fizmail.com",
-		"fleckens.hu", "flyspam.com", "footard.com", "forgetmail.com", "fr33mail.info",
-		"frapmail.com", "freegmail.net", "freemails.cf", "freemails.ga", "freemails.ml",
-		"freundin.ru", "friendlymail.co.uk", "front14.org", "fuckingduh.com", "fudgerub.com",
-		"fux0ringduh.com", "garliclife.com", "gelitik.in", "get1mail.com", "get2mail.fr",
-		"getonemail.com", "getonemail.net", "ghosttexter.de", "girlsundertheinfluence.com",
-		"gishpuppy.com", "gmial.com", "goemailgo.com", "gotmail.net", "gotmail.org",
-		"gotti.otherinbox.com", "great-host.in", "greensloth.com", "grr.la", "gsrv.co.uk",
-		"guerillamail.biz", "guerillamail.com", "guerillamail.de", "guerillamail.net",
-		"guerillamail.org", "guerrillamailblock.com", "h.mintemail.com", "h8s.org",
-		"hacccc.com", "haltospam.com", "harakirimail.com", "hatespam.org", "herp.in",
-		"hidemail.de", "hidzz.com", "hmamail.com", "hopemail.biz", "hotpop.com",
-		"hulapla.de", "ieatspam.eu", "ieatspam.info", "ieh-mail.de", "ikbenspamvrij.nl",
-		"imails.info", "inbax.tk", "inbox.si", "inboxalias.com", "inboxclean.com",
-		"inboxclean.org", "inboxproxy.com", "incognitomail.com", "incognitomail.net",
-		"incognitomail.org", "insorg-mail.info", "instant-mail.de", "instantemailaddress.com",
-		"ipoo.org", "irish2me.com", "iwi.net", "jetable.com", "jetable.fr.nf",
-		"jetable.net", "jetable.org", "jnxjn.com", "jourrapide.com", "jsrsolutions.com",
-		"junk1e.com", "junkmail.ga", "junkmail.gq", "kasmail.com", "kaspop.com",
-		"keepmymail.com", "killmail.com", "killmail.net", "kir.ch.tc", "klassmaster.com",
-		"klzlk.com", "kook.ml", "koszmail.pl", "kurzepost.de", "l33r.eu",
-		"lackmail.net", "lags.us", "landmail.co", "lastmail.co", "lavabit.com",
-		"lawlita.com", "letthemeatspam.com", "lhsdv.com", "lifebyfood.com", "link2mail.net",
-		"litedrop.com", "lol.ovpn.to", "lolfreak.net", "lookugly.com", "lopl.co.cc",
-		"lortemail.dk", "lr78.com", "lroid.com", "lukop.dk", "m4ilweb.info",
-		"maboard.com", "mail-filter.com", "mail-temporaire.fr", "mail.by", "mail.mezimages.net",
-		"mail.zp.ua", "mail1a.de", "mail21.cc", "mail2rss.org", "mail333.com",
-		"mail4trash.com", "mailbidon.com", "mailbiz.biz", "mailblocks.com", "mailbucket.org",
-		"mailcatch.com", "mailde.de", "mailde.info", "maildrop.cc", "maildrop.cf",
-		"maildrop.ga", "maildrop.gq", "maildrop.ml", "maileater.com", "mailed.ro",
-		"mailexpire.com", "mailfa.tk", "mailforspam.com", "mailfreeonline.com", "mailguard.me",
-		"mailin8r.com", "mailinater.com", "mailinator.com", "mailinator.net", "mailinator.org",
-		"mailinator2.com", "mailincubator.com", "mailismagic.com", "mailme.lv", "mailme24.com",
-		"mailmetrash.com", "mailmoat.com", "mailnator.com", "mailnesia.com", "mailnull.com",
-		"mailorg.org", "mailpick.biz", "mailrock.biz", "mailscrap.com", "mailshell.com",
-		"mailsiphon.com", "mailtemp.info", "mailtome.de", "mailtothis.com", "mailtrash.net",
-		"mailtv.net", "mailtv.tv", "mailzilla.com", "mailzilla.org", "makemetheking.com",
-		"manybrain.com", "mbx.cc", "mciek.com", "mega.zik.dj", "meinspamschutz.de",
-		"meltmail.com", "messagebeamer.de", "mezimages.net", "mierdamail.com", "migmail.pl",
-		"mintemail.com", "mjukglass.nu", "mobi.web.id", "moburl.com", "mohmal.com",
-		"moncourrier.fr.nf", "monemail.fr.nf", "monmail.fr.nf", "monumentmail.com", "mt2009.com",
-		"mt2014.com", "mycard.net.ua", "mycleaninbox.net", "myemailboxy.com", "mymail-in.net",
-		"mymailoasis.com", "mynetstore.de", "mypacks.net", "mypartyclip.de", "myphantomemail.com",
-		"myspaceinc.com", "myspaceinc.net", "myspaceinc.org", "myspacepimpedup.com", "myspamless.com",
-		"mytemp.email", "mytempemail.com", "mytempmail.com", "mytrashmail.com", "nabuma.com",
-		"neomailbox.com", "nepwk.com", "nervmich.net", "nervtmich.net", "netmails.com",
-		"netmails.net", "netzidiot.de", "neverbox.com", "nice-4u.com", "nincsmail.com",
-		"nincsmail.hu", "nnh.com", "no-spam.ws", "noblepioneer.com", "nobugmail.com",
-		"noclickemail.com", "nogmailspam.info", "nomail.xl.cx", "nomail2me.com", "nomorespamemails.com",
-		"nonspam.eu", "nonspammer.de", "noref.in", "nospam.ze.tc", "nospam4.us",
-		"nospamfor.us", "nospammail.net", "nospamthanks.info", "notmailinator.com", "notsharingmy.info",
-		"nowhere.org", "nowmymail.com", "nurfuerspam.de", "nus.edu.sg", "nwldx.com",
-		"objectmail.com", "obobbo.com", "odnorazovoe.ru", "one-time.email", "oneoffemail.com",
-		"onewaymail.com", "onlatedotcom.info", "online.ms", "opayq.com", "ordinaryamerican.net",
-		"otherinbox.com", "ovpn.to", "owlpic.com", "pancakemail.com", "paplease.com",
-		"pcusers.otherinbox.com", "pjkd.com", "plexolan.de", "poczta.onet.pl", "politikerclub.de",
-		"poofy.org", "pookmail.com", "privacy.net", "privatdemail.net", "proxymail.eu",
-		"prtnx.com", "putthisinyourspamdatabase.com", "pwrby.com", "quickinbox.com", "rcpt.at",
-		"reallymymail.com", "realtyalerts.ca", "receiveee.com", "recode.me", "recursor.net",
-		"recyclebin.jp", "regbypass.com", "regbypass.comsafe-mail.net", "rejectmail.com", "reliable-mail.com",
-		"rhyta.com", "rklips.com", "rmqkr.net", "royal.net", "rppkn.com",
-		"rtrtr.com", "s0ny.net", "safe-mail.net", "safersignup.de", "safetymail.info",
-		"safetypost.de", "sandelf.de", "saynotospams.com", "schafmail.de", "schrott-email.de",
-		"secretemail.de", "secure-mail.biz", "selfdestructingmail.com", "selfdestructingmail.org", "sendspamhere.de",
-		"sharklasers.com", "shieldedmail.com", "shieldemail.com", "shiftmail.com", "shitmail.me",
-		"shitware.nl", "shmeriously.com", "shortmail.net", "sibmail.com", "sinnlos-mail.de",
-		"siteposter.net", "skeefmail.com", "slaskpost.se", "slopsbox.com", "slushmail.com",
-		"smashmail.de", "smellfear.com", "snakemail.com", "sneakemail.com", "snkmail.com",
-		"sofimail.com", "sofort-mail.de", "sogetthis.com", "soodonims.com", "spam.la",
-		"spam.su", "spam4.me", "spamail.de", "spambob.com", "spambob.net",
-		"spambob.org", "spambog.com", "spambog.de", "spambog.ru", "spambox.info",
-		"spambox.irishspringtours.com", "spambox.us", "spamcannon.com", "spamcannon.net", "spamcon.org",
-		"spamcorptastic.com", "spamcowboy.com", "spamcowboy.net", "spamcowboy.org", "spamday.com",
-		"spamex.com", "spamfree24.com", "spamfree24.de", "spamfree24.eu", "spamfree24.net",
-		"spamfree24.org", "spamgoes.com", "spamgourmet.com", "spamgourmet.net", "spamgourmet.org",
-		"spamherelots.com", "spamhereplease.com", "spamhole.com", "spami.spam.co.za", "spaminator.de",
-		"spamkill.info", "spaml.com", "spaml.de", "spammotel.com", "spamobox.com",
-		"spamoff.de", "spamslicer.com", "spamspot.com", "spamthis.co.uk", "spamthisplease.com",
-		"spamtrail.com", "spamtroll.net", "speed.1s.fr", "spoofmail.de", "stuffmail.de",
-		"super-auswahl.de", "supergreatmail.com", "supermailer.jp", "superrito.com", "superstachel.de",
-		"suremail.info", "talkinator.com", "tapchicuoihoi.com", "teewars.org", "teleworm.com",
-		"teleworm.us", "temp-mail.org", "temp-mail.ru", "temp.emeraldwebmail.com", "tempail.com",
-		"tempalias.com", "tempe-mail.com", "tempemail.biz", "tempemail.com", "tempinbox.co.uk",
-		"tempinbox.com", "tempmail.eu", "tempmail2.com", "tempmaildemo.com", "tempmailer.com",
-		"tempmailer.de", "tempomail.fr", "temporarily.de", "temporarioemail.com.br", "temporaryemail.net",
-		"temporaryforwarding.com", "temporaryinbox.com", "temporarymailaddress.com", "tempthe.net", "tempymail.com",
-		"thanksnospam.info", "thankyou2010.com", "thc.st", "thelimestones.com", "thisisnotmyrealemail.com",
-		"thismail.net", "throwawayemailaddresses.com", "tilien.com", "tittbit.in", "tizi.com",
-		"tmail.ws", "tmailinator.com", "toiea.com", "toomail.biz", "topranklist.de",
-		"tradermail.info", "trash-amil.com", "trash-mail.at", "trash-mail.com", "trash-mail.de",
-		"trash2009.com", "trashdevil.com", "trashdevil.de", "trashemail.de", "trashmail.at",
-		"trashmail.com", "trashmail.de", "trashmail.me", "trashmail.net", "trashmail.org",
-		"trashmail.ws", "trashmailer.com", "trashymail.com", "trashymail.net", "trbvm.com",
-		"trialmail.de", "trillianpro.com", "tryalert.com", "turual.com", "twinmail.de",
-		"tyldd.com", "uggsrock.com", "umail.net", "upliftnow.com", "uplipht.com",
-		"uroid.com", "us.af", "venompen.com", "veryrealemail.com", "viditag.com",
-		"viewcastmedia.com", "viewcastmedia.net", "viewcastmedia.org", "vomoto.com", "vubby.com",
-		"walala.org", "walkmail.net", "webemail.me", "webm4il.info", "webuser.in",
-		"wh4f.org", "whopy.com", "willselfdestruct.com", "winemaven.info", "wronghead.com",
-		"wuzup.net", "wuzupmail.net", "www.e4ward.com", "www.gishpuppy.com", "www.mailinator.com",
-		"wwwnew.eu", "x.ip6.li", "xagloo.com", "xemaps.com", "xents.com",
-		"xmaily.com", "xoxy.net", "yapped.net", "yeah.net", "yep.it",
-		"yogamaven.com", "yopmail.com", "yopmail.fr", "yopmail.net", "yourdomain.com",
-		"ypmail.webredirect.org", "yuurok.com", "z1p.biz", "za.com", "zehnminutenmail.de",
-		"zetmail.com", "zippymail.info", "zoaxe.com", "zoemail.org", "zomg.info",
-	}
-
-	if slices.Contains(disposableDomains, domain) {
-		return true
-	}
-
-	disposablePatterns := []string{
-		"temp", "disposable", "throw", "trash", "fake", "spam", "guerrilla", "mailinator",
-		"10min", "minute", "tempor", "jetable", "wegwerf", "kurz", "nada", "guerilla",
-	}
-
-	for _, pattern := range disposablePatterns {
-		if strings.Contains(domain, pattern) {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (s *AuthService) validateEmailMXRecord(email string) error {

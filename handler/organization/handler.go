@@ -601,6 +601,33 @@ func (h *Handler) InviteMember(
 		if wsCheckResult.IsMember {
 			return handler.SendBadRequest(c, nil, "User is already a member of this workspace")
 		}
+
+		if d.B2BSettings.MaxAllowedWorkspaceMembers > 0 {
+			var wsMemberCount int64
+			if err := database.Connection.Model(&model.WorkspaceMembership{}).
+				Where("workspace_id = ?", *b.WorkspaceID).
+				Count(&wsMemberCount).Error; err != nil {
+				return handler.SendInternalServerError(c, err, "Failed to check workspace member limits")
+			}
+
+			var wsInviteCount int64
+			if err := database.Connection.Model(&model.OrganizationInvitation{}).
+				Where("workspace_id = ? AND deleted_at IS NULL", *b.WorkspaceID).
+				Count(&wsInviteCount).Error; err != nil {
+				return handler.SendInternalServerError(c, err, "Failed to check workspace invitation limits")
+			}
+
+			if uint64(wsMemberCount+wsInviteCount) >= d.B2BSettings.MaxAllowedWorkspaceMembers {
+				return handler.SendForbidden(
+					c,
+					nil,
+					fmt.Sprintf(
+						"Workspace has reached the maximum number of members allowed (%d)",
+						d.B2BSettings.MaxAllowedWorkspaceMembers,
+					),
+				)
+			}
+		}
 	}
 
 	if b.WorkspaceRoleID != nil {

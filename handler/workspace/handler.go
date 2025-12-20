@@ -535,8 +535,8 @@ func (h *Handler) AddWorkspaceMemberRole(c *fiber.Ctx) error {
 	assoc := model.WorkspaceMembershipRoleAssoc{
 		WorkspaceMembershipID: targetMembershipID,
 		WorkspaceRoleID:       roleIDToAdd,
-		WorkspaceID:           workspaceID,                     // Populate from context/targetMembership
-		OrganizationID:        targetMembership.OrganizationID, // Populate from targetMembership
+		WorkspaceID:           workspaceID,
+		OrganizationID:        targetMembership.OrganizationID,
 	}
 
 	var existingAssocCount int64
