@@ -2,14 +2,13 @@ package config
 
 import (
 	"context"
-	"github.com/joho/godotenv"
 	"log"
 	"os"
 )
 
 func Init() {
-	godotenv.Load()
-	InitAwsSession()
+	// godotenv.Load()
+	InitR2Session()
 	RegisterHandlebarsHelpers()
 	loadSecrets()
 }

@@ -19,7 +19,7 @@ type S3Service struct {
 
 func NewS3Service() *S3Service {
 	return &S3Service{
-		client: s3.New(config.AwsSession),
+		client: s3.New(config.R2Session),
 	}
 }
 

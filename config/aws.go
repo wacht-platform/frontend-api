@@ -9,9 +9,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 )
 
-var AwsSession *session.Session
+var R2Session *session.Session
 
-func InitAwsSession() error {
+func InitR2Session() error {
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint: aws.String(os.Getenv("R2_ENDPOINT")),
 		Region:   aws.String(os.Getenv("R2_DEFAULT_REGION")),
@@ -22,11 +22,11 @@ func InitAwsSession() error {
 		),
 	})
 	if err != nil {
-		log.Printf("Failed to create AWS session: %v", err)
+		log.Printf("Failed to create R2 session: %v", err)
 		return err
 	}
 
-	AwsSession = sess
+	R2Session = sess
 
 	return nil
 }
