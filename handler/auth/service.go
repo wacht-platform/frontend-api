@@ -258,7 +258,7 @@ func (s *AuthService) ValidateSignUpRequest(
 	}
 
 	if b.PhoneNumber != "" {
-		if err := s.ValidatePhoneRestrictions(b.PhoneNumber, d.Restrictions); err != nil {
+		if err := s.ValidatePhoneRestrictions(b.PhoneNumber, b.PhoneCountryCode, d.Restrictions); err != nil {
 			return err
 		}
 	}
@@ -382,10 +382,9 @@ func (s *AuthService) HandleExistingUser(
 
 	attempt.UserID = &email.User.ID
 	attempt.IdentifierID = &email.ID
-	attempt.FirstMethodAuthenticated = true // OAuth is already authenticated
+	attempt.FirstMethodAuthenticated = true
 
 	if len(steps) > 0 {
-		// Has remaining steps
 		attempt.RemainingSteps = datatypes.NewJSONSlice(steps)
 		attempt.CurrentStep = steps[0]
 
@@ -520,8 +519,6 @@ func (s *AuthService) PawnedPassword(password string) (bool, error) {
 }
 
 func (s *AuthService) ValidatePassword(password string) error {
-	// Basic validation with minimal requirements for backwards compatibility
-	// Use ValidatePasswordWithSettings for full deployment-aware validation
 	if len(password) < 6 || len(password) > 125 {
 		return errors.New("password must be between 6 and 125 characters")
 	}
@@ -582,7 +579,6 @@ func (s *AuthService) SendVerificationEmail(
 		return fmt.Errorf("deployment is required")
 	}
 
-	// If userID is 0, we might want to look it up or just pass 0 if it's a new user verification
 	return s.nats.SendVerificationEmail(deployment.ID, userID, email, code, ip, userAgent)
 }
 
@@ -673,7 +669,6 @@ func (s *AuthService) GenerateMagicLink(
 	magicLink := fmt.Sprintf("https://%s/magic?token=%s&attempt=%d",
 		deployment.FrontendHost, token, attemptID)
 
-	// Add redirect_uri parameter if provided
 	if redirectURI != "" {
 		magicLink += "&redirect_uri=" + url.QueryEscape(redirectURI)
 	}
@@ -686,10 +681,8 @@ func (s *AuthService) SendMagicLinkAsync(
 	magicLink string,
 	deployment model.Deployment,
 ) error {
-	// Get user ID for the email
 	userEmail, err := s.FindUserByEmail(email, deployment.ID)
 	if err != nil {
-		// For new signups or non-existent users, use 0 as user ID
 		return s.nats.SendMagicLinkEmail(deployment.ID, 0, email, magicLink)
 	}
 
@@ -844,7 +837,6 @@ func (s *AuthService) CheckAndAddUserToOrganizationByDomain(
 		return err
 	}
 
-	// Check if user is already a member
 	var count int64
 	tx.Model(&model.OrganizationMembership{}).
 		Where("organization_id = ? AND user_id = ?", org.ID, userID).
@@ -866,7 +858,6 @@ func (s *AuthService) CheckAndAddUserToOrganizationByDomain(
 	}
 
 	if org.AutoAssignedWorkspaceID != nil {
-		// Check if user is already a member of the workspace
 		tx.Model(&model.WorkspaceMembership{}).
 			Where("workspace_id = ? AND user_id = ?", *org.AutoAssignedWorkspaceID, userID).
 			Count(&count)
@@ -1065,18 +1056,14 @@ func (s *AuthService) StoreOTPInCache(key string, otp string) error {
 	ctx := context.Background()
 	redisKey := fmt.Sprintf("otp:%s", key)
 
-	// Add OTP to the set
 	if err := database.Redis.SAdd(ctx, redisKey, otp).Err(); err != nil {
 		return err
 	}
 
-	// Set TTL to 90 seconds for the entire set
 	return database.Redis.Expire(ctx, redisKey, 90*time.Second).Err()
 }
 
 func (s *AuthService) GetOTPFromRedis(key string) (string, error) {
-	// This method is deprecated but kept for backward compatibility
-	// Use VerifyOTPFromRedis instead
 	return database.Redis.Get(
 		context.Background(),
 		fmt.Sprintf("otp:%s", key),
@@ -1087,7 +1074,6 @@ func (s *AuthService) VerifyOTPFromRedis(key string, otp string) (bool, error) {
 	ctx := context.Background()
 	redisKey := fmt.Sprintf("otp:%s", key)
 
-	// Check if OTP exists in the set
 	exists, err := database.Redis.SIsMember(ctx, redisKey, otp).Result()
 	if err != nil {
 		return false, err
@@ -1282,7 +1268,6 @@ func (s *AuthService) getIPLocation(ip string) IPLocation {
 		return defaultLocation
 	}
 
-	// Basic validation to consider it a success
 	if response.CountryCode == "" {
 		return defaultLocation
 	}
@@ -1296,7 +1281,7 @@ func (s *AuthService) getIPLocation(ip string) IPLocation {
 		Status:        "success",
 		Country:       response.CountryName,
 		CountryCode:   response.CountryCode,
-		Region:        response.RegionName, // freeipapi doesn't provide region code in main response
+		Region:        response.RegionName,
 		RegionName:    response.RegionName,
 		City:          response.CityName,
 		Zip:           response.ZipCode,
@@ -1345,50 +1330,38 @@ func (s *AuthService) ValidateEmailRestrictions(email string, restrictions model
 	return nil
 }
 
-func (s *AuthService) ValidatePhoneRestrictions(phoneNumber string, restrictions model.DeploymentRestrictions) error {
+func (s *AuthService) ValidatePhoneRestrictions(phoneNumber string, countryCode string, restrictions model.DeploymentRestrictions) error {
 	abstractAPIService := service.NewAbstractAPIService(
 		config.GetEnv("ABSTRACT_API_KEY", ""),
 	)
 
-	if abstractAPIService.APIKey != "" {
-		result, err := abstractAPIService.ValidatePhoneNumber(phoneNumber)
-		if err != nil {
-			return s.validatePhoneBasic(phoneNumber, restrictions)
-		}
-
-		if !result.IsValid {
-			return handler.ErrVoipNumberBlocked
-		}
-
-		if result.IsBlocked {
-			return handler.ErrVoipNumberBlocked
-		}
-
-		if restrictions.BlockVoipNumbers && result.IsVOIP {
-			return handler.ErrVoipNumberBlocked
-		}
-
-		if restrictions.BlockVoipNumbers && result.IsHighRisk {
-			return handler.ErrVoipNumberBlocked
-		}
-
-		if restrictions.CountryRestrictions.Enabled && len(restrictions.CountryRestrictions.CountryCodes) > 0 {
-			allowed := slices.Contains(restrictions.CountryRestrictions.CountryCodes, result.CountryCode)
-			if !allowed {
-				return handler.ErrCountryRestricted
-			}
-		}
-	} else {
-		return s.validatePhoneBasic(phoneNumber, restrictions)
+	if abstractAPIService.APIKey == "" {
+		return fmt.Errorf("phone validation service not configured")
 	}
 
-	return nil
-}
+	result, err := abstractAPIService.ValidatePhoneNumber(phoneNumber, countryCode)
+	if err != nil {
+		return fmt.Errorf("phone validation failed: %w", err)
+	}
 
-func (s *AuthService) validatePhoneBasic(phoneNumber string, restrictions model.DeploymentRestrictions) error {
+	if !result.IsValid {
+		return handler.ErrVoipNumberBlocked
+	}
+
+	if result.IsBlocked {
+		return handler.ErrVoipNumberBlocked
+	}
+
+	if restrictions.BlockVoipNumbers && result.IsVOIP {
+		return handler.ErrVoipNumberBlocked
+	}
+
+	if restrictions.BlockVoipNumbers && result.IsHighRisk {
+		return handler.ErrVoipNumberBlocked
+	}
+
 	if restrictions.CountryRestrictions.Enabled && len(restrictions.CountryRestrictions.CountryCodes) > 0 {
-		countryCode := s.extractCountryCodeFromPhone(phoneNumber)
-		allowed := slices.Contains(restrictions.CountryRestrictions.CountryCodes, countryCode)
+		allowed := slices.Contains(restrictions.CountryRestrictions.CountryCodes, result.CountryCode)
 		if !allowed {
 			return handler.ErrCountryRestricted
 		}
@@ -1469,12 +1442,11 @@ func (s *AuthService) DetermineVerificationStepsForProfileCompletion(
 	if data.Email != "" && authSettings.EmailAddress.VerifySignup {
 		needsEmailVerification := true
 
-		// If this is for an existing user (signin completion), check if email is already verified
 		if userID != nil {
 			var existingEmail model.UserEmailAddress
 			err := s.db.Where("user_id = ? AND email_address = ? AND verified = true",
 				*userID, data.Email).First(&existingEmail).Error
-			needsEmailVerification = err != nil // If no verified email found, verification is needed
+			needsEmailVerification = err != nil
 		}
 
 		if needsEmailVerification {
@@ -1485,12 +1457,11 @@ func (s *AuthService) DetermineVerificationStepsForProfileCompletion(
 	if data.PhoneNumber != "" && authSettings.PhoneNumber.VerifySignup {
 		needsPhoneVerification := true
 
-		// If this is for an existing user (signin completion), check if phone is already verified
 		if userID != nil {
 			var existingPhone model.UserPhoneNumber
 			err := s.db.Where("user_id = ? AND phone_number = ? AND verified = true",
 				*userID, data.PhoneNumber).First(&existingPhone).Error
-			needsPhoneVerification = err != nil // If no verified phone found, verification is needed
+			needsPhoneVerification = err != nil
 		}
 
 		if needsPhoneVerification {
@@ -1499,68 +1470,6 @@ func (s *AuthService) DetermineVerificationStepsForProfileCompletion(
 	}
 
 	return steps
-}
-
-func (s *AuthService) extractCountryCodeFromPhone(phoneNumber string) string {
-	digits := regexp.MustCompile(`\D`).ReplaceAllString(phoneNumber, "")
-
-	if strings.HasPrefix(phoneNumber, "+") {
-		if len(digits) >= 2 {
-			oneDigitCodes := []string{"1", "7"}
-			for _, code := range oneDigitCodes {
-				if strings.HasPrefix(digits, code) {
-					return code
-				}
-			}
-
-			if len(digits) >= 2 {
-				twoDigitCode := digits[:2]
-				commonTwoDigit := []string{
-					"20", "27", "30", "31", "32", "33", "34", "36", "39", "40",
-					"41", "43", "44", "45", "46", "47", "48", "49", "51", "52",
-					"53", "54", "55", "56", "57", "58", "60", "61", "62", "63",
-					"64", "65", "66", "81", "82", "84", "86", "90", "91", "92",
-					"93", "94", "95", "98",
-				}
-				for _, code := range commonTwoDigit {
-					if twoDigitCode == code {
-						return code
-					}
-				}
-			}
-
-			if len(digits) >= 3 {
-				threeDigitCode := digits[:3]
-				commonThreeDigit := []string{
-					"212", "213", "216", "218", "220", "221", "222", "223", "224",
-					"225", "226", "227", "228", "229", "230", "231", "232", "233",
-					"234", "235", "236", "237", "238", "239", "240", "241", "242",
-					"243", "244", "245", "246", "247", "248", "249", "250", "251",
-					"252", "253", "254", "255", "256", "257", "258", "260", "261",
-					"262", "263", "264", "265", "266", "267", "268", "269", "290",
-					"291", "297", "298", "299", "350", "351", "352", "353", "354",
-					"355", "356", "357", "358", "359", "370", "371", "372", "373",
-					"374", "375", "376", "377", "378", "380", "381", "382", "383",
-					"385", "386", "387", "389", "420", "421", "423", "500", "501",
-					"502", "503", "504", "505", "506", "507", "508", "509", "590",
-					"591", "592", "593", "594", "595", "596", "597", "598", "599",
-					"670", "672", "673", "674", "675", "676", "677", "678", "679",
-					"680", "681", "682", "683", "684", "685", "686", "687", "688",
-					"689", "690", "691", "692", "850", "852", "853", "855", "856",
-					"880", "886", "960", "961", "962", "963", "964", "965", "966",
-					"967", "968", "970", "971", "972", "973", "974", "975", "976",
-					"977", "992", "993", "994", "995", "996", "998",
-				}
-				for _, code := range commonThreeDigit {
-					if threeDigitCode == code {
-						return code
-					}
-				}
-			}
-		}
-	}
-
-	return "1"
 }
 
 func (s *AuthService) GetAvailable2FAMethods(userID uint64, deployment *model.Deployment) []string {

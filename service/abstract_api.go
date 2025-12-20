@@ -71,11 +71,17 @@ func NewAbstractAPIService(apiKey string) *AbstractAPIService {
 	}
 }
 
-func (a *AbstractAPIService) ValidatePhoneNumber(phoneNumber string) (*PhoneValidationResult, error) {
+func (a *AbstractAPIService) ValidatePhoneNumber(phoneNumber string, countryCode string) (*PhoneValidationResult, error) {
 	cleanedNumber := strings.ReplaceAll(phoneNumber, " ", "")
 	cleanedNumber = strings.ReplaceAll(cleanedNumber, "-", "")
 	cleanedNumber = strings.ReplaceAll(cleanedNumber, "(", "")
 	cleanedNumber = strings.ReplaceAll(cleanedNumber, ")", "")
+	cleanedNumber = strings.TrimPrefix(cleanedNumber, "+")
+
+	// Prepend country code if provided and number doesn't already start with it
+	if countryCode != "" && !strings.HasPrefix(cleanedNumber, countryCode) {
+		cleanedNumber = countryCode + cleanedNumber
+	}
 
 	reqURL := fmt.Sprintf("%s?api_key=%s&phone=%s",
 		a.BaseURL,

@@ -16,7 +16,7 @@ type SecretConfig struct {
 	Prefix    string
 }
 
-// InitSecrets fetches OAuth credentials from a single JSON secret in Google Secret Manager
+// InitSecrets fetches credentials from Google Secret Manager
 func InitSecrets(ctx context.Context, config SecretConfig) error {
 	client, err := secretmanager.NewClient(ctx)
 	if err != nil {
@@ -24,27 +24,37 @@ func InitSecrets(ctx context.Context, config SecretConfig) error {
 	}
 	defer client.Close()
 
-	// Fetch the single JSON secret containing all OAuth credentials
-	secretName := "oauth-credentials"
+	// Load OAuth credentials
+	if err := loadSecretAsEnvVars(ctx, client, config, "oauth-credentials"); err != nil {
+		return fmt.Errorf("failed to load OAuth credentials: %w", err)
+	}
+
+	// Load backend API credentials (Abstract API, etc.)
+	if err := loadSecretAsEnvVars(ctx, client, config, "backend-credentials"); err != nil {
+		log.Printf("Warning: backend-credentials secret not found, skipping: %v", err)
+	}
+
+	return nil
+}
+
+func loadSecretAsEnvVars(ctx context.Context, client *secretmanager.Client, config SecretConfig, secretName string) error {
 	if config.Prefix != "" {
 		secretName = config.Prefix + secretName
 	}
 
 	jsonData, err := fetchSecret(ctx, client, config.ProjectID, secretName)
 	if err != nil {
-		return fmt.Errorf("failed to fetch OAuth credentials secret: %w", err)
+		return err
 	}
 
-	// Parse JSON and set environment variables
 	var credentials map[string]string
 	if err := json.Unmarshal([]byte(jsonData), &credentials); err != nil {
-		return fmt.Errorf("failed to parse OAuth credentials JSON: %w", err)
+		return fmt.Errorf("failed to parse %s JSON: %w", secretName, err)
 	}
 
-	// Set each credential as environment variable
 	for key, value := range credentials {
 		os.Setenv(key, value)
-		log.Printf("Loaded %s from Secret Manager", key)
+		log.Printf("Loaded %s from Secret Manager (%s)", key, secretName)
 	}
 
 	return nil

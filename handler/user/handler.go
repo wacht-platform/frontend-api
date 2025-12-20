@@ -916,7 +916,7 @@ func (h *Handler) AddPhoneNumber(c *fiber.Ctx) error {
 
 	deployment := handler.GetDeployment(c)
 
-	if err := h.service.ValidatePhoneRestrictions(b.PhoneNumber, deployment.Restrictions); err != nil {
+	if err := h.service.ValidatePhoneRestrictions(b.PhoneNumber, b.CountryCode, deployment.Restrictions); err != nil {
 		return handler.SendBadRequest(c, nil, err.Error())
 	}
 

@@ -141,58 +141,40 @@ func (s *UserService) ValidateEmailRestrictions(email string, restrictions model
 	return nil
 }
 
-func (s *UserService) ValidatePhoneRestrictions(phoneNumber string, restrictions model.DeploymentRestrictions) error {
+func (s *UserService) ValidatePhoneRestrictions(phoneNumber string, countryCode string, restrictions model.DeploymentRestrictions) error {
 	abstractAPIService := service.NewAbstractAPIService(
 		config.GetEnv("ABSTRACT_API_KEY", ""),
 	)
 
-	if abstractAPIService.APIKey != "" {
-		result, err := abstractAPIService.ValidatePhoneNumber(phoneNumber)
-		if err != nil {
-			return s.validatePhoneBasic(phoneNumber, restrictions)
-		}
-
-		if !result.IsValid {
-			return handler.ErrVoipNumberBlocked
-		}
-
-		if result.IsBlocked {
-			return handler.ErrVoipNumberBlocked
-		}
-
-		if restrictions.BlockVoipNumbers && result.IsVOIP {
-			return handler.ErrVoipNumberBlocked
-		}
-
-		if restrictions.BlockVoipNumbers && result.IsHighRisk {
-			return handler.ErrVoipNumberBlocked
-		}
-
-		if restrictions.CountryRestrictions.Enabled && len(restrictions.CountryRestrictions.CountryCodes) > 0 {
-			allowed := false
-			for _, allowedCountry := range restrictions.CountryRestrictions.CountryCodes {
-				if result.CountryCode == allowedCountry {
-					allowed = true
-					break
-				}
-			}
-			if !allowed {
-				return handler.ErrCountryRestricted
-			}
-		}
-	} else {
-		return s.validatePhoneBasic(phoneNumber, restrictions)
+	if abstractAPIService.APIKey == "" {
+		return fmt.Errorf("phone validation service not configured")
 	}
 
-	return nil
-}
+	result, err := abstractAPIService.ValidatePhoneNumber(phoneNumber, countryCode)
+	if err != nil {
+		return fmt.Errorf("phone validation failed: %w", err)
+	}
 
-func (s *UserService) validatePhoneBasic(phoneNumber string, restrictions model.DeploymentRestrictions) error {
+	if !result.IsValid {
+		return handler.ErrVoipNumberBlocked
+	}
+
+	if result.IsBlocked {
+		return handler.ErrVoipNumberBlocked
+	}
+
+	if restrictions.BlockVoipNumbers && result.IsVOIP {
+		return handler.ErrVoipNumberBlocked
+	}
+
+	if restrictions.BlockVoipNumbers && result.IsHighRisk {
+		return handler.ErrVoipNumberBlocked
+	}
+
 	if restrictions.CountryRestrictions.Enabled && len(restrictions.CountryRestrictions.CountryCodes) > 0 {
-		countryCode := s.extractCountryCodeFromPhone(phoneNumber)
 		allowed := false
 		for _, allowedCountry := range restrictions.CountryRestrictions.CountryCodes {
-			if countryCode == allowedCountry {
+			if result.CountryCode == allowedCountry {
 				allowed = true
 				break
 			}
