@@ -14,9 +14,9 @@ type UserPasskey struct {
 	Name         string         `json:"name"                  gorm:"not null"` // Friendly name like "MacBook Touch ID"
 	CredentialID []byte         `json:"-"                     gorm:"not null;uniqueIndex"`
 	PublicKey    []byte         `json:"-"                     gorm:"not null"`
-	AAGUID       []byte         `json:"-"`                                        // Authenticator Attestation GUID
-	SignCount    uint32         `json:"sign_count"            gorm:"not null"`    // For replay attack prevention
-	Transports   []string       `json:"-"                     gorm:"type:text[]"` // usb, nfc, ble, internal
+	AAGUID       []byte         `json:"-"                     gorm:"column:aaguid"` // Authenticator Attestation GUID
+	SignCount    uint32         `json:"sign_count"            gorm:"not null"`      // For replay attack prevention
+	Transports   []string       `json:"-"                     gorm:"type:text[]"`   // usb, nfc, ble, internal
 	LastUsedAt   *time.Time     `json:"last_used_at"`
 	BackedUp     bool           `json:"backed_up"`   // Whether credential is backed up
 	DeviceType   string         `json:"device_type"` // platform or cross-platform
