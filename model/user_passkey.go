@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/godruoyi/go-snowflake"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
 
@@ -16,7 +17,7 @@ type UserPasskey struct {
 	PublicKey    []byte         `json:"-"                     gorm:"not null"`
 	AAGUID       []byte         `json:"-"                     gorm:"column:aaguid"` // Authenticator Attestation GUID
 	SignCount    uint32         `json:"sign_count"            gorm:"not null"`      // For replay attack prevention
-	Transports   []string       `json:"-"                     gorm:"type:text[]"`   // usb, nfc, ble, internal
+	Transports   pq.StringArray `json:"-"                     gorm:"type:text[]"`   // usb, nfc, ble, internal
 	LastUsedAt   *time.Time     `json:"last_used_at"`
 	BackedUp     bool           `json:"backed_up"`   // Whether credential is backed up
 	DeviceType   string         `json:"device_type"` // platform or cross-platform
