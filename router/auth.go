@@ -27,4 +27,8 @@ func setupAuthRoutes(
 	router.Post("/sso/login", authHandler.SSOLogin)
 	router.Post("/sso/callback", authHandler.EnterpriseSSOCallback)
 	router.Get("/sso/oidc/callback", authHandler.OIDCCallback)
+
+	// Passkey login routes (unauthenticated)
+	router.Post("/passkey/login/begin", authHandler.BeginPasskeyLogin)
+	router.Post("/passkey/login/finish", authHandler.FinishPasskeyLogin)
 }

@@ -52,6 +52,7 @@ const (
 	ErrCodeInvitationRequiresSignin     = "INVITATION_REQUIRES_SIGNIN"
 	ErrCodeAlreadyOrganizationMember    = "ALREADY_ORGANIZATION_MEMBER"
 	ErrCodeMfaRequired                  = "MFA_REQUIRED"
+	ErrCodePasskeyNotEnabled            = "PASSKEY_NOT_ENABLED"
 )
 
 var (
@@ -170,6 +171,10 @@ var (
 	ErrMfaRequired = Error{
 		Code:    ErrCodeMfaRequired,
 		Message: "Multi-Factor Authentication is required to access this organization or workspace.",
+	}
+	ErrPasskeyNotEnabled = Error{
+		Code:    ErrCodePasskeyNotEnabled,
+		Message: "Passkeys are not enabled for this deployment.",
 	}
 )
 

@@ -69,5 +69,6 @@ func AutoMigratePg() error {
 		&model.DeploymentInvitation{},
 		&model.DeploymentWaitlistUser{},
 		&model.AgentExecutionContext{},
+		&model.UserPasskey{},
 	)
 }

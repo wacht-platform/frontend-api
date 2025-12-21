@@ -306,8 +306,9 @@ func (e *EmailLinkSettings) GormDBDataType() string {
 }
 
 type PasskeySettings struct {
-	Enabled       bool `json:"enabled"`
-	AllowAutofill bool `json:"allow_autofill"`
+	Enabled                  bool `json:"enabled"`
+	PromptRegistrationOnAuth bool `json:"prompt_registration_on_auth"`
+	AllowAutofill            bool `json:"allow_autofill"`
 }
 
 func (p *PasskeySettings) Scan(src any) error {

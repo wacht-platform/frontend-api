@@ -43,4 +43,11 @@ func setupUserRoutes(
 	router.Post("/social-connections/:id/disconnect", userHandler.DisconnectSocialConnection)
 	router.Post("/init-sso-connection", userHandler.InitConnectSocial)
 	router.Post("/sso-connection-callback", userHandler.ConnectSocialCallback)
+
+	// Passkey management routes
+	router.Get("/passkeys", userHandler.GetPasskeys)
+	router.Post("/passkeys/register/begin", userHandler.BeginPasskeyRegistration)
+	router.Post("/passkeys/register/finish", userHandler.FinishPasskeyRegistration)
+	router.Post("/passkeys/:id/delete", userHandler.DeletePasskey)
+	router.Patch("/passkeys/:id", userHandler.RenamePasskey)
 }

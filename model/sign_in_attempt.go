@@ -30,7 +30,7 @@ const (
 	SignInMethodEmailOTP      SignInMethod = "email_otp"
 	SignInMethodSSO           SignInMethod = "sso"            // OAuth2 social login
 	SignInMethodEnterpriseSso SignInMethod = "enterprise_sso" // SAML/OIDC enterprise SSO
-	Passkey                   SignInMethod = "passkey"
+	SignInMethodPasskey       SignInMethod = "passkey"
 	SignInMethodImpersonation SignInMethod = "impersonation"
 )
 
