@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
@@ -300,7 +301,12 @@ func getRPDisplayName(d model.Deployment) string {
 }
 
 func getRPID(d model.Deployment) string {
-	return d.BackendHost
+	host := d.BackendHost
+	parts := strings.Split(host, ".")
+	if len(parts) >= 2 {
+		return strings.Join(parts[len(parts)-2:], ".")
+	}
+	return host
 }
 
 func getRPOrigins(d model.Deployment) []string {

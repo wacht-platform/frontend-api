@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
@@ -222,7 +223,12 @@ func getRPDisplayName(d model.Deployment) string {
 }
 
 func getRPID(d model.Deployment) string {
-	return d.BackendHost
+	host := d.BackendHost
+	parts := strings.Split(host, ".")
+	if len(parts) >= 2 {
+		return strings.Join(parts[len(parts)-2:], ".")
+	}
+	return host
 }
 
 func getRPOrigins(d model.Deployment) []string {
@@ -232,6 +238,9 @@ func getRPOrigins(d model.Deployment) []string {
 	}
 	if d.BackendHost != "" {
 		origins = append(origins, "https://"+d.BackendHost)
+	}
+	if strings.Contains(d.FrontendHost, "localhost") || strings.Contains(d.BackendHost, "localhost") {
+		origins = append(origins, "http://localhost:3000", "http://localhost:5173", "http://localhost:8080")
 	}
 	return origins
 }
