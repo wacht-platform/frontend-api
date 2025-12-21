@@ -12,15 +12,15 @@ import (
 type UserPasskey struct {
 	Model
 	UserID       uint64         `json:"user_id,string"        gorm:"not null;index"`
-	Name         string         `json:"name"                  gorm:"not null"` // Friendly name like "MacBook Touch ID"
+	Name         string         `json:"name"                  gorm:"not null"`
 	CredentialID []byte         `json:"-"                     gorm:"not null;uniqueIndex"`
 	PublicKey    []byte         `json:"-"                     gorm:"not null"`
-	AAGUID       []byte         `json:"-"                     gorm:"column:aaguid"` // Authenticator Attestation GUID
-	SignCount    uint32         `json:"sign_count"            gorm:"not null"`      // For replay attack prevention
-	Transports   pq.StringArray `json:"-"                     gorm:"type:text[]"`   // usb, nfc, ble, internal
+	AAGUID       []byte         `json:"-"                     gorm:"column:aaguid"`
+	SignCount    uint32         `json:"sign_count"            gorm:"not null"`
+	Transports   pq.StringArray `json:"-"                     gorm:"type:text[]"`
 	LastUsedAt   *time.Time     `json:"last_used_at"`
-	BackedUp     bool           `json:"backed_up"`   // Whether credential is backed up
-	DeviceType   string         `json:"device_type"` // platform or cross-platform
+	BackedUp     bool           `json:"backed_up"`
+	DeviceType   string         `json:"device_type"`
 	User         *User          `json:"-"                     gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
 	DeletedAt    gorm.DeletedAt `json:"-"                gorm:"index"`
 }
@@ -36,7 +36,7 @@ func NewUserPasskey(userID uint64, name string, credentialID, publicKey, aaguid 
 		PublicKey:    publicKey,
 		AAGUID:       aaguid,
 		SignCount:    signCount,
-		Transports:   transports,
+		Transports:   pq.StringArray(transports),
 		BackedUp:     backedUp,
 		DeviceType:   deviceType,
 	}
