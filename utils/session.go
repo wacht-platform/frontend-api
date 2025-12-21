@@ -16,7 +16,6 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
-// Helper functions to safely parse IDs from various types
 func parseUint64FromInterface(v any) (uint64, error) {
 	switch val := v.(type) {
 	case string:

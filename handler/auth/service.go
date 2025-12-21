@@ -646,9 +646,10 @@ func (s *AuthService) SendSmsOTPVerificationAsync(
 func (s *AuthService) VerifyPhoneOTP(
 	deploymentID uint64,
 	phoneNumber string,
+	countryCode string,
 	code string,
 ) (bool, error) {
-	return utils.VerifyPhoneOTP(deploymentID, phoneNumber, code)
+	return utils.VerifyPhoneOTP(deploymentID, phoneNumber, countryCode, code)
 }
 
 func (s *AuthService) GenerateMagicLink(
