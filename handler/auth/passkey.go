@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -51,7 +52,7 @@ func (h *Handler) BeginPasskeyLogin(c *fiber.Ctx) error {
 	wconfig := &webauthn.Config{
 		RPDisplayName: getRPDisplayName(d),
 		RPID:          getRPID(d),
-		RPOrigins:     getRPOrigins(d),
+		RPOrigins:     getRPOrigins(d, c.Get("Origin")),
 	}
 
 	webAuthn, err := webauthn.New(wconfig)
@@ -97,7 +98,7 @@ func (h *Handler) FinishPasskeyLogin(c *fiber.Ctx) error {
 	wconfig := &webauthn.Config{
 		RPDisplayName: getRPDisplayName(d),
 		RPID:          getRPID(d),
-		RPOrigins:     getRPOrigins(d),
+		RPOrigins:     getRPOrigins(d, c.Get("Origin")),
 	}
 
 	webAuthn, err := webauthn.New(wconfig)
@@ -231,7 +232,7 @@ func getRPID(d model.Deployment) string {
 	return host
 }
 
-func getRPOrigins(d model.Deployment) []string {
+func getRPOrigins(d model.Deployment, requestOrigin string) []string {
 	origins := []string{}
 	if d.FrontendHost != "" {
 		origins = append(origins, "https://"+d.FrontendHost)
@@ -239,8 +240,8 @@ func getRPOrigins(d model.Deployment) []string {
 	if d.BackendHost != "" {
 		origins = append(origins, "https://"+d.BackendHost)
 	}
-	if strings.Contains(d.FrontendHost, "localhost") || strings.Contains(d.BackendHost, "localhost") {
-		origins = append(origins, "http://localhost:3000", "http://localhost:5173", "http://localhost:8080")
+	if requestOrigin != "" && !slices.Contains(origins, requestOrigin) {
+		origins = append(origins, requestOrigin)
 	}
 	return origins
 }

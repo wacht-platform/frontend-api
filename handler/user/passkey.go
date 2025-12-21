@@ -3,6 +3,7 @@ package user
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -79,7 +80,7 @@ func (h *Handler) BeginPasskeyRegistration(c *fiber.Ctx) error {
 	wconfig := &webauthn.Config{
 		RPDisplayName: getRPDisplayName(d),
 		RPID:          getRPID(d),
-		RPOrigins:     getRPOrigins(d),
+		RPOrigins:     getRPOrigins(d, c.Get("Origin")),
 	}
 
 	webAuthn, err := webauthn.New(wconfig)
@@ -158,7 +159,7 @@ func (h *Handler) FinishPasskeyRegistration(c *fiber.Ctx) error {
 	wconfig := &webauthn.Config{
 		RPDisplayName: getRPDisplayName(d),
 		RPID:          getRPID(d),
-		RPOrigins:     getRPOrigins(d),
+		RPOrigins:     getRPOrigins(d, c.Get("Origin")),
 	}
 
 	webAuthn, err := webauthn.New(wconfig)
@@ -309,13 +310,16 @@ func getRPID(d model.Deployment) string {
 	return host
 }
 
-func getRPOrigins(d model.Deployment) []string {
+func getRPOrigins(d model.Deployment, requestOrigin string) []string {
 	origins := []string{}
 	if d.FrontendHost != "" {
 		origins = append(origins, "https://"+d.FrontendHost)
 	}
 	if d.BackendHost != "" {
 		origins = append(origins, "https://"+d.BackendHost)
+	}
+	if requestOrigin != "" && !slices.Contains(origins, requestOrigin) {
+		origins = append(origins, requestOrigin)
 	}
 	return origins
 }
