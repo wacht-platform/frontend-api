@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"mime/multipart"
 	"net"
-	"regexp"
 	"strings"
 	"time"
 
@@ -87,7 +86,7 @@ func (s *UserService) verifyPhoneOTP(
 	countryCode string,
 	code string,
 ) (bool, error) {
-	return utils.VerifyPhoneOTP(deploymentID, phoneNumber, code)
+	return utils.VerifyPhoneOTP(deploymentID, phoneNumber, countryCode, code)
 }
 
 func (s *UserService) uploadProfilePicture(
@@ -183,34 +182,6 @@ func (s *UserService) ValidatePhoneRestrictions(phoneNumber string, countryCode 
 	}
 
 	return nil
-}
-
-func (s *UserService) extractCountryCodeFromPhone(phoneNumber string) string {
-	digits := regexp.MustCompile(`\D`).ReplaceAllString(phoneNumber, "")
-
-	if strings.HasPrefix(digits, "1") && len(digits) == 11 {
-		return "US"
-	}
-	if strings.HasPrefix(digits, "44") {
-		return "GB"
-	}
-	if strings.HasPrefix(digits, "49") {
-		return "DE"
-	}
-	if strings.HasPrefix(digits, "33") {
-		return "FR"
-	}
-	if strings.HasPrefix(digits, "81") {
-		return "JP"
-	}
-	if strings.HasPrefix(digits, "86") {
-		return "CN"
-	}
-	if strings.HasPrefix(digits, "91") {
-		return "IN"
-	}
-
-	return "XX"
 }
 
 func (s *UserService) validateEmailMXRecord(email string) error {

@@ -332,6 +332,7 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 			u.public_metadata,
 			u.backup_codes_generated,
 			CASE WHEN u.password != '' AND u.password IS NOT NULL THEN true ELSE false END as has_password,
+			EXISTS(SELECT 1 FROM user_passkeys up WHERE up.user_id = u.id) as has_passkeys,
 
 			-- JSON aggregation for related data
 			COALESCE(
@@ -503,11 +504,13 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 	type UserResponse struct {
 		model.User
 		HasPassword bool `json:"has_password"`
+		HasPasskeys bool `json:"has_passkeys"`
 	}
 
 	response := UserResponse{
 		User:        user,
 		HasPassword: queryResult.HasPassword,
+		HasPasskeys: queryResult.HasPasskeys,
 	}
 
 	return handler.SendSuccess(c, response)

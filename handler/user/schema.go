@@ -65,6 +65,7 @@ type UserQueryResult struct {
 	PublicMetadata                 string    `gorm:"column:public_metadata"`
 	BackupCodesGenerated           bool      `gorm:"column:backup_codes_generated"`
 	HasPassword                    bool      `gorm:"column:has_password"`
+	HasPasskeys                    bool      `gorm:"column:has_passkeys"`
 	UserEmailAddressesJSON         string    `gorm:"column:user_email_addresses_json"`
 	UserPhoneNumbersJSON           string    `gorm:"column:user_phone_numbers_json"`
 	SocialConnectionsJSON          string    `gorm:"column:social_connections_json"`

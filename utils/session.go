@@ -122,6 +122,7 @@ func parseUserFromMap(userData map[string]any) *model.User {
 	// Parse bool fields
 	user.Disabled = getBoolFromMap(userData, "disabled")
 	user.HasProfilePicture = getBoolFromMap(userData, "has_profile_picture")
+	user.HasPasskeys = getBoolFromMap(userData, "has_passkeys")
 
 	// Parse availability
 	if availability := getStringFromMap(userData, "availability"); availability != "" {
@@ -544,6 +545,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		au.active_workspace_membership_id as "ASI__User__active_ws_membership_id",
 		au.public_metadata as "ASI__User__public_metadata",
 		au.backup_codes_generated as "ASI__User__backup_codes_generated",
+		EXISTS(SELECT 1 FROM user_passkeys upk WHERE upk.user_id = au.id) as "ASI__User__has_passkeys",
 
 		-- Primary Email Address for Active User
 		CASE
@@ -838,6 +840,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 						'active_workspace_membership_id', u.active_workspace_membership_id,
 						'public_metadata', u.public_metadata,
 						'backup_codes_generated', u.backup_codes_generated,
+						'has_passkeys', EXISTS(SELECT 1 FROM user_passkeys upk WHERE upk.user_id = u.id),
 						'primary_email_address', CASE
 							WHEN u.primary_email_address_id IS NOT NULL
 							THEN (SELECT json_build_object(
@@ -938,6 +941,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 				ProfilePictureURL: getStringFromMap(rawResult, "ASI__User__profile_picture_url"),
 			}
 			session.ActiveSignin.User.ID = userID
+			session.ActiveSignin.User.HasPasskeys = getBoolFromMap(rawResult, "ASI__User__has_passkeys")
 
 			// Parse availability
 			if availability := getStringFromMap(rawResult, "ASI__User__availability"); availability != "" {

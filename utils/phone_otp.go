@@ -13,9 +13,9 @@ import (
 	"github.com/ilabs/wacht-fe/database"
 )
 
-func VerifyPhoneOTP(deploymentID uint64, phoneNumber string, code string) (bool, error) {
+func VerifyPhoneOTP(deploymentID uint64, phoneNumber, countryCode, code string) (bool, error) {
 	cleanPhone := strings.TrimPrefix(phoneNumber, "+")
-	cacheKey := fmt.Sprintf("sms_verification:%d:%s", deploymentID, cleanPhone)
+	cacheKey := fmt.Sprintf("sms_verification:%d:%s:%s", deploymentID, countryCode, cleanPhone)
 	verificationID, err := database.Redis.Get(context.Background(), cacheKey).Result()
 	if err != nil {
 		return false, fmt.Errorf("verification session expired or not found")
