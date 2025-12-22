@@ -51,7 +51,7 @@ func (s *S3Service) UploadToCdn(key string, file io.ReadSeeker) (string, error) 
 
 	req, err := http.NewRequest(
 		"POST",
-		"https://api.cloudflare.com/client/v4/zones/90930ab39928937ca4d0c4aba3b03126/purge_cache",
+		fmt.Sprintf("https://api.cloudflare.com/client/v4/zones/%s/purge_cache", os.Getenv("CLOUDFLARE_ZONE_ID")),
 		bytes.NewBuffer(reqBody),
 	)
 	if err != nil {
