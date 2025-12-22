@@ -13,8 +13,9 @@ var R2Session *session.Session
 
 func InitR2Session() error {
 	sess, err := session.NewSession(&aws.Config{
-		Endpoint: aws.String(os.Getenv("R2_ENDPOINT")),
-		Region:   aws.String(os.Getenv("R2_DEFAULT_REGION")),
+		Endpoint:         aws.String(os.Getenv("R2_ENDPOINT")),
+		Region:           aws.String(os.Getenv("R2_DEFAULT_REGION")),
+		S3ForcePathStyle: aws.Bool(true),
 		Credentials: credentials.NewStaticCredentials(
 			os.Getenv("R2_ACCESS_KEY_ID"),
 			os.Getenv("R2_SECRET_ACCESS_KEY"),
