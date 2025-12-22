@@ -8,9 +8,8 @@ import (
 
 func Init() {
 	// godotenv.Load()
-	InitR2Session()
-	RegisterHandlebarsHelpers()
 	loadSecrets()
+	InitR2Session()
 }
 
 func loadSecrets() {
