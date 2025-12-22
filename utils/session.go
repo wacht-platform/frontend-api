@@ -1005,6 +1005,7 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		// Parse active organization membership
 		if orgMembershipID, err := parseUint64FromInterface(rawResult["ASI__AOM__id"]); err == nil {
 			session.ActiveSignin.ActiveOrganizationMembership = &model.OrganizationMembership{}
+			session.ActiveSignin.ActiveOrganizationMembership.Organization = &model.PublicOrganizationData{}
 			session.ActiveSignin.ActiveOrganizationMembership.ID = orgMembershipID
 
 			if orgID, err := parseUint64FromInterface(rawResult["ASI__AOM__org_id"]); err == nil {
@@ -1094,6 +1095,8 @@ func GetSessionByID(sessionID uint64) (*model.Session, error) {
 		// Parse active workspace membership
 		if wsMembershipID, err := parseUint64FromInterface(rawResult["ASI__AWM__id"]); err == nil {
 			session.ActiveSignin.ActiveWorkspaceMembership = &model.WorkspaceMembership{}
+			session.ActiveSignin.ActiveWorkspaceMembership.Workspace = &model.PublicWorkspaceData{}
+			session.ActiveSignin.ActiveWorkspaceMembership.Organization = &model.PublicOrganizationData{}
 			session.ActiveSignin.ActiveWorkspaceMembership.ID = wsMembershipID
 
 			if wsID, err := parseUint64FromInterface(rawResult["ASI__AWM__ws_id"]); err == nil {

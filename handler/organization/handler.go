@@ -1350,6 +1350,7 @@ func (h *Handler) GetOrganizationMembers(
 				'profile_picture_url', users.profile_picture_url,
 				'has_profile_picture', users.has_profile_picture,
 				'availability', users.availability,
+				'public_metadata', COALESCE(users.public_metadata, '{}'),
 				'created_at', users.created_at,
 				'updated_at', users.updated_at,
 				'primary_email_address', CASE

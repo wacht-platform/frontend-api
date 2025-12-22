@@ -86,6 +86,7 @@ type PublicUserData struct {
 	LastName              string            `json:"last_name"                gorm:"not null"`
 	Username              string            `json:"username"                 gorm:"not null"`
 	Availability          UserAvailability  `json:"availability"             gorm:"default:away;not null"`
+	PublicMetadata        datatypes.JSONMap `json:"public_metadata"          gorm:"not null"`
 	PrimaryEmailAddressID *uint64           `json:"primary_email_address_id"`
 	PrimaryPhoneNumberID  *uint64           `json:"-"`
 	PrimaryPhoneNumber    *UserPhoneNumber  `json:"primary_phone_number"     gorm:"-:migration;foreignKey:PrimaryPhoneNumberID;references:ID"`
