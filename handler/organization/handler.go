@@ -22,6 +22,7 @@ import (
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/utils"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/plugin/dbresolver"
 )
@@ -1377,7 +1378,8 @@ func (h *Handler) GetOrganizationMembers(
 				JOIN organization_roles ON organization_membership_roles.organization_role_id = organization_roles.id
 				WHERE organization_membership_roles.organization_membership_id = organization_memberships.id
 				), '[]'::json
-			) as roles_json
+			) as roles_json,
+			COALESCE(organization_memberships.public_metadata::text, '{}') as public_metadata_json
 		FROM organization_memberships
 		JOIN users ON organization_memberships.user_id = users.id
 		LEFT JOIN user_email_addresses primary_email ON users.primary_email_address_id = primary_email.id
@@ -1420,6 +1422,18 @@ func (h *Handler) GetOrganizationMembers(
 			}
 		} else {
 			log.Printf("No roles JSON for member %d", members[i].ID)
+		}
+
+		// Parse public metadata
+		if result.PublicMetadataJSON != "" && result.PublicMetadataJSON != "{}" && result.PublicMetadataJSON != "null" {
+			var metadata datatypes.JSONMap
+			if err := json.Unmarshal([]byte(result.PublicMetadataJSON), &metadata); err == nil {
+				members[i].PublicMetadata = metadata
+			} else {
+				members[i].PublicMetadata = make(datatypes.JSONMap)
+			}
+		} else {
+			members[i].PublicMetadata = make(datatypes.JSONMap)
 		}
 	}
 

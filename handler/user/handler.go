@@ -1654,7 +1654,7 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 			}
 		}
 
-		memberships[i].Organization = model.PublicOrganizationData{
+		memberships[i].Organization = &model.PublicOrganizationData{
 			Model: model.Model{
 				ID:        result.OrganizationID,
 				CreatedAt: result.CreatedAt,
@@ -1703,7 +1703,7 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 		for i := range memberships {
 			eligibility := utils.CalculateOrganizationEligibility(
 				&user,
-				&memberships[i].Organization,
+				memberships[i].Organization,
 				memberships[i].Roles,
 				clientIP,
 				&deployment,
@@ -1816,7 +1816,7 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 			}
 		}
 
-		memberships[i].Workspace = model.PublicWorkspaceData{
+		memberships[i].Workspace = &model.PublicWorkspaceData{
 			Model: model.Model{
 				ID:        result.WorkspaceID,
 				CreatedAt: result.CreatedAt,
@@ -1840,7 +1840,7 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 			}
 		}
 
-		memberships[i].Organization = model.PublicOrganizationData{
+		memberships[i].Organization = &model.PublicOrganizationData{
 			Model: model.Model{
 				ID: result.OrganizationID,
 			},
@@ -1887,7 +1887,7 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 		for i := range memberships {
 			eligibility := utils.CalculateWorkspaceEligibility(
 				&user,
-				&memberships[i].Workspace,
+				memberships[i].Workspace,
 				memberships[i].Roles,
 				clientIP,
 				&deployment,

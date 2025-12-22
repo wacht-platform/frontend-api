@@ -274,7 +274,8 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 				JOIN workspace_roles ON workspace_membership_roles.workspace_role_id = workspace_roles.id
 				WHERE workspace_membership_roles.workspace_membership_id = workspace_memberships.id
 				), '[]'::json
-			) as roles_json
+			) as roles_json,
+			COALESCE(workspace_memberships.public_metadata::text, '{}') as public_metadata_json
 		FROM workspace_memberships
 		LEFT JOIN users ON workspace_memberships.user_id = users.id AND users.deleted_at IS NULL
 		LEFT JOIN user_email_addresses primary_email ON users.primary_email_address_id = primary_email.id
@@ -311,6 +312,18 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 			if err := json.Unmarshal([]byte(result.RolesJSON), &roles); err == nil {
 				members[i].Roles = roles
 			}
+		}
+
+		// Parse public metadata
+		if result.PublicMetadataJSON != "" && result.PublicMetadataJSON != "{}" && result.PublicMetadataJSON != "null" {
+			var metadata datatypes.JSONMap
+			if err := json.Unmarshal([]byte(result.PublicMetadataJSON), &metadata); err == nil {
+				members[i].PublicMetadata = metadata
+			} else {
+				members[i].PublicMetadata = make(datatypes.JSONMap)
+			}
+		} else {
+			members[i].PublicMetadata = make(datatypes.JSONMap)
 		}
 	}
 

@@ -38,8 +38,9 @@ type VerifyDomainRequest struct {
 
 type OrganizationMemberQueryResult struct {
 	model.OrganizationMembership
-	RolesJSON string `gorm:"column:roles_json"`
-	UserJSON  string `gorm:"column:user_json"`
+	RolesJSON          string `gorm:"column:roles_json"`
+	UserJSON           string `gorm:"column:user_json"`
+	PublicMetadataJSON string `gorm:"column:public_metadata_json"`
 }
 
 type AcceptInvitationRequest struct {

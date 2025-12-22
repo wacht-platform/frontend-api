@@ -22,8 +22,8 @@ func EnforceB2BSettings(c *fiber.Ctx) error {
 
 	if d.B2BSettings.IpAllowlistPerOrgEnabled && session.ActiveSignin.ActiveOrganizationMembershipID != nil {
 		if session.ActiveSignin.ActiveOrganizationMembership != nil {
-			org := &session.ActiveSignin.ActiveOrganizationMembership.Organization
-			if org.EnableIPRestriction && len(org.WhitelistedIPs) > 0 {
+			org := session.ActiveSignin.ActiveOrganizationMembership.Organization
+			if org != nil && org.EnableIPRestriction && len(org.WhitelistedIPs) > 0 {
 				if err := checkIPAllowlist(c, clientIP, org.WhitelistedIPs); err != nil {
 					return err
 				}
@@ -33,8 +33,8 @@ func EnforceB2BSettings(c *fiber.Ctx) error {
 
 	if d.B2BSettings.IpAllowlistPerWorkspaceEnabled && session.ActiveSignin.ActiveWorkspaceMembershipID != nil {
 		if session.ActiveSignin.ActiveWorkspaceMembership != nil {
-			workspace := &session.ActiveSignin.ActiveWorkspaceMembership.Workspace
-			if workspace.EnableIPRestriction && len(workspace.WhitelistedIPs) > 0 {
+			workspace := session.ActiveSignin.ActiveWorkspaceMembership.Workspace
+			if workspace != nil && workspace.EnableIPRestriction && len(workspace.WhitelistedIPs) > 0 {
 				if err := checkIPAllowlist(c, clientIP, workspace.WhitelistedIPs); err != nil {
 					return err
 				}
