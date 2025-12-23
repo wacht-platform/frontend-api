@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -10,7 +11,6 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
@@ -145,10 +145,37 @@ func (h *Handler) FinishPasskeyLogin(c *fiber.Ctx) error {
 		}, nil
 	}
 
-	httpReq, err := adaptor.ConvertRequest(c, false)
-	if err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to convert request")
+	// Parse FormData fields and reconstruct JSON for WebAuthn library
+	credId := c.FormValue("id")
+	rawId := c.FormValue("rawId")
+	credType := c.FormValue("type")
+	clientDataJSON := c.FormValue("clientDataJSON")
+	authenticatorData := c.FormValue("authenticatorData")
+	signature := c.FormValue("signature")
+	userHandle := c.FormValue("userHandle")
+
+	// Build the assertion response JSON that WebAuthn library expects
+	assertionJSON := map[string]any{
+		"id":    credId,
+		"rawId": rawId,
+		"type":  credType,
+		"response": map[string]any{
+			"clientDataJSON":    clientDataJSON,
+			"authenticatorData": authenticatorData,
+			"signature":         signature,
+		},
 	}
+	if userHandle != "" {
+		assertionJSON["response"].(map[string]any)["userHandle"] = userHandle
+	}
+
+	// Create a new HTTP request with JSON body for WebAuthn library
+	jsonBody, _ := json.Marshal(assertionJSON)
+	httpReq, err := http.NewRequest("POST", "/", strings.NewReader(string(jsonBody)))
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to create request")
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
 
 	credential, err := webAuthn.FinishDiscoverableLogin(discoverHandler, sessionData, httpReq)
 	if err != nil {
