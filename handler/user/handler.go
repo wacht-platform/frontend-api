@@ -1644,10 +1644,8 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 	for i, result := range queryResults {
 		memberships[i] = result.OrganizationMembership
 
-		// Parse whitelisted IPs
 		var whitelistedIPs []string
 		if result.OrganizationWhitelistedIPs != "" && result.OrganizationWhitelistedIPs != "{}" {
-			// PostgreSQL array format: {ip1,ip2,ip3}
 			trimmed := strings.Trim(result.OrganizationWhitelistedIPs, "{}")
 			if trimmed != "" {
 				whitelistedIPs = strings.Split(trimmed, ",")
@@ -1670,7 +1668,6 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 			EnableIPRestriction:     result.OrganizationEnableIPRestriction,
 		}
 
-		// Parse public metadata
 		if result.MembershipPublicMetadata != "" && result.MembershipPublicMetadata != "null" {
 			var metadata datatypes.JSONMap
 			if err := json.Unmarshal([]byte(result.MembershipPublicMetadata), &metadata); err != nil {
@@ -1694,7 +1691,6 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 		}
 	}
 
-	// Calculate eligibility restrictions for all memberships
 	var user model.User
 	deployment := handler.GetDeployment(c)
 	clientIP := c.IP()

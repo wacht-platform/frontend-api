@@ -130,6 +130,10 @@ func (h *Handler) FinishPasskeyLogin(c *fiber.Ctx) error {
 					AAGUID:    pk.AAGUID,
 					SignCount: pk.SignCount,
 				},
+				Flags: webauthn.CredentialFlags{
+					BackupEligible: pk.BackedUp,
+					BackupState:    pk.BackedUp,
+				},
 			}
 		}
 
