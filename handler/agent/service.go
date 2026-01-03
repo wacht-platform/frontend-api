@@ -209,8 +209,7 @@ func (s *Service) GetContextMessages(
 		switch conv.MessageType {
 		case "user_message":
 			role = "user"
-		case "agent_response", "assistant_acknowledgment", "assistant_ideation",
-			"assistant_action_planning", "action_execution_result", "assistant_validation":
+		case "agent_response", "assistant_acknowledgment", "action_execution_result":
 			role = "assistant"
 		case "user_input_request", "system_decision", "context_results", "execution_summary":
 			role = "system"

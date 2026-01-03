@@ -9,7 +9,8 @@ import (
 func Init() {
 	// godotenv.Load()
 	loadSecrets()
-	InitR2Session()
+	initR2Session()
+	initAgentStorageSession()
 }
 
 func loadSecrets() {

@@ -15,4 +15,5 @@ func setupAgentRoutes(app *fiber.App) {
 	agentGroup.Get("/contexts/:id", h.GetContext)
 	agentGroup.Post("/contexts/:id/delete", h.DeleteContext)
 	agentGroup.Get("/contexts/:id/messages", h.GetContextMessages)
+	agentGroup.Get("/contexts/:context_id/files/:filename", h.ServeFile)
 }

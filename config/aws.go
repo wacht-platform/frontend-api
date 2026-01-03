@@ -11,7 +11,7 @@ import (
 
 var R2Session *session.Session
 
-func InitR2Session() error {
+func initR2Session() error {
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(os.Getenv("R2_ENDPOINT")),
 		Region:           aws.String(os.Getenv("R2_DEFAULT_REGION")),
