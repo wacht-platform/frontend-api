@@ -512,7 +512,7 @@ func (h *Handler) handleImpersonationSignIn(
 			return err
 		}
 
-		signIn = h.service.CreateSignin(userID, session.ID, c, 1200)
+		signIn = h.service.CreateSignin(userID, session.ID, c, 120000)
 		if err := tx.Create(signIn).Error; err != nil {
 			return err
 		}
