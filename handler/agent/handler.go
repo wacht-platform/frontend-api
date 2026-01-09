@@ -270,3 +270,64 @@ func (h *Handler) ListAvailableIntegrations(c *fiber.Ctx) error {
 
 	return handler.SendSuccess(c, integrations)
 }
+
+func (h *Handler) GenerateLinkCode(c *fiber.Ctx) error {
+	_, contextGroup, err := h.verifyAgentToken(c)
+	if err != nil {
+		return err
+	}
+
+	if contextGroup == nil || *contextGroup == "" {
+		return handler.SendBadRequest(c, nil, "Context group required in token")
+	}
+
+	integrationIDStr := c.Params("integration_id")
+	integrationID, err := strconv.ParseUint(integrationIDStr, 10, 64)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid integration ID")
+	}
+
+	deployment := handler.GetDeployment(c)
+
+	code, expiresAt, err := h.service.GenerateLinkCode(deployment.ID, *contextGroup, integrationID)
+	if err != nil {
+		return handler.SendInternalServerError(c, nil, err.Error())
+	}
+
+	return handler.SendSuccess(c, map[string]interface{}{
+		"code":       code,
+		"expires_at": expiresAt,
+	})
+}
+
+func (h *Handler) GenerateConsentURL(c *fiber.Ctx) error {
+	_, contextGroup, err := h.verifyAgentToken(c)
+	if err != nil {
+		return err
+	}
+
+	if contextGroup == nil || *contextGroup == "" {
+		return handler.SendBadRequest(c, nil, "Context group required in token")
+	}
+
+	integrationIDStr := c.Params("integration_id")
+	integrationID, err := strconv.ParseUint(integrationIDStr, 10, 64)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid integration ID")
+	}
+
+	redirectURL := c.Query("redirect_url", "")
+
+	deployment := handler.GetDeployment(c)
+
+	consentURL, state, err := h.service.GenerateConsentURL(deployment.ID, *contextGroup, integrationID, redirectURL)
+	if err != nil {
+		return handler.SendInternalServerError(c, nil, err.Error())
+	}
+
+	return handler.SendSuccess(c, map[string]interface{}{
+		"consent_url": consentURL,
+		"state":       state,
+		"expires_in":  900,
+	})
+}

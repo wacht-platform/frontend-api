@@ -1,13 +1,19 @@
 package agent
 
 import (
+	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"math/big"
+	"os"
 	"time"
 
 	"github.com/godruoyi/go-snowflake"
+	"github.com/google/uuid"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
+
 	"gorm.io/gorm"
 )
 
@@ -330,4 +336,111 @@ func (s *Service) ListAvailableIntegrations(deploymentID uint64, contextGroup *s
 	}
 
 	return result, nil
+}
+
+func (s *Service) GenerateLinkCode(deploymentID uint64, contextGroup string, integrationID uint64) (string, time.Time, error) {
+	if contextGroup == "" {
+		return "", time.Time{}, fmt.Errorf("context group (agent name) is required")
+	}
+
+	var integration model.AgentIntegration
+	if err := s.db.Where("id = ? AND deployment_id = ?", integrationID, deploymentID).First(&integration).Error; err != nil {
+		return "", time.Time{}, fmt.Errorf("integration not found or access denied")
+	}
+
+	code, err := generateAlphanumericCode(6)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("failed to generate code: %w", err)
+	}
+
+	expiresAt := time.Now().Add(15 * time.Minute)
+
+	linkCode := model.IntegrationLinkCode{
+		ID:              snowflake.ID(),
+		DeploymentID:    deploymentID,
+		ContextGroup:    contextGroup,
+		AgentID:         integration.AgentID,
+		IntegrationType: integration.IntegrationType,
+		Code:            code,
+		ExpiresAt:       expiresAt,
+	}
+
+	if err := s.db.Create(&linkCode).Error; err != nil {
+		return "", time.Time{}, fmt.Errorf("failed to save link code: %w", err)
+	}
+
+	return code, expiresAt, nil
+}
+
+func generateAlphanumericCode(length int) (string, error) {
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	result := make([]byte, length)
+	for i := range result {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return "", err
+		}
+		result[i] = charset[num.Int64()]
+	}
+	return string(result), nil
+}
+
+func (s *Service) GenerateConsentURL(deploymentID uint64, contextGroup string, integrationID uint64, redirectURL string) (string, string, error) {
+	// Get the integration to get appId from config
+	var integration model.AgentIntegration
+	if err := s.db.Where("id = ? AND deployment_id = ?", integrationID, deploymentID).First(&integration).Error; err != nil {
+		return "", "", fmt.Errorf("integration not found")
+	}
+
+	// Parse config to get Teams App ID
+	var config map[string]interface{}
+	if err := json.Unmarshal([]byte(integration.Config), &config); err != nil {
+		return "", "", fmt.Errorf("invalid integration config")
+	}
+
+	appID, ok := config["app_id"].(string)
+	if !ok || appID == "" {
+		appID = os.Getenv("TEAMS_APP_ID")
+	}
+	if appID == "" {
+		return "", "", fmt.Errorf("Teams App ID not configured")
+	}
+
+	// Generate state token
+	state := uuid.New().String()
+
+	// Store state in Redis with 15 minute TTL
+	consentState := ConsentState{
+		DeploymentID:  fmt.Sprintf("%d", deploymentID),
+		IntegrationID: fmt.Sprintf("%d", integrationID),
+		AgentID:       fmt.Sprintf("%d", integration.AgentID),
+		ContextGroup:  contextGroup,
+		RedirectURL:   redirectURL,
+		CreatedAt:     time.Now().Unix(),
+	}
+
+	stateJSON, err := json.Marshal(consentState)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to marshal state: %w", err)
+	}
+
+	redisKey := fmt.Sprintf("teams:consent:%s", state)
+	if err := database.Redis.Set(context.Background(), redisKey, stateJSON, 15*time.Minute).Err(); err != nil {
+		return "", "", fmt.Errorf("failed to store state: %w", err)
+	}
+
+	// Build consent URL
+	callbackURL := os.Getenv("TEAMS_CONSENT_CALLBACK_URL")
+	if callbackURL == "" {
+		callbackURL = os.Getenv("AGENT_INTEGRATIONS_URL") + "/service/teams/consent/callback"
+	}
+
+	consentURL := fmt.Sprintf(
+		"https://login.microsoftonline.com/common/adminconsent?client_id=%s&redirect_uri=%s&state=%s",
+		appID,
+		callbackURL,
+		state,
+	)
+
+	return consentURL, state, nil
 }

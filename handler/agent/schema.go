@@ -37,3 +37,12 @@ type ListMessagesResponse struct {
 	Data    []ConversationMessage `json:"data"`
 	HasMore bool                  `json:"has_more"`
 }
+
+type ConsentState struct {
+	DeploymentID  string `json:"deployment_id"`
+	IntegrationID string `json:"integration_id"`
+	AgentID       string `json:"agent_id"`
+	ContextGroup  string `json:"context_group"`
+	RedirectURL   string `json:"redirect_url,omitempty"`
+	CreatedAt     int64  `json:"created_at"`
+}
