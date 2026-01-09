@@ -7,7 +7,6 @@ import (
 )
 
 func Init() {
-	// godotenv.Load()
 	loadSecrets()
 	initR2Session()
 	initAgentStorageSession()
@@ -29,7 +28,6 @@ func loadSecrets() {
 	}
 }
 
-// GetEnv gets an environment variable with a default value
 func GetEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value

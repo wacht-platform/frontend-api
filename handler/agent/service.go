@@ -153,7 +153,6 @@ func (s *Service) GetContextMessages(
 	limit int,
 	beforeID, afterID string,
 ) ([]ConversationMessage, bool, error) {
-	// First verify the context exists and user has access
 	var context model.AgentExecutionContext
 	query := s.db.Where("deployment_id = ? AND id = ?", deploymentID, contextID)
 	if contextGroup != nil {
@@ -167,12 +166,10 @@ func (s *Service) GetContextMessages(
 		return nil, false, fmt.Errorf("failed to fetch context: %w", err)
 	}
 
-	// Now fetch messages from conversations table
 	messagesQuery := s.db.Model(&model.Conversation{}).
 		Where("context_id = ?", contextID).
 		Where("message_type != ?", "execution_summary")
 
-	// Apply pagination
 	if beforeID != "" {
 		messagesQuery = messagesQuery.Where("id < ?", beforeID)
 	}
@@ -182,7 +179,6 @@ func (s *Service) GetContextMessages(
 		messagesQuery = messagesQuery.Order("id DESC")
 	}
 
-	// Fetch limit + 1 to check if there are more
 	messagesQuery = messagesQuery.Limit(limit + 1)
 
 	var conversations []model.Conversation
@@ -195,7 +191,6 @@ func (s *Service) GetContextMessages(
 		conversations = conversations[:limit]
 	}
 
-	// If we fetched in ascending order (afterID), reverse to maintain chronological order
 	if afterID != "" {
 		for i := len(conversations)/2 - 1; i >= 0; i-- {
 			opp := len(conversations) - 1 - i
@@ -233,4 +228,106 @@ func extractMetadata(messageType string) json.RawMessage {
 	}
 	data, _ := json.Marshal(metadata)
 	return data
+}
+
+func (s *Service) GetActiveIntegrations(deploymentID uint64, contextGroup string) ([]model.AgentIntegration, error) {
+	var agent model.AiAgent
+	if err := s.db.Where("deployment_id = ? AND name = ?", deploymentID, contextGroup).First(&agent).Error; err != nil {
+		return nil, fmt.Errorf("agent not found: %w", err)
+	}
+
+	var integrations []model.AgentIntegration
+
+	err := s.db.
+		Table("agent_integrations ai").
+		Select("ai.*").
+		Joins("JOIN active_agent_integrations aai ON ai.id = aai.integration_id").
+		Where("aai.deployment_id = ? AND aai.agent_id = ? AND aai.context_group = ?", deploymentID, agent.ID, contextGroup).
+		Find(&integrations).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch active integrations: %w", err)
+	}
+
+	return integrations, nil
+}
+
+func (s *Service) AddIntegration(deploymentID uint64, contextGroup string, integrationID uint64) error {
+	var integration model.AgentIntegration
+	if err := s.db.Where("id = ? AND deployment_id = ?", integrationID, deploymentID).First(&integration).Error; err != nil {
+		return fmt.Errorf("integration not found or access denied")
+	}
+
+	var existing model.ActiveAgentIntegration
+	err := s.db.Where("deployment_id = ? AND context_group = ? AND integration_id = ?",
+		deploymentID, contextGroup, integrationID).First(&existing).Error
+	if err == nil {
+		return nil
+	}
+
+	active := model.ActiveAgentIntegration{
+		Model: model.Model{
+			ID: snowflake.ID(),
+		},
+		DeploymentID:  deploymentID,
+		AgentID:       integration.AgentID,
+		IntegrationID: integrationID,
+		ContextGroup:  contextGroup,
+	}
+
+	if err := s.db.Create(&active).Error; err != nil {
+		return fmt.Errorf("failed to add integration: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Service) RemoveIntegration(deploymentID uint64, contextGroup string, integrationID uint64) error {
+	result := s.db.Where("deployment_id = ? AND context_group = ? AND integration_id = ?",
+		deploymentID, contextGroup, integrationID).Delete(&model.ActiveAgentIntegration{})
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to remove integration: %w", result.Error)
+	}
+
+	return nil
+}
+
+func (s *Service) ListAvailableIntegrations(deploymentID uint64, contextGroup *string) ([]map[string]interface{}, error) {
+	if contextGroup == nil || *contextGroup == "" {
+		return nil, fmt.Errorf("context group (agent name) is required")
+	}
+
+	var agent model.AiAgent
+	if err := s.db.Where("deployment_id = ? AND name = ?", deploymentID, *contextGroup).First(&agent).Error; err != nil {
+		return nil, fmt.Errorf("agent not found: %w", err)
+	}
+
+	var integrations []model.AgentIntegration
+	if err := s.db.Where("deployment_id = ? AND agent_id = ?", deploymentID, agent.ID).Find(&integrations).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch integrations: %w", err)
+	}
+
+	var activeIDs []uint64
+	s.db.Model(&model.ActiveAgentIntegration{}).
+		Where("deployment_id = ? AND agent_id = ? AND context_group = ?", deploymentID, agent.ID, *contextGroup).
+		Pluck("integration_id", &activeIDs)
+
+	activeSet := make(map[uint64]bool)
+	for _, id := range activeIDs {
+		activeSet[id] = true
+	}
+
+	result := make([]map[string]any, len(integrations))
+	for i, integration := range integrations {
+		result[i] = map[string]any{
+			"id":               fmt.Sprintf("%d", integration.ID),
+			"name":             integration.Name,
+			"integration_type": integration.IntegrationType,
+			"agent_id":         fmt.Sprintf("%d", integration.AgentID),
+			"is_active":        activeSet[integration.ID],
+		}
+	}
+
+	return result, nil
 }
