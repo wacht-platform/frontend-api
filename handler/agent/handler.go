@@ -202,33 +202,6 @@ func (h *Handler) GetActiveIntegrations(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, integrations)
 }
 
-// AddIntegration adds an integration to the current context_group
-func (h *Handler) AddIntegration(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentToken(c)
-	if err != nil {
-		return err
-	}
-
-	if contextGroup == nil || *contextGroup == "" {
-		return handler.SendBadRequest(c, nil, "Context group required in token")
-	}
-
-	integrationIDStr := c.Params("integration_id")
-	integrationID, err := strconv.ParseUint(integrationIDStr, 10, 64)
-	if err != nil {
-		return handler.SendBadRequest(c, nil, "Invalid integration ID")
-	}
-
-	deployment := handler.GetDeployment(c)
-
-	if err := h.service.AddIntegration(deployment.ID, *contextGroup, integrationID); err != nil {
-		return handler.SendInternalServerError(c, nil, err.Error())
-	}
-
-	return c.SendStatus(fiber.StatusCreated)
-}
-
-// RemoveIntegration removes an integration from the current context_group
 func (h *Handler) RemoveIntegration(c *fiber.Ctx) error {
 	_, contextGroup, err := h.verifyAgentToken(c)
 	if err != nil {

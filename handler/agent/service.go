@@ -258,36 +258,6 @@ func (s *Service) GetActiveIntegrations(deploymentID uint64, contextGroup string
 	return integrations, nil
 }
 
-func (s *Service) AddIntegration(deploymentID uint64, contextGroup string, integrationID uint64) error {
-	var integration model.AgentIntegration
-	if err := s.db.Where("id = ? AND deployment_id = ?", integrationID, deploymentID).First(&integration).Error; err != nil {
-		return fmt.Errorf("integration not found or access denied")
-	}
-
-	var existing model.ActiveAgentIntegration
-	err := s.db.Where("deployment_id = ? AND context_group = ? AND integration_id = ?",
-		deploymentID, contextGroup, integrationID).First(&existing).Error
-	if err == nil {
-		return nil
-	}
-
-	active := model.ActiveAgentIntegration{
-		Model: model.Model{
-			ID: snowflake.ID(),
-		},
-		DeploymentID:  deploymentID,
-		AgentID:       integration.AgentID,
-		IntegrationID: integrationID,
-		ContextGroup:  contextGroup,
-	}
-
-	if err := s.db.Create(&active).Error; err != nil {
-		return fmt.Errorf("failed to add integration: %w", err)
-	}
-
-	return nil
-}
-
 func (s *Service) RemoveIntegration(deploymentID uint64, contextGroup string, integrationID uint64) error {
 	result := s.db.Where("deployment_id = ? AND context_group = ? AND integration_id = ?",
 		deploymentID, contextGroup, integrationID).Delete(&model.ActiveAgentIntegration{})
@@ -314,25 +284,34 @@ func (s *Service) ListAvailableIntegrations(deploymentID uint64, contextGroup *s
 		return nil, fmt.Errorf("failed to fetch integrations: %w", err)
 	}
 
-	var activeIDs []uint64
-	s.db.Model(&model.ActiveAgentIntegration{}).
-		Where("deployment_id = ? AND agent_id = ? AND context_group = ?", deploymentID, agent.ID, *contextGroup).
-		Pluck("integration_id", &activeIDs)
+	var activeIntegrations []model.ActiveAgentIntegration
+	if err := s.db.Where("deployment_id = ? AND agent_id = ? AND context_group = ?", deploymentID, agent.ID, *contextGroup).
+		Find(&activeIntegrations).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch active integrations: %w", err)
+	}
 
-	activeSet := make(map[uint64]bool)
-	for _, id := range activeIDs {
-		activeSet[id] = true
+	activeMap := make(map[uint64]model.ActiveAgentIntegration)
+	for _, active := range activeIntegrations {
+		activeMap[active.IntegrationID] = active
 	}
 
 	result := make([]map[string]any, len(integrations))
 	for i, integration := range integrations {
-		result[i] = map[string]any{
+		active, isActive := activeMap[integration.ID]
+
+		res := map[string]any{
 			"id":               fmt.Sprintf("%d", integration.ID),
 			"name":             integration.Name,
 			"integration_type": integration.IntegrationType,
 			"agent_id":         fmt.Sprintf("%d", integration.AgentID),
-			"is_active":        activeSet[integration.ID],
+			"is_active":        isActive,
 		}
+
+		if isActive {
+			res["connection_metadata"] = active.ConnectionMetadata
+		}
+
+		result[i] = res
 	}
 
 	return result, nil
