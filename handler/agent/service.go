@@ -411,7 +411,7 @@ func (s *Service) GenerateConsentURL(deploymentID uint64, contextGroup string, i
 	// Build consent URL
 	callbackURL := os.Getenv("TEAMS_CONSENT_CALLBACK_URL")
 	if callbackURL == "" {
-		callbackURL = os.Getenv("AGENT_INTEGRATIONS_URL") + "/service/teams/consent/callback"
+		callbackURL = "https://agentlink.wacht.services/service/teams/consent/callback"
 	}
 
 	consentURL := fmt.Sprintf(
