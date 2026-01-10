@@ -39,9 +39,15 @@ func (h *Handler) verifyAgentToken(c *fiber.Ctx) (string, *string, error) {
 	if !ok || len(audiences) == 0 || audiences[0] == "" {
 		return "", nil, fiber.NewError(fiber.StatusUnauthorized, "Invalid token: missing audience (agent name)")
 	}
-	contextGroup := audiences[0]
+	agentName := audiences[0]
 
-	return contextGroup, &contextGroup, nil
+	subject, ok := claims.Subject()
+	if !ok || subject == "" {
+		return "", nil, fiber.NewError(fiber.StatusUnauthorized, "Invalid token: missing subject (context group)")
+	}
+	contextGroup := subject
+
+	return agentName, &contextGroup, nil
 }
 
 func (h *Handler) ListContexts(c *fiber.Ctx) error {
