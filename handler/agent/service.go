@@ -370,19 +370,10 @@ func (s *Service) GenerateConsentURL(deploymentID uint64, contextGroup string, i
 	if err := s.db.Where("id = ? AND deployment_id = ?", integrationID, deploymentID).First(&integration).Error; err != nil {
 		return "", "", fmt.Errorf("integration not found")
 	}
-
-	// Parse config to get Teams App ID
+	// Parse config to get App ID / Client ID
 	var config map[string]interface{}
 	if err := json.Unmarshal([]byte(integration.Config), &config); err != nil {
 		return "", "", fmt.Errorf("invalid integration config")
-	}
-
-	appID, ok := config["app_id"].(string)
-	if !ok || appID == "" {
-		appID = os.Getenv("TEAMS_APP_ID")
-	}
-	if appID == "" {
-		return "", "", fmt.Errorf("Teams App ID not configured")
 	}
 
 	// Generate state token
@@ -408,18 +399,38 @@ func (s *Service) GenerateConsentURL(deploymentID uint64, contextGroup string, i
 		return "", "", fmt.Errorf("failed to store state: %w", err)
 	}
 
-	// Build consent URL
-	callbackURL := os.Getenv("TEAMS_CONSENT_CALLBACK_URL")
-	if callbackURL == "" {
-		callbackURL = "https://agentlink.wacht.services/service/teams/consent/callback"
+	// Build consent URL based on provider
+	switch integration.IntegrationType {
+	case "teams":
+		appID, ok := config["app_id"].(string)
+		if !ok || appID == "" {
+			appID = os.Getenv("TEAMS_APP_ID")
+		}
+		if appID == "" {
+			return "", "", fmt.Errorf("Teams App ID not configured")
+		}
+
+		return fmt.Sprintf(
+			"https://login.microsoftonline.com/common/adminconsent?client_id=%s&redirect_uri=%s&state=%s",
+			appID,
+			"https://agentlink.wacht.services/service/teams/consent/callback",
+			state,
+		), state, nil
+
+	case "clickup":
+		clientID, ok := config["app_id"].(string)
+		if !ok || clientID == "" {
+			return "", "", fmt.Errorf("ClickUp Client ID not configured")
+		}
+
+		return fmt.Sprintf(
+			"https://app.clickup.com/api/v2/oauth/authorize?client_id=%s&redirect_uri=%s&state=%s",
+			clientID,
+			"https://agentlink.wacht.services/service/clickup/consent/callback",
+			state,
+		), state, nil
+
+	default:
+		return "", "", fmt.Errorf("integration type '%s' does not support OAuth consent flow", integration.IntegrationType)
 	}
-
-	consentURL := fmt.Sprintf(
-		"https://login.microsoftonline.com/common/adminconsent?client_id=%s&redirect_uri=%s&state=%s",
-		appID,
-		callbackURL,
-		state,
-	)
-
-	return consentURL, state, nil
 }
