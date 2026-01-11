@@ -236,9 +236,9 @@ func extractMetadata(messageType string) json.RawMessage {
 	return data
 }
 
-func (s *Service) GetActiveIntegrations(deploymentID uint64, contextGroup string) ([]model.AgentIntegration, error) {
+func (s *Service) GetActiveIntegrations(deploymentID uint64, agentName string, contextGroup string) ([]model.AgentIntegration, error) {
 	var agent model.AiAgent
-	if err := s.db.Where("deployment_id = ? AND name = ?", deploymentID, contextGroup).First(&agent).Error; err != nil {
+	if err := s.db.Where("deployment_id = ? AND name = ?", deploymentID, agentName).First(&agent).Error; err != nil {
 		return nil, fmt.Errorf("agent not found: %w", err)
 	}
 
@@ -269,13 +269,13 @@ func (s *Service) RemoveIntegration(deploymentID uint64, contextGroup string, in
 	return nil
 }
 
-func (s *Service) ListAvailableIntegrations(deploymentID uint64, contextGroup *string) ([]map[string]interface{}, error) {
+func (s *Service) ListAvailableIntegrations(deploymentID uint64, agentName string, contextGroup *string) ([]map[string]interface{}, error) {
 	if contextGroup == nil || *contextGroup == "" {
 		return nil, fmt.Errorf("context group (agent name) is required")
 	}
 
 	var agent model.AiAgent
-	if err := s.db.Where("deployment_id = ? AND name = ?", deploymentID, *contextGroup).First(&agent).Error; err != nil {
+	if err := s.db.Where("deployment_id = ? AND name = ?", deploymentID, agentName).First(&agent).Error; err != nil {
 		return nil, fmt.Errorf("agent not found: %w", err)
 	}
 

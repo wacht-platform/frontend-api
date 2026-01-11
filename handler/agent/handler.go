@@ -189,7 +189,7 @@ func (h *Handler) GetContextMessages(c *fiber.Ctx) error {
 
 // GetActiveIntegrations returns integrations active for the current context_group
 func (h *Handler) GetActiveIntegrations(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentToken(c)
+	agentName, contextGroup, err := h.verifyAgentToken(c)
 	if err != nil {
 		return err
 	}
@@ -200,7 +200,7 @@ func (h *Handler) GetActiveIntegrations(c *fiber.Ctx) error {
 
 	deployment := handler.GetDeployment(c)
 
-	integrations, err := h.service.GetActiveIntegrations(deployment.ID, *contextGroup)
+	integrations, err := h.service.GetActiveIntegrations(deployment.ID, agentName, *contextGroup)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, err.Error())
 	}
@@ -235,14 +235,14 @@ func (h *Handler) RemoveIntegration(c *fiber.Ctx) error {
 
 // ListAvailableIntegrations lists all integrations available for the agent
 func (h *Handler) ListAvailableIntegrations(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentToken(c)
+	agentName, contextGroup, err := h.verifyAgentToken(c)
 	if err != nil {
 		return err
 	}
 
 	deployment := handler.GetDeployment(c)
 
-	integrations, err := h.service.ListAvailableIntegrations(deployment.ID, contextGroup)
+	integrations, err := h.service.ListAvailableIntegrations(deployment.ID, agentName, contextGroup)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, err.Error())
 	}
