@@ -12,11 +12,11 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/godruoyi/go-snowflake"
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"github.com/ilabs/wacht-fe/service"
 	"github.com/ilabs/wacht-fe/utils"
 	"golang.org/x/oauth2"
@@ -417,11 +417,11 @@ func (h *Handler) createOIDCUser(
 	lastName string,
 	deployment *model.Deployment,
 ) (*model.User, error) {
-	primaryAddressID := snowflake.ID()
+	primaryAddressID := idgen.NextID()
 
 	user := model.User{
 		Model: model.Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		FirstName:             firstName,
 		LastName:              lastName,

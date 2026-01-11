@@ -3,7 +3,7 @@ package model
 import (
 	"time"
 
-	"github.com/godruoyi/go-snowflake"
+	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"gorm.io/gorm"
 )
 
@@ -32,7 +32,7 @@ func NewSignIn(sessionID, userID uint64, validityPeriodSeconds uint64) *Signin {
 	now := time.Now()
 	return &Signin{
 		Model: Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		SessionID:    sessionID,
 		UserID:       &userID,

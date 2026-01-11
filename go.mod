@@ -13,7 +13,6 @@ require (
 	github.com/go-playground/validator/v10 v10.23.0
 	github.com/go-webauthn/webauthn v0.15.0
 	github.com/goccy/go-json v0.10.5
-	github.com/godruoyi/go-snowflake v0.0.2
 	github.com/gofiber/fiber/v2 v2.52.5
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.2
@@ -24,6 +23,7 @@ require (
 	github.com/nats-io/nats.go v1.44.0
 	github.com/pquerna/otp v1.4.0
 	github.com/redis/go-redis/v9 v9.7.0
+	github.com/sony/sonyflake v1.3.0
 	github.com/ua-parser/uap-go v0.0.0-20250213224047-9c035f085b90
 	golang.org/x/crypto v0.45.0
 	golang.org/x/oauth2 v0.30.0

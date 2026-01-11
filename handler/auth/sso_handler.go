@@ -16,11 +16,11 @@ import (
 	"time"
 
 	"github.com/crewjam/saml"
-	"github.com/godruoyi/go-snowflake"
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"github.com/ilabs/wacht-fe/service"
 	"github.com/ilabs/wacht-fe/utils"
 	"gorm.io/gorm"
@@ -296,7 +296,7 @@ func (h *Handler) createSSOUser(
 	deployment *model.Deployment,
 	connection *model.EnterpriseConnection,
 ) (*model.User, error) {
-	primaryAddressID := snowflake.ID()
+	primaryAddressID := idgen.NextID()
 
 	firstNameAttrs := []string{"firstname", "first_name", "givenname"}
 	lastNameAttrs := []string{"lastname", "last_name", "surname", "familyname"}
@@ -336,7 +336,7 @@ func (h *Handler) createSSOUser(
 
 	user := model.User{
 		Model: model.Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		FirstName:             firstName,
 		LastName:              lastName,

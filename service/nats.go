@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/godruoyi/go-snowflake"
+	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -238,13 +238,16 @@ func (s *NatsService) publishTask(ctx context.Context, taskType string, payload 
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	message := NatsTaskMessage{
-		TaskType: taskType,
-		TaskID:   fmt.Sprintf("%d", snowflake.ID()),
-		Payload:  payloadBytes,
+	// Publish task
+	taskPayload := map[string]interface{}{
+		"TaskType": taskType,
+		"TaskID":   fmt.Sprintf("%d", idgen.NextID()),
+		"Priority": 1,
+		"Retry":    3,
+		"Payload":  payloadBytes,
 	}
 
-	messageBytes, err := json.Marshal(message)
+	messageBytes, err := json.Marshal(taskPayload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}

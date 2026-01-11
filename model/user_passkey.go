@@ -3,7 +3,7 @@ package model
 import (
 	"time"
 
-	"github.com/godruoyi/go-snowflake"
+	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
@@ -28,7 +28,7 @@ type UserPasskey struct {
 func NewUserPasskey(userID uint64, name string, credentialID, publicKey, aaguid []byte, signCount uint32, transports []string, backedUp bool, deviceType string) *UserPasskey {
 	return &UserPasskey{
 		Model: Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		UserID:       userID,
 		Name:         name,

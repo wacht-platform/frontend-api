@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/godruoyi/go-snowflake"
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/lib/pq"
@@ -694,7 +694,7 @@ func (h *Handler) CreateUserEmailAddress(c *fiber.Ctx) error {
 
 	newEmail := model.UserEmailAddress{
 		Model: model.Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		DeploymentID: deployment.ID,
 		UserID:       session.ActiveSignin.UserID,
@@ -925,7 +925,7 @@ func (h *Handler) AddPhoneNumber(c *fiber.Ctx) error {
 
 	phoneNumber := model.UserPhoneNumber{
 		Model: model.Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		PhoneNumber:  b.PhoneNumber,
 		CountryCode:  b.CountryCode,
@@ -1131,7 +1131,7 @@ func (h *Handler) GenerateAuthenticator(c *fiber.Ctx) error {
 
 	authenticator := &model.UserAuthenticator{
 		Model: model.Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		TotpSecret: key.Secret(),
 		OtpUrl:     key.URL(),
@@ -2387,7 +2387,7 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 		if err == gorm.ErrRecordNotFound {
 			userEmailAddress = model.UserEmailAddress{
 				Model: model.Model{
-					ID: snowflake.ID(),
+					ID: idgen.NextID(),
 				},
 				DeploymentID:         deployment.ID,
 				UserID:               session.ActiveSignin.UserID,

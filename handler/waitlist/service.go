@@ -3,10 +3,10 @@ package waitlist
 import (
 	"log"
 
-	"github.com/godruoyi/go-snowflake"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"github.com/ilabs/wacht-fe/service"
 	"gorm.io/gorm"
 )
@@ -68,7 +68,7 @@ func (s *WaitlistService) CreateWaitlistEntry(
 	deploymentIDUint := uint(deploymentID)
 	entry := &model.DeploymentWaitlistUser{
 		Model: model.Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		DeploymentID: &deploymentIDUint,
 		EmailAddress: b.Email,

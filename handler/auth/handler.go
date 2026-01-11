@@ -2,17 +2,16 @@ package auth
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
-	"slices"
-
-	"github.com/godruoyi/go-snowflake"
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pquerna/otp/totp"
@@ -1244,11 +1243,11 @@ func (h *Handler) OAuth2Callback(c *fiber.Ctx) error {
 			return nil
 		}
 
-		primaryAddressID := snowflake.ID()
+		primaryAddressID := idgen.NextID()
 
 		u := model.User{
 			Model: model.Model{
-				ID: snowflake.ID(),
+				ID: idgen.NextID(),
 			},
 			FirstName:             user.FirstName,
 			LastName:              user.LastName,
@@ -1955,7 +1954,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				if err := database.Connection.Transaction(func(tx *gorm.DB) error {
 
 					if attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.Email != "" && user != nil {
-						emailID := snowflake.ID()
+						emailID := idgen.NextID()
 						emailRecord := model.UserEmailAddress{
 							Model:        model.Model{ID: emailID},
 							EmailAddress: emailAddress,
@@ -2081,7 +2080,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				if err := database.Connection.Transaction(func(tx *gorm.DB) error {
 
 					if attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.PhoneNumber != "" && user != nil {
-						phoneID := snowflake.ID()
+						phoneID := idgen.NextID()
 						phoneRecord := model.UserPhoneNumber{
 							Model:        model.Model{ID: phoneID},
 							PhoneNumber:  phoneNumber,
@@ -2670,7 +2669,7 @@ func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
 			return handler.SendBadRequest(c, nil, err.Error())
 		}
 
-		phoneID := snowflake.ID()
+		phoneID := idgen.NextID()
 		phone := model.UserPhoneNumber{
 			Model:        model.Model{ID: phoneID},
 			PhoneNumber:  b.PhoneNumber,

@@ -15,12 +15,12 @@ import (
 
 	"time"
 
-	"github.com/godruoyi/go-snowflake"
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"github.com/ilabs/wacht-fe/utils"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
@@ -52,7 +52,7 @@ func (h *Handler) CreateOrganization(
 	b, validation := handler.Validate[CreateOrgRequest](c)
 	img, _ := c.FormFile("image")
 	imgurl := d.UISettings.DefaultOrganizationProfileImageURL
-	orgid := snowflake.ID()
+	orgid := idgen.NextID()
 
 	if !d.B2BSettings.OrganizationsEnabled {
 		return handler.SendBadRequest(c, nil, "Organizations are not enabled for this deployment")
@@ -110,7 +110,7 @@ func (h *Handler) CreateOrganization(
 
 	membership := model.OrganizationMembership{
 		Model: model.Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		OrganizationID: orgid,
 		UserID:         *session.ActiveSignin.UserID,
@@ -533,7 +533,7 @@ func (h *Handler) InviteMember(
 
 	invitation := model.OrganizationInvitation{
 		Model: model.Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		OrganizationID: getuint64(orgID),
 		InviterID:      membership.ID,
@@ -922,7 +922,7 @@ func (h *Handler) AcceptInvitation(
 			txErr := database.Connection.Transaction(func(tx *gorm.DB) error {
 				workspaceMembership := model.WorkspaceMembership{
 					Model: model.Model{
-						ID: snowflake.ID(),
+						ID: idgen.NextID(),
 					},
 					WorkspaceID:              *invitation.WorkspaceID,
 					UserID:                   *emailAddress.UserID,
@@ -989,7 +989,7 @@ func (h *Handler) AcceptInvitation(
 
 	membership := model.OrganizationMembership{
 		Model: model.Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		OrganizationID: invitation.OrganizationID,
 		UserID:         *emailAddress.UserID,
@@ -1019,7 +1019,7 @@ func (h *Handler) AcceptInvitation(
 		if invitation.WorkspaceID != nil {
 			workspaceMembership := model.WorkspaceMembership{
 				Model: model.Model{
-					ID: snowflake.ID(),
+					ID: idgen.NextID(),
 				},
 				WorkspaceID:              *invitation.WorkspaceID,
 				UserID:                   *emailAddress.UserID,
@@ -1484,7 +1484,7 @@ func (h *Handler) CreateOrganizationRole(
 
 	orgIDValue := getuint64(orgID)
 	role := model.OrganizationRole{
-		Model:          model.Model{ID: snowflake.ID()},
+		Model:          model.Model{ID: idgen.NextID()},
 		OrganizationID: &orgIDValue,
 		Name:           body.Name,
 		Permissions:    body.Permissions,
@@ -1609,10 +1609,10 @@ func (h *Handler) AddOrganizationDomain(
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
-	verificationToken := fmt.Sprintf("wacht-verify-%d", snowflake.ID())
+	verificationToken := fmt.Sprintf("wacht-verify-%d", idgen.NextID())
 
 	domain := model.OrganizationDomain{
-		ID:                        snowflake.ID(),
+		ID:                        idgen.NextID(),
 		OrganizationID:            getuint64(orgID),
 		Fqdn:                      b.Domain,
 		DeploymentID:              d.ID,
@@ -1808,7 +1808,7 @@ func (h *Handler) CreateEnterpriseConnection(c *fiber.Ctx) error {
 	}
 
 	connection := model.EnterpriseConnection{
-		ID:             snowflake.ID(),
+		ID:             idgen.NextID(),
 		OrganizationID: getuint64(orgID),
 		DeploymentID:   d.ID,
 		Protocol:       b.Protocol,

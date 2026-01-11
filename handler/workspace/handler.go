@@ -7,11 +7,11 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/godruoyi/go-snowflake"
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"github.com/ilabs/wacht-fe/utils"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
@@ -42,7 +42,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 	img, _ := c.FormFile("image")
 	imgurl := deployment.UISettings.DefaultWorkspaceProfileImageURL
-	workspaceid := snowflake.ID()
+	workspaceid := idgen.NextID()
 
 	if validation != nil {
 		return handler.SendBadRequest(c, validation, "Bad request body")
@@ -116,7 +116,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 
 		creatorMembership := model.WorkspaceMembership{
 			Model: model.Model{
-				ID: snowflake.ID(),
+				ID: idgen.NextID(),
 			},
 			WorkspaceID:              workspace.ID,
 			UserID:                   *session.ActiveSignin.UserID,
@@ -416,7 +416,7 @@ func (h *Handler) CreateWorkspaceRole(c *fiber.Ctx) error {
 
 	// Create the role
 	role := model.WorkspaceRole{
-		Model:          model.Model{ID: snowflake.ID()},
+		Model:          model.Model{ID: idgen.NextID()},
 		DeploymentID:   d.ID,
 		WorkspaceID:    workspaceID,
 		OrganizationID: membership.OrganizationID,

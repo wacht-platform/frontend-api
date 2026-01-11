@@ -18,12 +18,12 @@ import (
 
 	"slices"
 
-	"github.com/godruoyi/go-snowflake"
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/config"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"github.com/ilabs/wacht-fe/service"
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/ua-parser/uap-go/uaparser"
@@ -277,9 +277,9 @@ func (s *AuthService) CreateUser(
 	secondFactorPolicy model.SecondFactorPolicy,
 	verified bool,
 ) model.User {
-	emailID := snowflake.ID()
+	emailID := idgen.NextID()
 	u := model.User{
-		Model:                 model.Model{ID: snowflake.ID()},
+		Model:                 model.Model{ID: idgen.NextID()},
 		FirstName:             b.FirstName,
 		LastName:              b.LastName,
 		Username:              b.Username,
@@ -300,7 +300,7 @@ func (s *AuthService) CreateUser(
 	}
 
 	if b.PhoneNumber != "" {
-		phoneNumberID := snowflake.ID()
+		phoneNumberID := idgen.NextID()
 		u.UserPhoneNumbers = append(
 			u.UserPhoneNumbers,
 			model.UserPhoneNumber{
@@ -325,7 +325,7 @@ func (s *AuthService) CreateSocialConnection(
 	token *oauth2.Token,
 ) model.SocialConnection {
 	return model.SocialConnection{
-		Model:              model.Model{ID: snowflake.ID()},
+		Model:              model.Model{ID: idgen.NextID()},
 		Provider:           provider,
 		EmailAddress:       email,
 		UserID:             userID,
@@ -846,7 +846,7 @@ func (s *AuthService) CheckAndAddUserToOrganizationByDomain(
 		return nil
 	}
 
-	membershipID := snowflake.ID()
+	membershipID := idgen.NextID()
 	membership := model.OrganizationMembership{
 		Model:          model.Model{ID: membershipID},
 		OrganizationID: org.ID,
@@ -865,7 +865,7 @@ func (s *AuthService) CheckAndAddUserToOrganizationByDomain(
 
 		if count == 0 {
 			workspaceMembership := model.WorkspaceMembership{
-				Model:                    model.Model{ID: snowflake.ID()},
+				Model:                    model.Model{ID: idgen.NextID()},
 				WorkspaceID:              *org.AutoAssignedWorkspaceID,
 				OrganizationID:           org.ID,
 				OrganizationMembershipID: membershipID,
@@ -912,7 +912,7 @@ func (s *AuthService) CreateSignupAttempt(
 
 	attempt := &model.SignupAttempt{
 		Model: model.Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		SessionID:        session.ID,
 		FirstName:        b.FirstName,
@@ -968,7 +968,7 @@ func (s *AuthService) CreateOAuthSignupAttempt(
 
 	attempt := &model.SignupAttempt{
 		Model: model.Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		SessionID:       session.ID,
 		FirstName:       firstName,
@@ -1001,11 +1001,11 @@ func (s *AuthService) CreateOAuthUser(
 		return nil, fmt.Errorf("attempt is not an OAuth signup")
 	}
 
-	primaryAddressID := snowflake.ID()
+	primaryAddressID := idgen.NextID()
 
 	u := model.User{
 		Model: model.Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		SchemaVersion:         model.SchemaVersionV1,
 		FirstName:             attempt.FirstName,
@@ -1024,7 +1024,7 @@ func (s *AuthService) CreateOAuthUser(
 			DeploymentID:         d.ID,
 		}},
 		SocialConnections: []model.SocialConnection{{
-			Model:              model.Model{ID: snowflake.ID()},
+			Model:              model.Model{ID: idgen.NextID()},
 			Provider:           attempt.SSOProvider,
 			EmailAddress:       attempt.Email,
 			UserEmailAddressID: primaryAddressID,
@@ -1034,7 +1034,7 @@ func (s *AuthService) CreateOAuthUser(
 	}
 
 	if attempt.PhoneNumber != "" {
-		phoneID := snowflake.ID()
+		phoneID := idgen.NextID()
 		u.UserPhoneNumbers = []model.UserPhoneNumber{{
 			Model:        model.Model{ID: phoneID},
 			PhoneNumber:  attempt.PhoneNumber,

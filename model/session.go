@@ -1,8 +1,6 @@
 package model
 
-import (
-	"github.com/godruoyi/go-snowflake"
-)
+import "github.com/ilabs/wacht-fe/pkg/idgen"
 
 type SignInAttemptStep string
 
@@ -30,7 +28,7 @@ type Session struct {
 func NewSession() *Session {
 	return &Session{
 		Model: Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 	}
 }

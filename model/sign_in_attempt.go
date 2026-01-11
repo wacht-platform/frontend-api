@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/godruoyi/go-snowflake"
+	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"gorm.io/datatypes"
 )
 
@@ -103,7 +103,7 @@ type SignInAttempt struct {
 func NewSignInAttempt(method SignInMethod) *SignInAttempt {
 	return &SignInAttempt{
 		Model: Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		Method:    method,
 		ExpiresAt: time.Now().UTC().Add(time.Minute * 10),

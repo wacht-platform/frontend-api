@@ -9,10 +9,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/godruoyi/go-snowflake"
 	"github.com/google/uuid"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/pkg/idgen"
 
 	"gorm.io/gorm"
 )
@@ -34,7 +34,7 @@ func (s *Service) CreateContext(
 ) (*model.AgentExecutionContext, error) {
 	context := &model.AgentExecutionContext{
 		Model: model.Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		DeploymentID:       deploymentID,
 		Title:              req.Title,
@@ -335,7 +335,7 @@ func (s *Service) GenerateLinkCode(deploymentID uint64, contextGroup string, int
 	expiresAt := time.Now().Add(15 * time.Minute)
 
 	linkCode := model.IntegrationLinkCode{
-		ID:              snowflake.ID(),
+		ID:              idgen.NextID(),
 		DeploymentID:    deploymentID,
 		ContextGroup:    contextGroup,
 		AgentID:         integration.AgentID,

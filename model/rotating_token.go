@@ -3,7 +3,7 @@ package model
 import (
 	"time"
 
-	"github.com/godruoyi/go-snowflake"
+	"github.com/ilabs/wacht-fe/pkg/idgen"
 )
 
 type RotatingToken struct {
@@ -27,7 +27,7 @@ func NewRotatingToken(
 ) *RotatingToken {
 	return &RotatingToken{
 		Model: Model{
-			ID: snowflake.ID(),
+			ID: idgen.NextID(),
 		},
 		SessionID:  sessionID,
 		ValidUntil: validUntil,

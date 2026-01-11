@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/godruoyi/go-snowflake"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"gorm.io/gorm"
 )
 
@@ -39,7 +39,7 @@ func (s *SCIMService) GenerateToken(connectionID, deploymentID, organizationID u
 	s.db.Where("enterprise_connection_id = ?", connectionID).Delete(&model.SCIMToken{})
 
 	token := &model.SCIMToken{
-		ID:                     snowflake.ID(),
+		ID:                     idgen.NextID(),
 		EnterpriseConnectionID: connectionID,
 		DeploymentID:           deploymentID,
 		OrganizationID:         organizationID,
@@ -124,8 +124,8 @@ func (s *SCIMService) CreateUser(
 		return nil, fmt.Errorf("email is required")
 	}
 
-	primaryAddressID := snowflake.ID()
-	userID := snowflake.ID()
+	primaryAddressID := idgen.NextID()
+	userID := idgen.NextID()
 
 	firstName := ""
 	lastName := ""
@@ -181,7 +181,7 @@ func (s *SCIMService) CreateUser(
 	}
 
 	mapping := model.SCIMExternalID{
-		ID:                     snowflake.ID(),
+		ID:                     idgen.NextID(),
 		EnterpriseConnectionID: connection.ID,
 		DeploymentID:           deployment.ID,
 		ExternalID:             externalID,
@@ -311,7 +311,7 @@ func (s *SCIMService) CreateGroup(
 	}
 
 	group := model.SCIMGroup{
-		ID:                     snowflake.ID(),
+		ID:                     idgen.NextID(),
 		EnterpriseConnectionID: connection.ID,
 		DeploymentID:           deploymentID,
 		OrganizationID:         connection.OrganizationID,
@@ -326,7 +326,7 @@ func (s *SCIMService) CreateGroup(
 
 	if err != nil {
 		role = model.OrganizationRole{
-			Model:          model.Model{ID: snowflake.ID()},
+			Model:          model.Model{ID: idgen.NextID()},
 			OrganizationID: &connection.OrganizationID,
 			Name:           scimGroup.DisplayName,
 			Permissions:    []string{"organization:member"},
@@ -443,7 +443,7 @@ func (s *SCIMService) addUserToOrganization(tx *gorm.DB, userID, organizationID 
 		return nil
 	}
 
-	membershipID := snowflake.ID()
+	membershipID := idgen.NextID()
 	membership := model.OrganizationMembership{
 		Model:          model.Model{ID: membershipID},
 		OrganizationID: organizationID,
