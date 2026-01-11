@@ -238,16 +238,13 @@ func (s *NatsService) publishTask(ctx context.Context, taskType string, payload 
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	// Publish task
-	taskPayload := map[string]interface{}{
-		"TaskType": taskType,
-		"TaskID":   fmt.Sprintf("%d", idgen.NextID()),
-		"Priority": 1,
-		"Retry":    3,
-		"Payload":  payloadBytes,
+	message := NatsTaskMessage{
+		TaskType: taskType,
+		TaskID:   fmt.Sprintf("%d", idgen.NextID()),
+		Payload:  payloadBytes,
 	}
 
-	messageBytes, err := json.Marshal(taskPayload)
+	messageBytes, err := json.Marshal(message)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
