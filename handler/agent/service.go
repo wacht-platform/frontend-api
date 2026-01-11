@@ -424,7 +424,7 @@ func (s *Service) GenerateConsentURL(deploymentID uint64, contextGroup string, i
 		}
 
 		return fmt.Sprintf(
-			"https://app.clickup.com/api/v2/oauth/authorize?client_id=%s&redirect_uri=%s&state=%s",
+			"https://app.clickup.com/api?client_id=%s&redirect_uri=%s&state=%s",
 			clientID,
 			"https://agentlink.wacht.services/service/clickup/consent/callback",
 			state,
