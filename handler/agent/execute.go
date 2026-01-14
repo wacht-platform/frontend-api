@@ -3,11 +3,18 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"mime/multipart"
+	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/gofiber/fiber/v2"
+	"github.com/ilabs/wacht-fe/config"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
@@ -16,8 +23,8 @@ import (
 )
 
 type ExecuteAgentRequest struct {
-	AgentName     string        `json:"agent_name,omitempty"`
-	ExecutionType ExecutionType `json:"execution_type"`
+	AgentName     string        `json:"agent_name,omitempty" form:"agent_name"`
+	ExecutionType ExecutionType `json:"execution_type" form:"execution_type"`
 }
 
 type ExecutionType struct {
@@ -28,7 +35,7 @@ type ExecutionType struct {
 }
 
 type NewMessageRequest struct {
-	Message string `json:"message"`
+	Message string `json:"message" form:"message"`
 }
 
 type UserInputResponseRequest struct {
@@ -47,10 +54,24 @@ type ExecuteAgentResponse struct {
 	ConversationID string `json:"conversation_id,omitempty"`
 }
 
+type FileData struct {
+	Filename string `json:"filename"`
+	MimeType string `json:"mime_type"`
+	Data     string `json:"data"`
+}
+
+type StoredFileData struct {
+	Filename  string  `json:"filename"`
+	MimeType  string  `json:"mime_type"`
+	URL       string  `json:"url"`
+	SizeBytes *uint64 `json:"size_bytes,omitempty"`
+}
+
 type ConversationContent struct {
-	Type       string  `json:"type"`
-	Message    string  `json:"message"`
-	SenderName *string `json:"sender_name,omitempty"`
+	Type       string           `json:"type"`
+	Message    string           `json:"message"`
+	SenderName *string          `json:"sender_name,omitempty"`
+	Files      []StoredFileData `json:"files,omitempty"`
 }
 
 func (h *Handler) ExecuteAgent(c *fiber.Ctx) error {
@@ -68,8 +89,26 @@ func (h *Handler) ExecuteAgent(c *fiber.Ctx) error {
 	}
 
 	var req ExecuteAgentRequest
+	var multipartFiles []*multipart.FileHeader
+
 	if err := c.BodyParser(&req); err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid request body")
+	}
+
+	contentType := c.Get("Content-Type")
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		if req.ExecutionType.NewMessage == nil && c.FormValue("message") != "" {
+			req.ExecutionType.NewMessage = &NewMessageRequest{
+				Message: c.FormValue("message"),
+			}
+		}
+
+		form, err := c.MultipartForm()
+		if err == nil {
+			if files, ok := form.File["files"]; ok {
+				multipartFiles = files
+			}
+		}
 	}
 
 	var agentSession model.AgentSession
@@ -96,7 +135,6 @@ func (h *Handler) ExecuteAgent(c *fiber.Ctx) error {
 			return handler.SendBadRequest(c, nil, "Agent not found: "+req.AgentName)
 		}
 
-		// Verify agent is in allowed list
 		agentAllowed := slices.Contains(agentSession.AgentIDs, int64(agent.ID))
 		if !agentAllowed {
 			return handler.SendUnauthorized(c, nil, "Agent not authorized for this session")
@@ -108,7 +146,7 @@ func (h *Handler) ExecuteAgent(c *fiber.Ctx) error {
 
 	switch {
 	case req.ExecutionType.NewMessage != nil:
-		return h.handleNewMessage(c, deployment.ID, contextID, agentID, req.ExecutionType.NewMessage, natsService)
+		return h.handleNewMessage(c, deployment.ID, contextID, agentID, req.ExecutionType.NewMessage, multipartFiles, natsService)
 
 	case req.ExecutionType.UserInputResponse != nil:
 		return h.handleUserInputResponse(c, deployment.ID, contextID, agentID, req.ExecutionType.UserInputResponse, natsService)
@@ -129,16 +167,84 @@ func (h *Handler) handleNewMessage(
 	deploymentID, contextID uint64,
 	agentID *int64,
 	req *NewMessageRequest,
+	multipartFiles []*multipart.FileHeader,
 	natsService *service.NatsService,
 ) error {
-	if req.Message == "" {
-		return handler.SendBadRequest(c, nil, "Message is required")
+	if req.Message == "" && len(multipartFiles) == 0 {
+		return handler.SendBadRequest(c, nil, "Message or files required")
+	}
+
+	var storedFiles []StoredFileData
+	if len(multipartFiles) > 0 {
+		if config.AgentStorageSession == nil {
+			return handler.SendInternalServerError(c, nil, "File storage not configured")
+		}
+
+		s3Client := s3.New(config.AgentStorageSession)
+		bucket := "wacht-agents"
+
+		for _, fileHeader := range multipartFiles {
+			file, err := fileHeader.Open()
+			if err != nil {
+				return handler.SendInternalServerError(c, err, "Failed to open file: "+fileHeader.Filename)
+			}
+			defer file.Close()
+
+			safeFilename := strings.ReplaceAll(fileHeader.Filename, "/", "_")
+			safeFilename = strings.ReplaceAll(safeFilename, "\\", "_")
+			safeFilename = strings.ReplaceAll(safeFilename, "..", "_")
+
+			uniqueFilename := fmt.Sprintf("%d_%s", idgen.NextID(), safeFilename)
+
+			key := fmt.Sprintf("%d/persistent/%d/uploads/%s",
+				deploymentID,
+				contextID,
+				uniqueFilename,
+			)
+
+			contentType := fileHeader.Header.Get("Content-Type")
+			if contentType == "" || contentType == "application/octet-stream" {
+				buffer := make([]byte, 512)
+				_, _ = file.Read(buffer)
+				contentType = http.DetectContentType(buffer)
+				file.Seek(0, 0)
+			}
+
+			_, err = s3Client.PutObject(&s3.PutObjectInput{
+				Bucket:      aws.String(bucket),
+				Key:         aws.String(key),
+				Body:        file,
+				ContentType: aws.String(contentType),
+			})
+			if err != nil {
+				return handler.SendInternalServerError(c, err, "Failed to upload file: "+fileHeader.Filename)
+			}
+
+			sizeBytes := uint64(fileHeader.Size)
+			storedFiles = append(storedFiles, StoredFileData{
+				Filename:  fileHeader.Filename,
+				MimeType:  contentType,
+				URL:       fmt.Sprintf("/uploads/%s", uniqueFilename),
+				SizeBytes: &sizeBytes,
+			})
+		}
 	}
 
 	conversationID := idgen.NextID()
+
+	message := req.Message
+	if message == "" && len(storedFiles) > 0 {
+		var fileNames []string
+		for _, f := range storedFiles {
+			fileNames = append(fileNames, f.Filename)
+		}
+		message = fmt.Sprintf("I've uploaded the following files: %s", strings.Join(fileNames, ", "))
+	}
+
 	content := ConversationContent{
 		Type:    "user_message",
-		Message: req.Message,
+		Message: message,
+		Files:   storedFiles,
 	}
 
 	contentJSON, err := json.Marshal(content)
