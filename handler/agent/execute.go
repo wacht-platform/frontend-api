@@ -111,13 +111,12 @@ func (h *Handler) ExecuteAgent(c *fiber.Ctx) error {
 		}
 	}
 
-	var agentSession model.AgentSession
-	if err := database.Connection.Where(
-		"session_id = ? AND deployment_id = ? AND deleted_at IS NULL",
-		session.ID, deployment.ID,
-	).First(&agentSession).Error; err != nil {
+	// Verify agent session using shared logic (avoids ad-hoc deleted_at checks)
+	agentSessionPtr, err := h.service.GetActiveAgentSession(session.ID, deployment.ID)
+	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active agent session. Please exchange your ticket first.")
 	}
+	agentSession := *agentSessionPtr
 
 	if agentSession.ExpiresAt != nil && agentSession.ExpiresAt.Before(time.Now()) {
 		return handler.SendUnauthorized(c, nil, "Agent session expired")
