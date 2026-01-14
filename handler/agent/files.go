@@ -13,7 +13,7 @@ import (
 )
 
 func (h *Handler) ServeFile(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentSession(c)
+	contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}

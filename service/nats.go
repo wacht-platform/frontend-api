@@ -456,16 +456,12 @@ func (s *NatsService) PublishBillingEvent(deploymentID, resourceID uint64, event
 
 // Agent execution types
 type AgentExecutionRequest struct {
-	DeploymentID  string             `json:"deployment_id"`
-	ContextID     string             `json:"context_id"`
-	AgentID       *string            `json:"agent_id,omitempty"`
-	AgentName     *string            `json:"agent_name,omitempty"`
-	ExecutionType AgentExecutionType `json:"execution_type"`
-}
-
-type AgentExecutionType struct {
-	Type           string `json:"type"` // "new_message" or "user_input_response"
-	ConversationID string `json:"conversation_id"`
+	DeploymentID   string  `json:"deployment_id"`
+	ContextID      string  `json:"context_id"`
+	AgentID        *string `json:"agent_id,omitempty"`
+	AgentName      *string `json:"agent_name,omitempty"`
+	Type           string  `json:"type"`
+	ConversationID string  `json:"conversation_id,omitempty"`
 }
 
 func (s *NatsService) PublishAgentExecution(
@@ -482,13 +478,11 @@ func (s *NatsService) PublishAgentExecution(
 	}
 
 	req := AgentExecutionRequest{
-		DeploymentID: fmt.Sprintf("%d", deploymentID),
-		ContextID:    fmt.Sprintf("%d", contextID),
-		AgentID:      agentIDStr,
-		ExecutionType: AgentExecutionType{
-			Type:           executionType,
-			ConversationID: fmt.Sprintf("%d", conversationID),
-		},
+		DeploymentID:   fmt.Sprintf("%d", deploymentID),
+		ContextID:      fmt.Sprintf("%d", contextID),
+		AgentID:        agentIDStr,
+		Type:           executionType,
+		ConversationID: fmt.Sprintf("%d", conversationID),
 	}
 
 	return s.publishTask(ctx, "agent.execution_request", req)
@@ -512,28 +506,22 @@ func (s *NatsService) PublishAgentExecutionWithResult(
 		DeploymentID: fmt.Sprintf("%d", deploymentID),
 		ContextID:    fmt.Sprintf("%d", contextID),
 		AgentID:      agentIDStr,
-		ExecutionType: AgentPlatformFunctionResultType{
-			Type:        "platform_function_result",
-			ExecutionID: executionID,
-			Result:      result,
-		},
+		Type:         "platform_function_result",
+		ExecutionID:  executionID,
+		Result:       result,
 	}
 
 	return s.publishTask(ctx, "agent.execution_request", req)
 }
 
 type AgentExecutionRequestWithResult struct {
-	DeploymentID  string                          `json:"deployment_id"`
-	ContextID     string                          `json:"context_id"`
-	AgentID       *string                         `json:"agent_id,omitempty"`
-	AgentName     *string                         `json:"agent_name,omitempty"`
-	ExecutionType AgentPlatformFunctionResultType `json:"execution_type"`
-}
-
-type AgentPlatformFunctionResultType struct {
-	Type        string                 `json:"type"`
-	ExecutionID string                 `json:"execution_id"`
-	Result      map[string]interface{} `json:"result"`
+	DeploymentID string                 `json:"deployment_id"`
+	ContextID    string                 `json:"context_id"`
+	AgentID      *string                `json:"agent_id,omitempty"`
+	AgentName    *string                `json:"agent_name,omitempty"`
+	Type         string                 `json:"type"`
+	ExecutionID  string                 `json:"execution_id"`
+	Result       map[string]interface{} `json:"result"`
 }
 
 func (s *NatsService) PublishRateLimit(payload []byte) error {

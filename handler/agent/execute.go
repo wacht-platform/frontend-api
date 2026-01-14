@@ -111,7 +111,6 @@ func (h *Handler) ExecuteAgent(c *fiber.Ctx) error {
 		}
 	}
 
-	// Verify agent session using shared logic (avoids ad-hoc deleted_at checks)
 	agentSessionPtr, err := h.service.GetActiveAgentSession(session.ID, deployment.ID)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active agent session. Please exchange your ticket first.")

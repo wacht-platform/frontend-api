@@ -18,28 +18,24 @@ func NewHandler() *Handler {
 	}
 }
 
-// verifyAgentSession authenticates via session cookie and AgentSession
-func (h *Handler) verifyAgentSession(c *fiber.Ctx) (string, *string, error) {
+func (h *Handler) verifyAgentSession(c *fiber.Ctx) (*string, error) {
 	session := handler.GetSession(c)
 	if session == nil {
-		return "", nil, fiber.NewError(fiber.StatusUnauthorized, "Session required")
+		return nil, fiber.NewError(fiber.StatusUnauthorized, "Session required")
 	}
 
 	deployment := handler.GetDeployment(c)
 
 	agentSession, err := h.service.GetActiveAgentSession(session.ID, deployment.ID)
 	if err != nil {
-		return "", nil, fiber.NewError(fiber.StatusUnauthorized, "No active agent session")
+		return nil, fiber.NewError(fiber.StatusUnauthorized, "No active agent session")
 	}
 
-	// For now, use "default" as agent name since AgentSession stores agent_ids not names
-	agentName := "default"
-
-	return agentName, &agentSession.ContextGroup, nil
+	return &agentSession.ContextGroup, nil
 }
 
 func (h *Handler) ListContexts(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentSession(c)
+	contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
@@ -62,7 +58,7 @@ func (h *Handler) ListContexts(c *fiber.Ctx) error {
 }
 
 func (h *Handler) CreateContext(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentSession(c)
+	contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
@@ -88,7 +84,7 @@ func (h *Handler) CreateContext(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetContext(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentSession(c)
+	contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
@@ -110,7 +106,7 @@ func (h *Handler) GetContext(c *fiber.Ctx) error {
 }
 
 func (h *Handler) DeleteContext(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentSession(c)
+	contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
@@ -131,7 +127,7 @@ func (h *Handler) DeleteContext(c *fiber.Ctx) error {
 }
 
 func (h *Handler) UpdateContext(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentSession(c)
+	contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
@@ -154,7 +150,7 @@ func (h *Handler) UpdateContext(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetContextMessages(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentSession(c)
+	contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
@@ -195,7 +191,7 @@ func (h *Handler) GetContextMessages(c *fiber.Ctx) error {
 
 // GetActiveIntegrations returns integrations active for the current context_group
 func (h *Handler) GetActiveIntegrations(c *fiber.Ctx) error {
-	agentName, contextGroup, err := h.verifyAgentSession(c)
+	contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
@@ -206,7 +202,7 @@ func (h *Handler) GetActiveIntegrations(c *fiber.Ctx) error {
 
 	deployment := handler.GetDeployment(c)
 
-	integrations, err := h.service.GetActiveIntegrations(deployment.ID, agentName, *contextGroup)
+	integrations, err := h.service.GetActiveIntegrations(deployment.ID, "", *contextGroup)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, err.Error())
 	}
@@ -215,7 +211,7 @@ func (h *Handler) GetActiveIntegrations(c *fiber.Ctx) error {
 }
 
 func (h *Handler) RemoveIntegration(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentSession(c)
+	contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
@@ -239,25 +235,8 @@ func (h *Handler) RemoveIntegration(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-// ListAvailableIntegrations lists all integrations available for the agent
-func (h *Handler) ListAvailableIntegrations(c *fiber.Ctx) error {
-	agentName, contextGroup, err := h.verifyAgentSession(c)
-	if err != nil {
-		return err
-	}
-
-	deployment := handler.GetDeployment(c)
-
-	integrations, err := h.service.ListAvailableIntegrations(deployment.ID, agentName, contextGroup)
-	if err != nil {
-		return handler.SendInternalServerError(c, nil, err.Error())
-	}
-
-	return handler.SendSuccess(c, integrations)
-}
-
 func (h *Handler) GenerateConsentURL(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentSession(c)
+	contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
