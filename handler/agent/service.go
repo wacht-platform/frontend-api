@@ -163,6 +163,31 @@ func (s *Service) DeleteContext(deploymentID uint64, contextGroup *string, conte
 	return nil
 }
 
+func (s *Service) UpdateContext(
+	deploymentID uint64,
+	contextGroup *string,
+	contextID uint64,
+	title string,
+) error {
+	query := s.db.Model(&model.AgentExecutionContext{}).
+		Where("id = ? AND deployment_id = ?", contextID, deploymentID)
+
+	if contextGroup != nil && *contextGroup != "" {
+		query = query.Where("context_group = ?", *contextGroup)
+	}
+
+	result := query.Update("title", title)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update context: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("context not found or access denied")
+	}
+
+	return nil
+}
+
 func (s *Service) GetContextMessages(
 	deploymentID uint64,
 	contextGroup *string,

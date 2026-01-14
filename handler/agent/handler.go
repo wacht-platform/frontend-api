@@ -134,6 +134,35 @@ func (h *Handler) DeleteContext(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
+func (h *Handler) UpdateContext(c *fiber.Ctx) error {
+	_, contextGroup, err := h.verifyAgentSession(c)
+	if err != nil {
+		return err
+	}
+
+	contextIDStr := c.Params("id")
+	contextID, err := strconv.ParseUint(contextIDStr, 10, 64)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, err.Error())
+	}
+
+	var req struct {
+		Title string `json:"title"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid request body")
+	}
+
+	deployment := handler.GetDeployment(c)
+
+	if err := h.service.UpdateContext(deployment.ID, contextGroup, contextID, req.Title); err != nil {
+		return handler.SendInternalServerError(c, nil, err.Error())
+	}
+
+	return handler.SendSuccess(c, map[string]string{})
+}
+
 func (h *Handler) GetContextMessages(c *fiber.Ctx) error {
 	_, contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
