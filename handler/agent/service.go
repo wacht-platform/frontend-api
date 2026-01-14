@@ -96,7 +96,7 @@ func (s *Service) ListContexts(
 
 	var contexts []model.AgentExecutionContext
 	if err := query.
-		Order("created_at DESC").
+		Order("last_activity_at DESC").
 		Limit(limit + 1).
 		Offset(offset).
 		Find(&contexts).Error; err != nil {
@@ -183,9 +183,19 @@ func (s *Service) GetContextMessages(
 		return nil, false, fmt.Errorf("failed to fetch context: %w", err)
 	}
 
+	// Filter to only include displayable message types
+	allowedTypes := []string{
+		"user_message",
+		"agent_response",
+		"assistant_acknowledgment",
+		"system_decision",
+		"user_input_request",
+	}
+
 	messagesQuery := s.db.Model(&model.Conversation{}).
+		Select("id, context_id, message_type, content - 'thought_signature' as content, timestamp, metadata").
 		Where("context_id = ?", contextID).
-		Where("message_type != ?", "execution_summary")
+		Where("content->>'type' IN ?", allowedTypes)
 
 	if beforeID != "" {
 		messagesQuery = messagesQuery.Where("id < ?", beforeID)
