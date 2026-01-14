@@ -5,11 +5,6 @@ import (
 	"time"
 )
 
-type CreateContextRequest struct {
-	Title              string  `json:"title"                         validate:"required"`
-	SystemInstructions *string `json:"system_instructions,omitempty"`
-}
-
 type ListContextsRequest struct {
 	Limit  int    `query:"limit"`
 	Offset int    `query:"offset"`

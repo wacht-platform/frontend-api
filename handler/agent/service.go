@@ -42,15 +42,16 @@ func (s *Service) GetActiveAgentSession(sessionID, deploymentID uint64) (*model.
 func (s *Service) CreateContext(
 	deploymentID uint64,
 	contextGroup *string,
-	req CreateContextRequest,
+	title string,
+	systemInstructions *string,
 ) (*model.AgentExecutionContext, error) {
 	context := &model.AgentExecutionContext{
 		Model: model.Model{
 			ID: idgen.NextID(),
 		},
 		DeploymentID:       deploymentID,
-		Title:              req.Title,
-		SystemInstructions: req.SystemInstructions,
+		Title:              title,
+		SystemInstructions: systemInstructions,
 		ContextGroup:       contextGroup,
 		Status:             model.ExecutionStatusIdle,
 		LastActivityAt:     time.Now(),

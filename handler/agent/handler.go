@@ -77,14 +77,9 @@ func (h *Handler) CreateContext(c *fiber.Ctx) error {
 		systemInstructions = &si
 	}
 
-	req := CreateContextRequest{
-		Title:              title,
-		SystemInstructions: systemInstructions,
-	}
-
 	deployment := handler.GetDeployment(c)
 
-	context, err := h.service.CreateContext(deployment.ID, contextGroup, req)
+	context, err := h.service.CreateContext(deployment.ID, contextGroup, title, systemInstructions)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, err.Error())
 	}
@@ -147,17 +142,11 @@ func (h *Handler) UpdateContext(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, err.Error())
 	}
 
-	var req struct {
-		Title string `json:"title"`
-	}
-
-	if err := c.BodyParser(&req); err != nil {
-		return handler.SendBadRequest(c, nil, "Invalid request body")
-	}
+	title := c.FormValue("title")
 
 	deployment := handler.GetDeployment(c)
 
-	if err := h.service.UpdateContext(deployment.ID, contextGroup, contextID, req.Title); err != nil {
+	if err := h.service.UpdateContext(deployment.ID, contextGroup, contextID, title); err != nil {
 		return handler.SendInternalServerError(c, nil, err.Error())
 	}
 

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"time"
 
@@ -96,13 +97,7 @@ func (h *Handler) ExecuteAgent(c *fiber.Ctx) error {
 		}
 
 		// Verify agent is in allowed list
-		agentAllowed := false
-		for _, allowedID := range agentSession.AgentIDs {
-			if allowedID == int64(agent.ID) {
-				agentAllowed = true
-				break
-			}
-		}
+		agentAllowed := slices.Contains(agentSession.AgentIDs, int64(agent.ID))
 		if !agentAllowed {
 			return handler.SendUnauthorized(c, nil, "Agent not authorized for this session")
 		}
