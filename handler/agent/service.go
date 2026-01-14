@@ -11,6 +11,7 @@ import (
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/pkg/idgen"
+	"github.com/lib/pq"
 
 	"gorm.io/gorm"
 )
@@ -432,4 +433,29 @@ func (s *Service) GenerateConsentURL(deploymentID uint64, contextGroup string, i
 	default:
 		return "", "", fmt.Errorf("integration type '%s' does not support OAuth consent flow", integration.IntegrationType)
 	}
+}
+
+func (s *Service) GetAllowlistedAgents(deploymentID uint64, agentIDs []int64) ([]AgentWithIntegrations, error) {
+	var agents []model.AiAgent
+	if err := s.db.Where("deployment_id = ? AND id = ANY(?)", deploymentID, pq.Int64Array(agentIDs)).Find(&agents).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch agents: %w", err)
+	}
+
+	var result []AgentWithIntegrations
+
+	for _, agent := range agents {
+		var integrations []model.AgentIntegration
+		if err := s.db.Where("deployment_id = ? AND agent_id = ?", deploymentID, agent.ID).Find(&integrations).Error; err != nil {
+			return nil, fmt.Errorf("failed to fetch integrations for agent %d: %w", agent.ID, err)
+		}
+
+		result = append(result, AgentWithIntegrations{
+			ID:           fmt.Sprintf("%d", agent.ID),
+			Name:         agent.Name,
+			Description:  agent.Description,
+			Integrations: integrations,
+		})
+	}
+
+	return result, nil
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/handler"
+	"github.com/ilabs/wacht-fe/model"
 )
 
 type Handler struct {
@@ -296,4 +297,29 @@ func (h *Handler) GenerateConsentURL(c *fiber.Ctx) error {
 		"state":       state,
 		"expires_in":  900,
 	})
+}
+
+func (h *Handler) getAgentSession(c *fiber.Ctx) (*model.AgentSession, error) {
+	session := handler.GetSession(c)
+	if session == nil {
+		return nil, fiber.NewError(fiber.StatusUnauthorized, "Session required")
+	}
+	deployment := handler.GetDeployment(c)
+	return h.service.GetActiveAgentSession(session.ID, deployment.ID)
+}
+
+func (h *Handler) ListAgents(c *fiber.Ctx) error {
+	agentSession, err := h.getAgentSession(c)
+	if err != nil {
+		return fiber.NewError(fiber.StatusUnauthorized, "No active agent session")
+	}
+
+	deployment := handler.GetDeployment(c)
+
+	agents, err := h.service.GetAllowlistedAgents(deployment.ID, agentSession.AgentIDs)
+	if err != nil {
+		return handler.SendInternalServerError(c, nil, err.Error())
+	}
+
+	return handler.SendSuccess(c, agents)
 }

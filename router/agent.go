@@ -11,6 +11,7 @@ func setupAgentRoutes(app *fiber.App) {
 	agentGroup := app.Group("/api/agent")
 
 	agentGroup.Get("/contexts", h.ListContexts)
+	agentGroup.Get("/agents", h.ListAgents)
 	agentGroup.Post("/contexts", h.CreateContext)
 	agentGroup.Get("/contexts/:id", h.GetContext)
 	agentGroup.Patch("/contexts/:id", h.UpdateContext)
