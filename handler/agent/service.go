@@ -25,6 +25,19 @@ func NewService() *Service {
 	}
 }
 
+// GetActiveAgentSession retrieves an active agent session for the given session and deployment
+func (s *Service) GetActiveAgentSession(sessionID, deploymentID uint64) (*model.AgentSession, error) {
+	var agentSession model.AgentSession
+	err := s.db.Where(
+		"session_id = ? AND deployment_id = ? AND (expires_at IS NULL OR expires_at > ?)",
+		sessionID, deploymentID, time.Now(),
+	).First(&agentSession).Error
+	if err != nil {
+		return nil, err
+	}
+	return &agentSession, nil
+}
+
 func (s *Service) CreateContext(
 	deploymentID uint64,
 	contextGroup *string,

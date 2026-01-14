@@ -5,7 +5,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/handler"
-	"github.com/ilabs/wacht-fe/utils"
 )
 
 type Handler struct {
@@ -18,40 +17,28 @@ func NewHandler() *Handler {
 	}
 }
 
-func (h *Handler) verifyAgentToken(c *fiber.Ctx) (string, *string, error) {
-	token := c.Query("token")
-	if token == "" {
-		return "", nil, fiber.NewError(fiber.StatusUnauthorized, "Token required")
+// verifyAgentSession authenticates via session cookie and AgentSession
+func (h *Handler) verifyAgentSession(c *fiber.Ctx) (string, *string, error) {
+	session := handler.GetSession(c)
+	if session == nil {
+		return "", nil, fiber.NewError(fiber.StatusUnauthorized, "Session required")
 	}
 
 	deployment := handler.GetDeployment(c)
 
-	if deployment.KepPair == nil {
-		return "", nil, fiber.NewError(fiber.StatusInternalServerError, "Deployment keypair not configured")
-	}
-
-	claims, err := utils.VerifyJWT(token, *deployment.KepPair, deployment.BackendHost)
+	agentSession, err := h.service.GetActiveAgentSession(session.ID, deployment.ID)
 	if err != nil {
-		return "", nil, fiber.NewError(fiber.StatusUnauthorized, "Invalid token")
+		return "", nil, fiber.NewError(fiber.StatusUnauthorized, "No active agent session")
 	}
 
-	audiences, ok := claims.Audience()
-	if !ok || len(audiences) == 0 || audiences[0] == "" {
-		return "", nil, fiber.NewError(fiber.StatusUnauthorized, "Invalid token: missing audience (agent name)")
-	}
-	agentName := audiences[0]
+	// For now, use "default" as agent name since AgentSession stores agent_ids not names
+	agentName := "default"
 
-	subject, ok := claims.Subject()
-	if !ok || subject == "" {
-		return "", nil, fiber.NewError(fiber.StatusUnauthorized, "Invalid token: missing subject (context group)")
-	}
-	contextGroup := subject
-
-	return agentName, &contextGroup, nil
+	return agentName, &agentSession.ContextGroup, nil
 }
 
 func (h *Handler) ListContexts(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentToken(c)
+	_, contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
@@ -74,7 +61,7 @@ func (h *Handler) ListContexts(c *fiber.Ctx) error {
 }
 
 func (h *Handler) CreateContext(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentToken(c)
+	_, contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
@@ -105,7 +92,7 @@ func (h *Handler) CreateContext(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetContext(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentToken(c)
+	_, contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
@@ -127,7 +114,7 @@ func (h *Handler) GetContext(c *fiber.Ctx) error {
 }
 
 func (h *Handler) DeleteContext(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentToken(c)
+	_, contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
@@ -148,7 +135,7 @@ func (h *Handler) DeleteContext(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetContextMessages(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentToken(c)
+	_, contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
@@ -189,7 +176,7 @@ func (h *Handler) GetContextMessages(c *fiber.Ctx) error {
 
 // GetActiveIntegrations returns integrations active for the current context_group
 func (h *Handler) GetActiveIntegrations(c *fiber.Ctx) error {
-	agentName, contextGroup, err := h.verifyAgentToken(c)
+	agentName, contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
@@ -209,7 +196,7 @@ func (h *Handler) GetActiveIntegrations(c *fiber.Ctx) error {
 }
 
 func (h *Handler) RemoveIntegration(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentToken(c)
+	_, contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
@@ -235,7 +222,7 @@ func (h *Handler) RemoveIntegration(c *fiber.Ctx) error {
 
 // ListAvailableIntegrations lists all integrations available for the agent
 func (h *Handler) ListAvailableIntegrations(c *fiber.Ctx) error {
-	agentName, contextGroup, err := h.verifyAgentToken(c)
+	agentName, contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
@@ -251,7 +238,7 @@ func (h *Handler) ListAvailableIntegrations(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GenerateConsentURL(c *fiber.Ctx) error {
-	_, contextGroup, err := h.verifyAgentToken(c)
+	_, contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
 		return err
 	}
