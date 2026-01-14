@@ -210,7 +210,7 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token, deployment model.Deployment)
 		}
 
 		// Schedule token cleanup via NATS
-		natsService, err := service.NewNatsService()
+		natsService := service.GetNATS()
 		if err == nil {
 			natsService.ScheduleTokenCleanup(uint64(rotatingToken.ID), sessionID, 1)
 		}

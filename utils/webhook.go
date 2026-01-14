@@ -7,11 +7,7 @@ import (
 )
 
 func PublishWebhookEvent(deploymentID uint64, eventType string, entityID uint64, entityType string) {
-	natsService, err := service.NewNatsService()
-	if err != nil {
-		log.Printf("[WEBHOOK ERROR] Failed to create NATS service for event '%s': %v", eventType, err)
-		return
-	}
+	natsService := service.GetNATS()
 
 	go func() {
 		payload := map[string]interface{}{

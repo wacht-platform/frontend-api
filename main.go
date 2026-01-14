@@ -13,6 +13,7 @@ import (
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"github.com/ilabs/wacht-fe/router"
+	"github.com/ilabs/wacht-fe/service"
 )
 
 func main() {
@@ -22,6 +23,11 @@ func main() {
 	err := database.InitConnection()
 	if err != nil {
 		log.Fatal("Error connecting to database: ", err)
+	}
+
+	err = service.InitNATS()
+	if err != nil {
+		log.Fatal("Error connecting to NATS: ", err)
 	}
 
 	app := fiber.New(fiber.Config{

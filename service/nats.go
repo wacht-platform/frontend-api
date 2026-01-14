@@ -178,9 +178,9 @@ type BillingEventTask struct {
 
 var natsService *NatsService
 
-func NewNatsService() (*NatsService, error) {
+func InitNATS() error {
 	if natsService != nil {
-		return natsService, nil
+		return nil
 	}
 
 	natsURL := os.Getenv("NATS_URL")
@@ -198,13 +198,13 @@ func NewNatsService() (*NatsService, error) {
 		}),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to NATS: %w", err)
+		return fmt.Errorf("failed to connect to NATS: %w", err)
 	}
 
 	js, err := jetstream.New(nc)
 	if err != nil {
 		nc.Close()
-		return nil, fmt.Errorf("failed to create JetStream context: %w", err)
+		return fmt.Errorf("failed to create JetStream context: %w", err)
 	}
 
 	ctx := context.Background()
@@ -220,7 +220,7 @@ func NewNatsService() (*NatsService, error) {
 		})
 		if err != nil {
 			nc.Close()
-			return nil, fmt.Errorf("failed to create stream: %w", err)
+			return fmt.Errorf("failed to create stream: %w", err)
 		}
 	}
 
@@ -229,7 +229,14 @@ func NewNatsService() (*NatsService, error) {
 		js: js,
 	}
 
-	return natsService, nil
+	return nil
+}
+
+func GetNATS() *NatsService {
+	if natsService == nil {
+		panic("NATS service not initialized")
+	}
+	return natsService
 }
 
 func (s *NatsService) publishTask(ctx context.Context, taskType string, payload interface{}) error {
@@ -445,6 +452,88 @@ func (s *NatsService) PublishBillingEvent(deploymentID, resourceID uint64, event
 		ResourceID:   resourceID,
 	}
 	return s.publishTask(context.Background(), string(BillingEvent), task)
+}
+
+// Agent execution types
+type AgentExecutionRequest struct {
+	DeploymentID  string             `json:"deployment_id"`
+	ContextID     string             `json:"context_id"`
+	AgentID       *string            `json:"agent_id,omitempty"`
+	AgentName     *string            `json:"agent_name,omitempty"`
+	ExecutionType AgentExecutionType `json:"execution_type"`
+}
+
+type AgentExecutionType struct {
+	Type           string `json:"type"` // "new_message" or "user_input_response"
+	ConversationID string `json:"conversation_id"`
+}
+
+func (s *NatsService) PublishAgentExecution(
+	ctx context.Context,
+	deploymentID, contextID uint64,
+	agentID *int64,
+	conversationID uint64,
+	executionType string,
+) error {
+	var agentIDStr *string
+	if agentID != nil {
+		str := fmt.Sprintf("%d", *agentID)
+		agentIDStr = &str
+	}
+
+	req := AgentExecutionRequest{
+		DeploymentID: fmt.Sprintf("%d", deploymentID),
+		ContextID:    fmt.Sprintf("%d", contextID),
+		AgentID:      agentIDStr,
+		ExecutionType: AgentExecutionType{
+			Type:           executionType,
+			ConversationID: fmt.Sprintf("%d", conversationID),
+		},
+	}
+
+	return s.publishTask(ctx, "agent.execution_request", req)
+}
+
+// PublishAgentExecutionWithResult publishes a platform function result execution request
+func (s *NatsService) PublishAgentExecutionWithResult(
+	ctx context.Context,
+	deploymentID, contextID uint64,
+	agentID *int64,
+	executionID string,
+	result map[string]interface{},
+) error {
+	var agentIDStr *string
+	if agentID != nil {
+		str := fmt.Sprintf("%d", *agentID)
+		agentIDStr = &str
+	}
+
+	req := AgentExecutionRequestWithResult{
+		DeploymentID: fmt.Sprintf("%d", deploymentID),
+		ContextID:    fmt.Sprintf("%d", contextID),
+		AgentID:      agentIDStr,
+		ExecutionType: AgentPlatformFunctionResultType{
+			Type:        "platform_function_result",
+			ExecutionID: executionID,
+			Result:      result,
+		},
+	}
+
+	return s.publishTask(ctx, "agent.execution_request", req)
+}
+
+type AgentExecutionRequestWithResult struct {
+	DeploymentID  string                          `json:"deployment_id"`
+	ContextID     string                          `json:"context_id"`
+	AgentID       *string                         `json:"agent_id,omitempty"`
+	AgentName     *string                         `json:"agent_name,omitempty"`
+	ExecutionType AgentPlatformFunctionResultType `json:"execution_type"`
+}
+
+type AgentPlatformFunctionResultType struct {
+	Type        string                 `json:"type"`
+	ExecutionID string                 `json:"execution_id"`
+	Result      map[string]interface{} `json:"result"`
 }
 
 func (s *NatsService) PublishRateLimit(payload []byte) error {

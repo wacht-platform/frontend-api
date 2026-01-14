@@ -38,10 +38,7 @@ type AuthService struct {
 }
 
 func NewAuthService() *AuthService {
-	natsService, err := service.NewNatsService()
-	if err != nil {
-		panic(fmt.Sprintf("Failed to initialize NATS service: %v", err))
-	}
+	natsService := service.GetNATS()
 
 	return &AuthService{
 		db:   database.Connection,

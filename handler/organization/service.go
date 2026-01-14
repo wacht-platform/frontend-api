@@ -31,11 +31,7 @@ type OrgService struct {
 }
 
 func NewOrgService() *OrgService {
-	natsService, err := service.NewNatsService()
-	if err != nil {
-		// Log error and panic - NATS is required for invitations
-		panic(fmt.Sprintf("Failed to initialize NATS service: %v", err))
-	}
+	natsService := service.GetNATS()
 
 	return &OrgService{
 		s3:   service.NewS3Service(),

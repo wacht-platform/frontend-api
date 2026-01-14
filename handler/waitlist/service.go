@@ -17,10 +17,7 @@ type WaitlistService struct {
 }
 
 func NewWaitlistService() *WaitlistService {
-	natsService, err := service.NewNatsService()
-	if err != nil {
-		panic("Failed to initialize NATS service: " + err.Error())
-	}
+	natsService := service.GetNATS()
 
 	return &WaitlistService{
 		db:   database.Connection,

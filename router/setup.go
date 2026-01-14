@@ -35,7 +35,7 @@ func setupRoutes(app *fiber.App) {
 
 func setupMiddleware(app *fiber.App) {
 	app.Use(recover.New())
-	natsService, _ := service.NewNatsService()
+	natsService := service.GetNATS()
 	app.Use(limiter.New(limiter.Config{
 		Max:        20,
 		Expiration: 1 * time.Minute,

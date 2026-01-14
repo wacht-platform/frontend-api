@@ -255,9 +255,8 @@ func (h *Handler) SwitchOrganization(
 	tx.Commit()
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
-	if natsService, err := service.NewNatsService(); err == nil {
-		go natsService.PublishBillingEvent(deployment.ID, orgIDuint64, "organization_accessed")
-	}
+	natsService := service.GetNATS()
+	go natsService.PublishBillingEvent(deployment.ID, orgIDuint64, "organization_accessed")
 
 	return handler.SendSuccess(c, session)
 }
@@ -365,9 +364,8 @@ func (h *Handler) SwitchWorkspace(
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	deployment = handler.GetDeployment(c)
-	if natsService, err := service.NewNatsService(); err == nil {
-		go natsService.PublishBillingEvent(deployment.ID, workspaceIDuint64, "workspace_accessed")
-	}
+	natsService := service.GetNATS()
+	go natsService.PublishBillingEvent(deployment.ID, workspaceIDuint64, "workspace_accessed")
 
 	return handler.SendSuccess(c, session)
 }

@@ -9,12 +9,7 @@ import (
 )
 
 func PublishSignInEvent(deploymentID uint64, user *model.User, authMethod string, identifier *string, c *fiber.Ctx) {
-	natsService, err := service.NewNatsService()
-	if err != nil {
-		log.Printf("[ANALYTICS ERROR] Failed to create NATS service for signin event: %v", err)
-		return
-	}
-
+	natsService := service.GetNATS()
 	ipAddress := c.IP()
 
 	go func() {
@@ -47,12 +42,7 @@ func PublishSignInEvent(deploymentID uint64, user *model.User, authMethod string
 }
 
 func PublishSignUpEvent(deploymentID uint64, user *model.User, authMethod string, identifier *string, c *fiber.Ctx) {
-	natsService, err := service.NewNatsService()
-	if err != nil {
-		log.Printf("[ANALYTICS ERROR] Failed to create NATS service for signup event: %v", err)
-		return
-	}
-
+	natsService := service.GetNATS()
 	ipAddress := c.IP()
 
 	go func() {
@@ -85,11 +75,7 @@ func PublishSignUpEvent(deploymentID uint64, user *model.User, authMethod string
 }
 
 func PublishOrganizationCreatedEvent(deploymentID uint64, userID *uint64) {
-	natsService, err := service.NewNatsService()
-	if err != nil {
-		log.Printf("[ANALYTICS ERROR] Failed to create NATS service for organization_created event: %v", err)
-		return
-	}
+	natsService := service.GetNATS()
 
 	go func() {
 		if err := natsService.PublishAnalyticsEvent(
@@ -110,11 +96,7 @@ func PublishOrganizationCreatedEvent(deploymentID uint64, userID *uint64) {
 }
 
 func PublishWorkspaceCreatedEvent(deploymentID uint64, userID *uint64) {
-	natsService, err := service.NewNatsService()
-	if err != nil {
-		log.Printf("[ANALYTICS ERROR] Failed to create NATS service for workspace_created event: %v", err)
-		return
-	}
+	natsService := service.GetNATS()
 
 	go func() {
 		if err := natsService.PublishAnalyticsEvent(

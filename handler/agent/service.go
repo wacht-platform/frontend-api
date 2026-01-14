@@ -2,10 +2,8 @@ package agent
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"os"
 	"time"
 
@@ -315,53 +313,6 @@ func (s *Service) ListAvailableIntegrations(deploymentID uint64, agentName strin
 	}
 
 	return result, nil
-}
-
-func (s *Service) GenerateLinkCode(deploymentID uint64, contextGroup string, integrationID uint64) (string, time.Time, error) {
-	if contextGroup == "" {
-		return "", time.Time{}, fmt.Errorf("context group (agent name) is required")
-	}
-
-	var integration model.AgentIntegration
-	if err := s.db.Where("id = ? AND deployment_id = ?", integrationID, deploymentID).First(&integration).Error; err != nil {
-		return "", time.Time{}, fmt.Errorf("integration not found or access denied")
-	}
-
-	code, err := generateAlphanumericCode(6)
-	if err != nil {
-		return "", time.Time{}, fmt.Errorf("failed to generate code: %w", err)
-	}
-
-	expiresAt := time.Now().Add(15 * time.Minute)
-
-	linkCode := model.IntegrationLinkCode{
-		ID:              idgen.NextID(),
-		DeploymentID:    deploymentID,
-		ContextGroup:    contextGroup,
-		AgentID:         integration.AgentID,
-		IntegrationType: integration.IntegrationType,
-		Code:            code,
-		ExpiresAt:       expiresAt,
-	}
-
-	if err := s.db.Create(&linkCode).Error; err != nil {
-		return "", time.Time{}, fmt.Errorf("failed to save link code: %w", err)
-	}
-
-	return code, expiresAt, nil
-}
-
-func generateAlphanumericCode(length int) (string, error) {
-	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	result := make([]byte, length)
-	for i := range result {
-		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-		if err != nil {
-			return "", err
-		}
-		result[i] = charset[num.Int64()]
-	}
-	return string(result), nil
 }
 
 func (s *Service) GenerateConsentURL(deploymentID uint64, contextGroup string, integrationID uint64, redirectURL string) (string, string, error) {
