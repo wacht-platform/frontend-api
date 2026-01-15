@@ -189,7 +189,7 @@ func (h *Handler) GetContextMessages(c *fiber.Ctx) error {
 	})
 }
 
-// GetActiveIntegrations returns integrations active for the current context_group
+// GetActiveIntegrations returns integrations active for the current context_group and agent
 func (h *Handler) GetActiveIntegrations(c *fiber.Ctx) error {
 	contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
@@ -200,9 +200,14 @@ func (h *Handler) GetActiveIntegrations(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Context group required in token")
 	}
 
+	agentName := c.Query("agent_name")
+	if agentName == "" {
+		return handler.SendBadRequest(c, nil, "agent_name query parameter required")
+	}
+
 	deployment := handler.GetDeployment(c)
 
-	integrations, err := h.service.GetActiveIntegrations(deployment.ID, "", *contextGroup)
+	integrations, err := h.service.GetActiveIntegrations(deployment.ID, agentName, *contextGroup)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, err.Error())
 	}
