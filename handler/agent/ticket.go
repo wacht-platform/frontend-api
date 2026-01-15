@@ -49,7 +49,6 @@ func (h *Handler) ExchangeConnectionTicket(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to parse ticket")
 	}
 
-	// Parse deployment ID from string to uint64
 	deploymentID, err := strconv.ParseUint(payload.DeploymentID, 10, 64)
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid deployment ID in ticket")
@@ -90,6 +89,13 @@ func (h *Handler) ExchangeConnectionTicket(c *fiber.Ctx) error {
 			return handler.SendBadRequest(c, err, fmt.Sprintf("Invalid agent ID: %s", idStr))
 		}
 		agentIDs[i] = id
+	}
+
+	now := time.Now()
+	if err := database.Connection.Model(&model.AgentSession{}).
+		Where("session_id = ? AND (expires_at IS NULL OR expires_at > ?)", session.ID, now).
+		Update("expires_at", now).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to expire old sessions")
 	}
 
 	agentSession := model.NewAgentSession(
