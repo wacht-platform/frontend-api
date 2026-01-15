@@ -13,11 +13,11 @@ import (
 )
 
 type TicketPayload struct {
-	DeploymentID uint64  `json:"deployment_id"`
-	Identifier   string  `json:"identifier"`
-	ContextGroup *string `json:"context_group"`
-	AgentIDs     []int64 `json:"agent_ids"`
-	ExpiresAt    *int64  `json:"expires_at"`
+	DeploymentID uint64   `json:"deployment_id"`
+	Identifier   string   `json:"identifier"`
+	ContextGroup *string  `json:"context_group"`
+	AgentIDs     []string `json:"agent_ids"`
+	ExpiresAt    *int64   `json:"expires_at"`
 }
 
 type ExchangeTicketResponse struct {
@@ -77,12 +77,21 @@ func (h *Handler) ExchangeConnectionTicket(c *fiber.Ctx) error {
 		expiresAt = &t
 	}
 
+	agentIDs := make([]int64, len(payload.AgentIDs))
+	for i, idStr := range payload.AgentIDs {
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			return handler.SendBadRequest(c, err, fmt.Sprintf("Invalid agent ID: %s", idStr))
+		}
+		agentIDs[i] = id
+	}
+
 	agentSession := model.NewAgentSession(
 		session.ID,
 		deployment.ID,
 		identifier,
 		contextGroup,
-		payload.AgentIDs,
+		agentIDs,
 		expiresAt,
 	)
 
