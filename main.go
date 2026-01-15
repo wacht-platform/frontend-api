@@ -37,6 +37,7 @@ func main() {
 		EnableTrustedProxyCheck: true,
 		TrustedProxies:          []string{config.GetEnv("LOAD_BALANCER_IP", "127.0.0.1")},
 		ReadBufferSize:          16384,
+		BodyLimit:               50 * 1024 * 1024,
 	})
 
 	router.Setup(app)

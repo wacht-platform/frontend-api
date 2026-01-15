@@ -20,7 +20,7 @@ func initAgentStorageSession() error {
 
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(gatewayURL),
-		Region:           aws.String("us-east-1"),
+		Region:           aws.String("auto"),
 		S3ForcePathStyle: aws.Bool(true),
 		Credentials: credentials.NewStaticCredentials(
 			os.Getenv("AGENT_STORAGE_ACCESS_KEY"),
