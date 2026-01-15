@@ -39,7 +39,7 @@ func (h *Handler) ExchangeConnectionTicket(c *fiber.Ctx) error {
 	}
 
 	redisKey := fmt.Sprintf("agent:ticket:%s", ticket)
-	ticketJSON, err := database.Redis.GetDel(c.Context(), redisKey).Result()
+	ticketJSON, err := database.Redis.Get(c.Context(), redisKey).Result()
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "Invalid or expired ticket")
 	}
