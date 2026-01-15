@@ -189,7 +189,6 @@ func (h *Handler) GetContextMessages(c *fiber.Ctx) error {
 	})
 }
 
-// GetActiveIntegrations returns integrations active for the current context_group and agent
 func (h *Handler) GetActiveIntegrations(c *fiber.Ctx) error {
 	contextGroup, err := h.verifyAgentSession(c)
 	if err != nil {
