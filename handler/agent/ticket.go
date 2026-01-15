@@ -13,7 +13,7 @@ import (
 )
 
 type TicketPayload struct {
-	DeploymentID uint64   `json:"deployment_id"`
+	DeploymentID string   `json:"deployment_id"`
 	Identifier   string   `json:"identifier"`
 	ContextGroup *string  `json:"context_group"`
 	AgentIDs     []string `json:"agent_ids"`
@@ -49,7 +49,13 @@ func (h *Handler) ExchangeConnectionTicket(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to parse ticket")
 	}
 
-	if payload.DeploymentID != deployment.ID {
+	// Parse deployment ID from string to uint64
+	deploymentID, err := strconv.ParseUint(payload.DeploymentID, 10, 64)
+	if err != nil {
+		return handler.SendBadRequest(c, err, "Invalid deployment ID in ticket")
+	}
+
+	if deploymentID != deployment.ID {
 		return handler.SendUnauthorized(c, nil, "Ticket not valid for this deployment")
 	}
 

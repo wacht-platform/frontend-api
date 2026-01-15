@@ -15,7 +15,7 @@ const (
 )
 
 type AgentSession struct {
-	Model
+	ID           uint64                 `gorm:"primarykey"              json:"id,string"`
 	SessionID    uint64                 `json:"session_id,string" gorm:"index;not null"`
 	DeploymentID uint64                 `json:"deployment_id,string" gorm:"index;not null"`
 	Identifier   AgentSessionIdentifier `json:"identifier" gorm:"type:varchar(20);not null"`
@@ -33,9 +33,7 @@ func NewAgentSession(
 	expiresAt *time.Time,
 ) *AgentSession {
 	return &AgentSession{
-		Model: Model{
-			ID: idgen.NextID(),
-		},
+		ID:           idgen.NextID(),
 		SessionID:    sessionID,
 		DeploymentID: deploymentID,
 		Identifier:   identifier,
