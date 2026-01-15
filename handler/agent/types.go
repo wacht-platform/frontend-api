@@ -12,3 +12,9 @@ type AgentWithIntegrations struct {
 type ListAgentsResponse struct {
 	Agents []AgentWithIntegrations `json:"agents"`
 }
+
+type AgentSessionResponse struct {
+	SessionID    string                  `json:"session_id"`
+	ContextGroup string                  `json:"context_group"`
+	Agents       []AgentWithIntegrations `json:"agents"`
+}

@@ -280,7 +280,7 @@ func (h *Handler) getAgentSession(c *fiber.Ctx) (*model.AgentSession, error) {
 	return h.service.GetActiveAgentSession(session.ID, deployment.ID)
 }
 
-func (h *Handler) ListAgents(c *fiber.Ctx) error {
+func (h *Handler) GetSession(c *fiber.Ctx) error {
 	agentSession, err := h.getAgentSession(c)
 	if err != nil {
 		return fiber.NewError(fiber.StatusUnauthorized, "No active agent session")
@@ -293,5 +293,9 @@ func (h *Handler) ListAgents(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, nil, err.Error())
 	}
 
-	return handler.SendSuccess(c, agents)
+	return handler.SendSuccess(c, AgentSessionResponse{
+		SessionID:    strconv.FormatUint(agentSession.ID, 10),
+		ContextGroup: agentSession.ContextGroup,
+		Agents:       agents,
+	})
 }
