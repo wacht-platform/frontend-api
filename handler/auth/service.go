@@ -19,7 +19,6 @@ import (
 	"slices"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/config"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
@@ -33,16 +32,19 @@ import (
 )
 
 type AuthService struct {
-	db   *gorm.DB
-	nats *service.NatsService
+	db      *gorm.DB
+	nats    *service.NatsService
+	prelude *service.PreludeService
 }
 
 func NewAuthService() *AuthService {
 	natsService := service.GetNATS()
+	preludeService := service.GetPrelude()
 
 	return &AuthService{
-		db:   database.Connection,
-		nats: natsService,
+		db:      database.Connection,
+		nats:    natsService,
+		prelude: preludeService,
 	}
 }
 
@@ -636,17 +638,21 @@ func (s *AuthService) SendSmsOTPVerificationAsync(
 	countryCode string,
 	userID uint64,
 	deployment model.Deployment,
+	clientIP string,
+	userAgent string,
 ) error {
-	return s.nats.SendOTPSMS(deployment.ID, userID, phoneNumber, countryCode)
+	fullPhoneNumber := countryCode + phoneNumber
+	_, err := s.prelude.SendVerification(fullPhoneNumber, deployment.ID, userID, clientIP, userAgent)
+	return err
 }
 
 func (s *AuthService) VerifyPhoneOTP(
-	deploymentID uint64,
 	phoneNumber string,
 	countryCode string,
 	code string,
 ) (bool, error) {
-	return utils.VerifyPhoneOTP(deploymentID, phoneNumber, countryCode, code)
+	fullPhoneNumber := countryCode + phoneNumber
+	return s.prelude.CheckVerification(fullPhoneNumber, code)
 }
 
 func (s *AuthService) GenerateMagicLink(
@@ -1329,37 +1335,8 @@ func (s *AuthService) ValidateEmailRestrictions(email string, restrictions model
 }
 
 func (s *AuthService) ValidatePhoneRestrictions(phoneNumber string, countryCode string, restrictions model.DeploymentRestrictions) error {
-	abstractAPIService := service.NewAbstractAPIService(
-		config.GetEnv("ABSTRACT_API_KEY", ""),
-	)
-
-	if abstractAPIService.APIKey == "" {
-		return fmt.Errorf("phone validation service not configured")
-	}
-
-	result, err := abstractAPIService.ValidatePhoneNumber(phoneNumber, countryCode)
-	if err != nil {
-		return fmt.Errorf("phone validation failed: %w", err)
-	}
-
-	if !result.IsValid {
-		return handler.ErrVoipNumberBlocked
-	}
-
-	if result.IsBlocked {
-		return handler.ErrVoipNumberBlocked
-	}
-
-	if restrictions.BlockVoipNumbers && result.IsVOIP {
-		return handler.ErrVoipNumberBlocked
-	}
-
-	if restrictions.BlockVoipNumbers && result.IsHighRisk {
-		return handler.ErrVoipNumberBlocked
-	}
-
 	if restrictions.CountryRestrictions.Enabled && len(restrictions.CountryRestrictions.CountryCodes) > 0 {
-		allowed := slices.Contains(restrictions.CountryRestrictions.CountryCodes, result.CountryCode)
+		allowed := slices.Contains(restrictions.CountryRestrictions.CountryCodes, countryCode)
 		if !allowed {
 			return handler.ErrCountryRestricted
 		}

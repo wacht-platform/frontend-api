@@ -1538,7 +1538,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				return handler.SendSuccess[any](c, nil)
 			}
 
-			if err := h.service.SendSmsOTPVerificationAsync(phoneNumber, countryCode, userID, deployment); err != nil {
+			if err := h.service.SendSmsOTPVerificationAsync(phoneNumber, countryCode, userID, deployment, c.IP(), c.Get("User-Agent")); err != nil {
 				return handler.SendInternalServerError(c, err, "Error sending SMS OTP verification")
 			}
 		case model.SignInAttemptStepVerifyEmailLink:
@@ -1634,7 +1634,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 					)
 				}
 
-				if err := h.service.SendSmsOTPVerificationAsync(user.PrimaryPhoneNumber.PhoneNumber, user.PrimaryPhoneNumber.CountryCode, user.ID, deployment); err != nil {
+				if err := h.service.SendSmsOTPVerificationAsync(user.PrimaryPhoneNumber.PhoneNumber, user.PrimaryPhoneNumber.CountryCode, user.ID, deployment, c.IP(), c.Get("User-Agent")); err != nil {
 					return handler.SendInternalServerError(
 						c,
 						err,
@@ -1735,7 +1735,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 				)
 			}
 		case model.SignupAttemptStepVerifyPhone:
-			if err := h.service.SendSmsOTPVerificationAsync(attempt.PhoneNumber, attempt.PhoneCountryCode, 0, deployment); err != nil {
+			if err := h.service.SendSmsOTPVerificationAsync(attempt.PhoneNumber, attempt.PhoneCountryCode, 0, deployment, c.IP(), c.Get("User-Agent")); err != nil {
 				return handler.SendInternalServerError(
 					c,
 					err,
@@ -2049,7 +2049,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					return handler.SendBadRequest(c, nil, "Invalid verification attempt")
 				}
 
-				isValid, err := h.service.VerifyPhoneOTP(deployment.ID, phoneNumber, attempt.ProfileCompletionData.PhoneCountryCode, b.VerificationCode)
+				isValid, err := h.service.VerifyPhoneOTP(phoneNumber, phone.CountryCode, b.VerificationCode)
 				if err != nil {
 					return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
 				}
@@ -2206,7 +2206,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 					return handler.SendInternalServerError(c, err, "Error fetching user")
 				}
 
-				verified, err = h.service.VerifyPhoneOTP(deployment.ID, p.PhoneNumber, p.CountryCode, b.VerificationCode)
+				verified, err = h.service.VerifyPhoneOTP(p.PhoneNumber, p.CountryCode, b.VerificationCode)
 				if err != nil {
 					return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
 				}
@@ -2351,7 +2351,6 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 
 		if attempt.CurrentStep == model.SignupAttemptStepVerifyPhone {
 			isValid, err := h.service.VerifyPhoneOTP(
-				deployment.ID,
 				attempt.PhoneNumber,
 				attempt.PhoneCountryCode,
 				b.VerificationCode,

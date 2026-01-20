@@ -8,30 +8,31 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ilabs/wacht-fe/config"
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/service"
-	"github.com/ilabs/wacht-fe/utils"
 	"gorm.io/gorm"
 )
 
 const otpExpirationTime = 5 * time.Minute
 
 type UserService struct {
-	db   *gorm.DB
-	s3   *service.S3Service
-	nats *service.NatsService
+	db      *gorm.DB
+	s3      *service.S3Service
+	nats    *service.NatsService
+	prelude *service.PreludeService
 }
 
 func NewUserService() *UserService {
 	natsService := service.GetNATS()
+	preludeService := service.GetPrelude()
 
 	return &UserService{
-		db:   database.Connection,
-		s3:   service.NewS3Service(),
-		nats: natsService,
+		db:      database.Connection,
+		s3:      service.NewS3Service(),
+		nats:    natsService,
+		prelude: preludeService,
 	}
 }
 
@@ -73,17 +74,21 @@ func (s *UserService) sendSmsOTPVerification(
 	userID uint64,
 	phoneNumber string,
 	countryCode string,
+	clientIP string,
+	userAgent string,
 ) error {
-	return s.nats.SendOTPSMS(deploymentID, userID, phoneNumber, countryCode)
+	fullPhoneNumber := countryCode + phoneNumber
+	_, err := s.prelude.SendVerification(fullPhoneNumber, deploymentID, userID, clientIP, userAgent)
+	return err
 }
 
 func (s *UserService) verifyPhoneOTP(
-	deploymentID uint64,
 	phoneNumber string,
 	countryCode string,
 	code string,
 ) (bool, error) {
-	return utils.VerifyPhoneOTP(deploymentID, phoneNumber, countryCode, code)
+	fullPhoneNumber := countryCode + phoneNumber
+	return s.prelude.CheckVerification(fullPhoneNumber, code)
 }
 
 func (s *UserService) uploadProfilePicture(
@@ -136,39 +141,10 @@ func (s *UserService) ValidateEmailRestrictions(email string, restrictions model
 }
 
 func (s *UserService) ValidatePhoneRestrictions(phoneNumber string, countryCode string, restrictions model.DeploymentRestrictions) error {
-	abstractAPIService := service.NewAbstractAPIService(
-		config.GetEnv("ABSTRACT_API_KEY", ""),
-	)
-
-	if abstractAPIService.APIKey == "" {
-		return fmt.Errorf("phone validation service not configured")
-	}
-
-	result, err := abstractAPIService.ValidatePhoneNumber(phoneNumber, countryCode)
-	if err != nil {
-		return fmt.Errorf("phone validation failed: %w", err)
-	}
-
-	if !result.IsValid {
-		return handler.ErrVoipNumberBlocked
-	}
-
-	if result.IsBlocked {
-		return handler.ErrVoipNumberBlocked
-	}
-
-	if restrictions.BlockVoipNumbers && result.IsVOIP {
-		return handler.ErrVoipNumberBlocked
-	}
-
-	if restrictions.BlockVoipNumbers && result.IsHighRisk {
-		return handler.ErrVoipNumberBlocked
-	}
-
 	if restrictions.CountryRestrictions.Enabled && len(restrictions.CountryRestrictions.CountryCodes) > 0 {
 		allowed := false
 		for _, allowedCountry := range restrictions.CountryRestrictions.CountryCodes {
-			if result.CountryCode == allowedCountry {
+			if countryCode == allowedCountry {
 				allowed = true
 				break
 			}

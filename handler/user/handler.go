@@ -982,6 +982,8 @@ func (h *Handler) PreparePhoneVerification(c *fiber.Ctx) error {
 		*session.ActiveSignin.UserID,
 		phoneNumber.PhoneNumber,
 		phoneNumber.CountryCode,
+		c.IP(),
+		c.Get("User-Agent"),
 	)
 	if err != nil {
 		return handler.SendInternalServerError(
@@ -1028,7 +1030,6 @@ func (h *Handler) AttemptPhoneVerification(c *fiber.Ctx) error {
 	}
 
 	isValid, err := h.service.verifyPhoneOTP(
-		deployment.ID,
 		phoneNumber.PhoneNumber,
 		phoneNumber.CountryCode,
 		code,

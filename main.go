@@ -30,6 +30,11 @@ func main() {
 		log.Fatal("Error connecting to NATS: ", err)
 	}
 
+	err = service.InitPrelude()
+	if err != nil {
+		log.Fatal("Error initializing Prelude: ", err)
+	}
+
 	app := fiber.New(fiber.Config{
 		JSONEncoder:             json.Marshal,
 		JSONDecoder:             json.Unmarshal,
