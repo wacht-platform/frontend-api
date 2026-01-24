@@ -4,9 +4,12 @@ import (
 	"context"
 	"log"
 	"os"
+
+	"github.com/joho/godotenv"
 )
 
 func Init() {
+	godotenv.Load()
 	loadSecrets()
 	initR2Session()
 	initAgentStorageSession()
