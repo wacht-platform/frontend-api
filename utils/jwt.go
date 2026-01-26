@@ -70,10 +70,6 @@ func SignJWT(
 		log.Fatal("Error parsing private key: ", err)
 	}
 
-	if err != nil {
-		return "", err
-	}
-
 	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.ES256(), privateKey))
 
 	return string(signed), err

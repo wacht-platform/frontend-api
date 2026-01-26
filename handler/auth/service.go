@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -643,6 +644,7 @@ func (s *AuthService) SendSmsOTPVerificationAsync(
 ) error {
 	fullPhoneNumber := countryCode + phoneNumber
 	_, err := s.prelude.SendVerification(fullPhoneNumber, deployment.ID, userID, clientIP, userAgent)
+	log.Println(err)
 	return err
 }
 
@@ -1450,12 +1452,14 @@ func (s *AuthService) DetermineVerificationStepsForProfileCompletion(
 func (s *AuthService) GetAvailable2FAMethods(userID uint64, deployment *model.Deployment) []string {
 	var methods []string
 
-	var phoneCount int64
-	s.db.Model(&model.UserPhoneNumber{}).
-		Where("user_id = ? AND verified = true", userID).
-		Count(&phoneCount)
-	if phoneCount > 0 {
-		methods = append(methods, "phone_otp")
+	if deployment.AuthSettings.AuthFactorsEnabled.PhoneOTP {
+		var phoneCount int64
+		s.db.Model(&model.UserPhoneNumber{}).
+			Where("user_id = ? AND deployment_id = ? AND verified = true AND can_use_for_second_factor = true", userID, deployment.ID).
+			Count(&phoneCount)
+		if phoneCount > 0 {
+			methods = append(methods, "phone_otp")
+		}
 	}
 
 	if deployment.AuthSettings.AuthFactorsEnabled.Authenticator {
@@ -1468,10 +1472,12 @@ func (s *AuthService) GetAvailable2FAMethods(userID uint64, deployment *model.De
 		}
 	}
 
-	var user model.User
-	if err := s.db.Select("backup_codes").Where("id = ?", userID).First(&user).Error; err == nil {
-		if len(user.BackupCodes) > 0 {
-			methods = append(methods, "backup_code")
+	if deployment.AuthSettings.AuthFactorsEnabled.BackupCode {
+		var user model.User
+		if err := s.db.Select("backup_codes").Where("id = ?", userID).First(&user).Error; err == nil {
+			if len(user.BackupCodes) > 0 {
+				methods = append(methods, "backup_code")
+			}
 		}
 	}
 

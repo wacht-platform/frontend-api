@@ -48,7 +48,7 @@ type User struct {
 	HasProfilePicture              bool                    `json:"has_profile_picture"                      gorm:"not null"`
 	ProfilePictureURL              string                  `json:"profile_picture_url"                      gorm:"not null"`
 	LastName                       string                  `json:"last_name"                                gorm:"not null"`
-	Username                       string                  `json:"username"                                 gorm:"not null"`
+	Username                       string                  `json:"username"                                 gorm:"default:'';not null"`
 	Password                       string                  `json:"-"                                        gorm:"select:false"`
 	Availability                   UserAvailability        `json:"availability"                             gorm:"default:away;not null"`
 	LastPasswordResetAt            time.Time               `json:"last_password_reset_at"`
@@ -74,6 +74,7 @@ type User struct {
 	PrivateMetadata                datatypes.JSONMap       `json:"-"                                        gorm:"not null"`
 	BackupCodesGenerated           bool                    `json:"backup_codes_generated"                   gorm:"not null"`
 	HasPasskeys                    bool                    `json:"has_passkeys"                             gorm:"-"`
+	HasPassword                    bool                    `json:"has_password"                             gorm:"-"`
 	BackupCodes                    pq.StringArray          `json:"-"                                        gorm:"type:text[]"`
 	DeletedAt                      gorm.DeletedAt          `json:"-"                                        gorm:"index"`
 }
@@ -84,7 +85,7 @@ type PublicUserData struct {
 	HasProfilePicture     bool              `json:"has_profile_picture"      gorm:"not null"`
 	ProfilePictureURL     string            `json:"profile_picture_url"      gorm:"not null"`
 	LastName              string            `json:"last_name"                gorm:"not null"`
-	Username              string            `json:"username"                 gorm:"not null"`
+	Username              string            `json:"username"                 gorm:"default:'';not null"`
 	Availability          UserAvailability  `json:"availability"             gorm:"default:away;not null"`
 	PublicMetadata        datatypes.JSONMap `json:"public_metadata"          gorm:"not null"`
 	PrimaryEmailAddressID *uint64           `json:"primary_email_address_id"`

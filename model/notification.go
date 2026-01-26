@@ -30,9 +30,8 @@ type Notification struct {
 	Title string `json:"title" gorm:"not null"`
 	Body  string `json:"body"  gorm:"not null"`
 
-	// Action
-	ActionURL   *string `json:"action_url,omitempty"`
-	ActionLabel *string `json:"action_label,omitempty"`
+	// Interactive
+	CTAs json.RawMessage `json:"ctas,omitempty" gorm:"type:jsonb"` // Array of {label: string, payload: any}
 
 	// Status
 	Severity   NotificationSeverity `json:"severity"              gorm:"default:'info'"`

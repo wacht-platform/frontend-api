@@ -35,10 +35,6 @@ type UpdatePasswordSchema struct {
 	NewPassword     string `form:"new_password"     validate:"required"`
 }
 
-type DeleteAccountSchema struct {
-	Password string `form:"password" validate:"required"`
-}
-
 type RemovePasswordSchema struct {
 	CurrentPassword string `form:"current_password" validate:"required"`
 }

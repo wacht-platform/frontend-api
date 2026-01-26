@@ -28,8 +28,8 @@ const (
 	SignInMethodPhoneOTP      SignInMethod = "phone_otp"
 	SignInMethodMagicLink     SignInMethod = "magic_link"
 	SignInMethodEmailOTP      SignInMethod = "email_otp"
-	SignInMethodSSO           SignInMethod = "sso"            // OAuth2 social login
-	SignInMethodEnterpriseSso SignInMethod = "enterprise_sso" // SAML/OIDC enterprise SSO
+	SignInMethodSSO           SignInMethod = "sso"
+	SignInMethodEnterpriseSso SignInMethod = "enterprise_sso"
 	SignInMethodPasskey       SignInMethod = "passkey"
 	SignInMethodImpersonation SignInMethod = "impersonation"
 )
@@ -76,12 +76,12 @@ func (e *Error) GormDBDataType() string {
 
 type SignInAttempt struct {
 	Model
-	UserID                             *uint64                                `json:"-"`
-	IdentifierID                       *uint64                                `json:"-"`
-	SessionID                          uint64                                 `json:"session_id"                            gorm:"not null"`
+	UserID                             *uint64                                `json:"user_id,string"`
+	IdentifierID                       *uint64                                `json:"identifier_id,string"`
+	SessionID                          uint64                                 `json:"session_id,string"                     gorm:"not null"`
 	Method                             SignInMethod                           `json:"method"                                gorm:"not null"`
 	SSOProvider                        SocialConnectionProvider               `json:"sso_provider"`
-	EnterpriseConnectionID             *uint64                                `json:"enterprise_connection_id"`
+	EnterpriseConnectionID             *uint64                                `json:"enterprise_connection_id,string"`
 	SamlRequestID                      *string                                `json:"-"`
 	OIDCState                          *string                                `json:"-"                                     gorm:"column:oidc_state"` // For OIDC CSRF protection
 	ExpiresAt                          time.Time                              `json:"expires_at"                            gorm:"not null"`

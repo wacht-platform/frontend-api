@@ -21,7 +21,7 @@ type Session struct {
 	SigninAttempts []SignInAttempt `json:"signin_attempts,omitempty"`
 	Signins        []Signin        `json:"signins,omitempty"`
 	SignupAttempts []SignupAttempt `json:"signup_attempts,omitempty"`
-	ActiveSigninID *uint64         `json:"-"`
+	ActiveSigninID *uint64         `json:"active_signin_id,string"`
 	ActiveSignin   *Signin         `json:"active_signin,omitempty"`
 }
 

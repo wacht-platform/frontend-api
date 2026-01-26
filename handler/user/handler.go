@@ -34,45 +34,18 @@ func NewHandler() *Handler {
 	}
 }
 
-// JSON parsing structs to handle string IDs from SQL
-type userEmailAddressJSON struct {
-	ID                   string `json:"id"`
-	CreatedAt            string `json:"created_at"`
-	UpdatedAt            string `json:"updated_at"`
-	EmailAddress         string `json:"email_address"`
-	IsPrimary            bool   `json:"is_primary"`
-	Verified             bool   `json:"verified"`
-	VerifiedAt           string `json:"verified_at"`
-	VerificationStrategy string `json:"verification_strategy"`
-}
+func (h *Handler) GetUser(c *fiber.Ctx) error {
+	session := handler.GetSession(c)
 
-type userPhoneNumberJSON struct {
-	ID          string `json:"id"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
-	PhoneNumber string `json:"phone_number"`
-	Verified    bool   `json:"verified"`
-	VerifiedAt  string `json:"verified_at"`
-	CountryCode string `json:"country_code"`
-}
+	if session == nil || session.ActiveSignin == nil || session.ActiveSignin.User == nil {
+		return handler.SendUnauthorized(
+			c,
+			nil,
+			"Unauthorized",
+		)
+	}
 
-type socialConnectionJSON struct {
-	ID                 string `json:"id"`
-	CreatedAt          string `json:"created_at"`
-	UpdatedAt          string `json:"updated_at"`
-	UserEmailAddressID string `json:"user_email_address_id"`
-	Provider           string `json:"provider"`
-	EmailAddress       string `json:"email_address"`
-	FirstName          string `json:"first_name"`
-	LastName           string `json:"last_name"`
-}
-
-type userAuthenticatorJSON struct {
-	ID        string `json:"id"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
-	UserID    string `json:"user_id"`
-	OtpUrl    string `json:"otp_url"`
+	return handler.SendSuccess(c, session.ActiveSignin.User)
 }
 
 type segmentJSON struct {
@@ -82,184 +55,6 @@ type segmentJSON struct {
 	DeploymentID string `json:"deployment_id"`
 	Name         string `json:"name"`
 	Type         string `json:"type"`
-}
-
-func parseUserEmailAddressesJSON(jsonStr string) []model.UserEmailAddress {
-	if jsonStr == "" || jsonStr == "[]" || jsonStr == "null" {
-		return []model.UserEmailAddress{}
-	}
-
-	var jsonEmails []userEmailAddressJSON
-	if err := json.Unmarshal([]byte(jsonStr), &jsonEmails); err != nil {
-		log.Printf("Error parsing user email addresses JSON: %v, JSON: %s", err, jsonStr)
-		// Return empty slice to maintain backward compatibility and prevent response failure
-		return []model.UserEmailAddress{}
-	}
-
-	var emailAddresses []model.UserEmailAddress
-	for _, jsonEmail := range jsonEmails {
-
-		id, err := strconv.ParseUint(jsonEmail.ID, 10, 64)
-		if err != nil {
-			log.Printf("Error parsing email address ID '%s': %v", jsonEmail.ID, err)
-			continue
-		}
-
-		createdAt, _ := time.Parse(time.RFC3339, jsonEmail.CreatedAt)
-		updatedAt, _ := time.Parse(time.RFC3339, jsonEmail.UpdatedAt)
-		verifiedAt, _ := time.Parse(time.RFC3339, jsonEmail.VerifiedAt)
-
-		emailAddresses = append(emailAddresses, model.UserEmailAddress{
-			Model: model.Model{
-				ID:        id,
-				CreatedAt: createdAt,
-				UpdatedAt: updatedAt,
-			},
-			EmailAddress:         jsonEmail.EmailAddress,
-			IsPrimary:            jsonEmail.IsPrimary,
-			Verified:             jsonEmail.Verified,
-			VerifiedAt:           verifiedAt,
-			VerificationStrategy: model.VerificationStrategy(jsonEmail.VerificationStrategy),
-		})
-	}
-
-	return emailAddresses
-}
-
-func parseUserPhoneNumbersJSON(jsonStr string) []model.UserPhoneNumber {
-	if jsonStr == "" || jsonStr == "[]" || jsonStr == "null" {
-		return []model.UserPhoneNumber{}
-	}
-
-	var jsonPhones []userPhoneNumberJSON
-	if err := json.Unmarshal([]byte(jsonStr), &jsonPhones); err != nil {
-		log.Printf("Error parsing user phone numbers JSON: %v, JSON: %s", err, jsonStr)
-		return []model.UserPhoneNumber{}
-	}
-
-	var phoneNumbers []model.UserPhoneNumber
-	for _, jsonPhone := range jsonPhones {
-
-		id, err := strconv.ParseUint(jsonPhone.ID, 10, 64)
-		if err != nil {
-			log.Printf("Error parsing phone number ID '%s': %v", jsonPhone.ID, err)
-			continue
-		}
-
-		createdAt, _ := time.Parse(time.RFC3339, jsonPhone.CreatedAt)
-		updatedAt, _ := time.Parse(time.RFC3339, jsonPhone.UpdatedAt)
-		verifiedAt, _ := time.Parse(time.RFC3339, jsonPhone.VerifiedAt)
-
-		phoneNumbers = append(phoneNumbers, model.UserPhoneNumber{
-			Model: model.Model{
-				ID:        id,
-				CreatedAt: createdAt,
-				UpdatedAt: updatedAt,
-			},
-			PhoneNumber: jsonPhone.PhoneNumber,
-			Verified:    jsonPhone.Verified,
-			CountryCode: jsonPhone.CountryCode,
-			VerifiedAt:  verifiedAt,
-		})
-	}
-
-	return phoneNumbers
-}
-
-// parseSocialConnectionsJSON parses the JSON string into a slice of SocialConnection
-// Handles JSON parsing errors gracefully without breaking the response
-func parseSocialConnectionsJSON(jsonStr string) []model.SocialConnection {
-	// Handle empty, null, or empty array cases
-	if jsonStr == "" || jsonStr == "[]" || jsonStr == "null" {
-		return []model.SocialConnection{}
-	}
-
-	var jsonConnections []socialConnectionJSON
-	if err := json.Unmarshal([]byte(jsonStr), &jsonConnections); err != nil {
-		log.Printf("Error parsing social connections JSON: %v, JSON: %s", err, jsonStr)
-		// Return empty slice to maintain backward compatibility and prevent response failure
-		return []model.SocialConnection{}
-	}
-
-	var socialConnections []model.SocialConnection
-	for _, jsonConn := range jsonConnections {
-
-		id, err := strconv.ParseUint(jsonConn.ID, 10, 64)
-		if err != nil {
-			log.Printf("Error parsing social connection ID '%s': %v", jsonConn.ID, err)
-			continue
-		}
-
-		userEmailAddressID, err := strconv.ParseUint(jsonConn.UserEmailAddressID, 10, 64)
-		if err != nil {
-			log.Printf(
-				"Error parsing social connection user_email_address_id '%s': %v",
-				jsonConn.UserEmailAddressID,
-				err,
-			)
-			continue
-		}
-
-		createdAt, _ := time.Parse(time.RFC3339, jsonConn.CreatedAt)
-		updatedAt, _ := time.Parse(time.RFC3339, jsonConn.UpdatedAt)
-
-		socialConnections = append(socialConnections, model.SocialConnection{
-			Model: model.Model{
-				ID:        id,
-				CreatedAt: createdAt,
-				UpdatedAt: updatedAt,
-			},
-			UserEmailAddressID: userEmailAddressID,
-			Provider:           model.SocialConnectionProvider(jsonConn.Provider),
-			EmailAddress:       jsonConn.EmailAddress,
-			FirstName:          jsonConn.FirstName,
-			LastName:           jsonConn.LastName,
-		})
-	}
-
-	return socialConnections
-}
-
-// parseUserAuthenticatorJSON parses the JSON string into a UserAuthenticator pointer
-// Handles JSON parsing errors gracefully without breaking the response
-func parseUserAuthenticatorJSON(jsonStr string) *model.UserAuthenticator {
-	// Handle empty or null cases
-	if jsonStr == "" || jsonStr == "null" {
-		return nil
-	}
-
-	var jsonAuth userAuthenticatorJSON
-	if err := json.Unmarshal([]byte(jsonStr), &jsonAuth); err != nil {
-		log.Printf("Error parsing user authenticator JSON: %v, JSON: %s", err, jsonStr)
-		// Return nil to maintain backward compatibility and prevent response failure
-		return nil
-	}
-
-	// Parse fields with error handling - return nil if critical fields fail to parse
-	id, err := strconv.ParseUint(jsonAuth.ID, 10, 64)
-	if err != nil {
-		log.Printf("Error parsing user authenticator ID '%s': %v", jsonAuth.ID, err)
-		return nil
-	}
-
-	userID, err := strconv.ParseUint(jsonAuth.UserID, 10, 64)
-	if err != nil {
-		log.Printf("Error parsing user authenticator user_id '%s': %v", jsonAuth.UserID, err)
-		return nil
-	}
-
-	createdAt, _ := time.Parse(time.RFC3339, jsonAuth.CreatedAt)
-	updatedAt, _ := time.Parse(time.RFC3339, jsonAuth.UpdatedAt)
-
-	return &model.UserAuthenticator{
-		Model: model.Model{
-			ID:        id,
-			CreatedAt: createdAt,
-			UpdatedAt: updatedAt,
-		},
-		UserID: &userID,
-		OtpUrl: jsonAuth.OtpUrl,
-	}
 }
 
 func parseSegmentsJSON(jsonStr string) []*model.Segment {
@@ -295,225 +90,6 @@ func parseSegmentsJSON(jsonStr string) []*model.Segment {
 		})
 	}
 	return segments
-}
-
-func (h *Handler) GetUser(c *fiber.Ctx) error {
-	session := handler.GetSession(c)
-
-	// Validate session exists
-	if session == nil {
-		return handler.SendUnauthorized(
-			c,
-			nil,
-			"Unauthorized",
-		)
-	}
-
-	var queryResult UserQueryResult
-	rawSQL := `
-		SELECT
-			u.id as user_id,
-			u.created_at as user_created_at,
-			u.updated_at as user_updated_at,
-			u.first_name,
-			u.last_name,
-			u.username,
-			u.has_profile_picture,
-			u.profile_picture_url,
-			u.availability,
-			u.last_password_reset_at,
-			u.schema_version,
-			u.disabled,
-			u.primary_email_address_id,
-			u.primary_phone_number_id,
-			u.second_factor_policy,
-			u.active_organization_membership_id,
-			u.active_workspace_membership_id,
-			u.public_metadata,
-			u.backup_codes_generated,
-			CASE WHEN u.password != '' AND u.password IS NOT NULL THEN true ELSE false END as has_password,
-			EXISTS(SELECT 1 FROM user_passkeys up WHERE up.user_id = u.id) as has_passkeys,
-
-			-- JSON aggregation for related data
-			COALESCE(
-				(SELECT json_agg(
-					json_build_object(
-						'id', uea.id::text,
-						'created_at', uea.created_at,
-						'updated_at', uea.updated_at,
-						'email_address', uea.email_address,
-						'is_primary', uea.is_primary,
-						'verified', uea.verified,
-						'verified_at', uea.verified_at,
-						'verification_strategy', uea.verification_strategy
-					)
-				)
-				FROM user_email_addresses uea
-				WHERE uea.user_id = u.id AND uea.deleted_at IS NULL
-				), '[]'::json
-			) as user_email_addresses_json,
-
-			COALESCE(
-				(SELECT json_agg(
-					json_build_object(
-						'id', upn.id::text,
-						'created_at', upn.created_at,
-						'updated_at', upn.updated_at,
-						'phone_number', upn.phone_number,
-						'country_code', upn.country_code,
-						'verified', upn.verified,
-						'verified_at', upn.verified_at
-					)
-				)
-				FROM user_phone_numbers upn
-				WHERE upn.user_id = u.id AND upn.deleted_at IS NULL
-				), '[]'::json
-			) as user_phone_numbers_json,
-
-			COALESCE(
-				(SELECT json_agg(
-					json_build_object(
-						'id', sc.id::text,
-						'created_at', sc.created_at,
-						'updated_at', sc.updated_at,
-						'user_email_address_id', sc.user_email_address_id::text,
-						'provider', sc.provider,
-						'email_address', sc.email_address,
-						'first_name', sc.first_name,
-						'last_name', sc.last_name
-					)
-				)
-				FROM social_connections sc
-				WHERE sc.user_id = u.id AND sc.deleted_at IS NULL
-				), '[]'::json
-			) as social_connections_json,
-
-			COALESCE(
-				(SELECT json_agg(
-					json_build_object(
-						'id', s.id::text,
-						'created_at', s.created_at,
-						'updated_at', s.updated_at,
-						'deployment_id', s.deployment_id::text,
-						'name', s.name,
-						'type', s.type
-					)
-				)
-				FROM user_segments us
-				JOIN segments s ON us.segment_id = s.id
-				WHERE us.user_id = u.id AND s.deleted_at IS NULL
-				), '[]'::json
-			) as segments_json,
-
-			COALESCE(
-				(SELECT json_build_object(
-					'id', ua.id::text,
-					'created_at', ua.created_at,
-					'updated_at', ua.updated_at,
-					'user_id', ua.user_id::text,
-					'otp_url', ua.otp_url
-				)
-				FROM user_authenticators ua
-				WHERE ua.user_id = u.id AND ua.deleted_at IS NULL
-				LIMIT 1
-				), 'null'::json
-			) as user_authenticator_json
-
-		FROM sessions s
-		JOIN signins si ON s.active_signin_id = si.id
-		JOIN users u ON si.user_id = u.id
-		WHERE s.id = ? AND s.deleted_at IS NULL AND si.deleted_at IS NULL AND u.deleted_at IS NULL
-	`
-
-	// Execute the optimized query with proper error handling
-	if err := database.Connection.Clauses(dbresolver.Read).Raw(rawSQL, session.ID).Scan(&queryResult).Error; err != nil {
-		log.Printf("Database error in GetUser: %v", err)
-		return handler.SendInternalServerError(
-			c,
-			nil,
-			"Something went wrong",
-			handler.ErrInternal,
-		)
-	}
-
-	if queryResult.UserID == 0 {
-		return handler.SendBadRequest(
-			c,
-			nil,
-			"No active sign-in found",
-		)
-	}
-
-	user := model.User{
-		Model: model.Model{
-			ID:        queryResult.UserID,
-			CreatedAt: queryResult.UserCreatedAt,
-			UpdatedAt: queryResult.UserUpdatedAt,
-		},
-		FirstName:                      queryResult.FirstName,
-		LastName:                       queryResult.LastName,
-		Username:                       queryResult.Username,
-		HasProfilePicture:              queryResult.HasProfilePicture,
-		ProfilePictureURL:              queryResult.ProfilePictureURL,
-		Availability:                   model.UserAvailability(queryResult.Availability),
-		LastPasswordResetAt:            queryResult.LastPasswordResetAt,
-		SchemaVersion:                  model.SchemaVersion(queryResult.SchemaVersion),
-		Disabled:                       queryResult.Disabled,
-		PrimaryEmailAddressID:          queryResult.PrimaryEmailAddressID,
-		PrimaryPhoneNumberID:           queryResult.PrimaryPhoneNumberID,
-		SecondFactorPolicy:             model.SecondFactorPolicy(queryResult.SecondFactorPolicy),
-		ActiveOrganizationMembershipID: queryResult.ActiveOrganizationMembershipID,
-		ActiveWorkspaceMembershipID:    queryResult.ActiveWorkspaceMembershipID,
-		PublicMetadata:                 make(datatypes.JSONMap),
-		BackupCodesGenerated:           queryResult.BackupCodesGenerated,
-	}
-
-	user.UserEmailAddresses = parseUserEmailAddressesJSON(queryResult.UserEmailAddressesJSON)
-	user.UserPhoneNumbers = parseUserPhoneNumbersJSON(queryResult.UserPhoneNumbersJSON)
-	user.SocialConnections = parseSocialConnectionsJSON(queryResult.SocialConnectionsJSON)
-	user.Segments = parseSegmentsJSON(queryResult.SegmentsJSON)
-	user.UserAuthenticator = parseUserAuthenticatorJSON(queryResult.UserAuthenticatorJSON)
-
-	if user.PrimaryEmailAddressID != nil {
-		for i := range user.UserEmailAddresses {
-			if user.UserEmailAddresses[i].ID == *user.PrimaryEmailAddressID {
-				user.PrimaryEmailAddress = &user.UserEmailAddresses[i]
-				break
-			}
-		}
-	}
-
-	if user.PrimaryPhoneNumberID != nil {
-		for i := range user.UserPhoneNumbers {
-			if user.UserPhoneNumbers[i].ID == *user.PrimaryPhoneNumberID {
-				user.PrimaryPhoneNumber = &user.UserPhoneNumbers[i]
-				break
-			}
-		}
-	}
-
-	if queryResult.PublicMetadata != "" && queryResult.PublicMetadata != "null" {
-		var metadata datatypes.JSONMap
-		if err := json.Unmarshal([]byte(queryResult.PublicMetadata), &metadata); err != nil {
-			user.PublicMetadata = make(datatypes.JSONMap)
-		} else {
-			user.PublicMetadata = metadata
-		}
-	}
-
-	type UserResponse struct {
-		model.User
-		HasPassword bool `json:"has_password"`
-		HasPasskeys bool `json:"has_passkeys"`
-	}
-
-	response := UserResponse{
-		User:        user,
-		HasPassword: queryResult.HasPassword,
-		HasPasskeys: queryResult.HasPasskeys,
-	}
-
-	return handler.SendSuccess(c, response)
 }
 
 func (h *Handler) UpdateUser(c *fiber.Ctx) error {
@@ -572,7 +148,7 @@ func (h *Handler) UpdateUser(c *fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 	utils.PublishWebhookEvent(deployment.ID, "user.updated", *session.ActiveSignin.UserID, "user")
 
-	utils.RemoveCachedSession(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, "Profile updated successfully")
 }
@@ -671,6 +247,8 @@ func (h *Handler) DeleteUserEmailAddress(c *fiber.Ctx) error {
 		)
 	}
 
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+
 	return handler.SendSuccess(c, "Deleted successfully")
 }
 
@@ -690,6 +268,10 @@ func (h *Handler) CreateUserEmailAddress(c *fiber.Ctx) error {
 
 	if err := h.service.ValidateEmailRestrictions(b.Email, deployment.Restrictions); err != nil {
 		return handler.SendBadRequest(c, nil, err.Error())
+	}
+
+	if h.service.CheckEmailExists(b.Email, deployment.ID) {
+		return handler.SendBadRequest(c, nil, "Email address already exists")
 	}
 
 	newEmail := model.UserEmailAddress{
@@ -713,6 +295,8 @@ func (h *Handler) CreateUserEmailAddress(c *fiber.Ctx) error {
 	}
 
 	utils.PublishWebhookEvent(deployment.ID, "user.email.added", newEmail.ID, "user_email")
+
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, newEmail)
 }
@@ -779,6 +363,8 @@ func (h *Handler) AttemptEmailVerification(c *fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 	utils.PublishWebhookEvent(deployment.ID, "user.email.verified", emailAddress.ID, "user_email")
 
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+
 	return handler.SendSuccess(c, "Email verified successfully")
 }
 
@@ -808,8 +394,6 @@ func (h *Handler) PrepareEmailVerification(c *fiber.Ctx) error {
 			handler.ErrInternal,
 		)
 	}
-
-	session.ActiveSignin.LoadUser(database.Connection)
 
 	code, err := utils.GenerateOTP()
 	if err != nil {
@@ -923,6 +507,10 @@ func (h *Handler) AddPhoneNumber(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, err.Error())
 	}
 
+	if h.service.CheckUserphoneExists(b.PhoneNumber, b.CountryCode, deployment.ID) {
+		return handler.SendBadRequest(c, nil, "Phone number already exists")
+	}
+
 	phoneNumber := model.UserPhoneNumber{
 		Model: model.Model{
 			ID: idgen.NextID(),
@@ -944,6 +532,8 @@ func (h *Handler) AddPhoneNumber(c *fiber.Ctx) error {
 	}
 
 	utils.PublishWebhookEvent(deployment.ID, "user.phone.added", phoneNumber.ID, "user_phone")
+
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, phoneNumber)
 }
@@ -974,8 +564,6 @@ func (h *Handler) PreparePhoneVerification(c *fiber.Ctx) error {
 			handler.ErrInternal,
 		)
 	}
-
-	session.ActiveSignin.LoadUser(database.Connection)
 
 	err := h.service.sendSmsOTPVerification(
 		deployment.ID,
@@ -1048,6 +636,7 @@ func (h *Handler) AttemptPhoneVerification(c *fiber.Ctx) error {
 	}
 
 	phoneNumber.Verified = true
+	phoneNumber.CanUseForSecondFactor = true
 	phoneNumber.VerifiedAt = time.Now().UTC()
 	if err = database.Connection.Save(&phoneNumber).Error; err != nil {
 		return handler.SendInternalServerError(
@@ -1059,6 +648,8 @@ func (h *Handler) AttemptPhoneVerification(c *fiber.Ctx) error {
 	}
 
 	utils.PublishWebhookEvent(deployment.ID, "user.phone.verified", phoneNumber.ID, "user_phone")
+
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, "Phone number verified successfully")
 }
@@ -1092,6 +683,12 @@ func (h *Handler) DeletePhoneNumber(c *fiber.Ctx) error {
 			handler.ErrInternal,
 		)
 	}
+
+	if query.RowsAffected == 0 {
+		return handler.SendBadRequest(c, nil, "Phone number not found")
+	}
+
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, "Deleted successfully")
 }
@@ -1252,6 +849,8 @@ func (h *Handler) VerifyAuthenticator(c *fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 	utils.PublishWebhookEvent(deployment.ID, "user.mfa.enabled", *session.ActiveSignin.UserID, "user_authenticator")
 
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+
 	return handler.SendSuccess(c, authenticator)
 }
 
@@ -1320,7 +919,7 @@ func (h *Handler) DeleteAuthenticator(c *fiber.Ctx) error {
 	}
 
 	utils.PublishWebhookEvent(deployment.ID, "user.mfa.disabled", *session.ActiveSignin.UserID, "user_authenticator")
-	utils.RemoveCachedSession(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, "Authenticator deleted successfully")
 }
@@ -1390,6 +989,8 @@ func (h *Handler) GenerateBackupCodes(c *fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 	utils.PublishWebhookEvent(deployment.ID, "user.backup_codes.generated", *session.ActiveSignin.UserID, "user")
 
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+
 	return handler.SendSuccess(c, backupCodes)
 }
 
@@ -1458,6 +1059,8 @@ func (h *Handler) RegenerateBackupCodes(c *fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 	utils.PublishWebhookEvent(deployment.ID, "user.backup_codes.regenerated", *session.ActiveSignin.UserID, "user")
 
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+
 	return handler.SendSuccess(c, backupCodes)
 }
 
@@ -1468,17 +1071,6 @@ func (h *Handler) GetUserSignins(c *fiber.Ctx) error {
 	}
 
 	var signins []model.Signin
-
-	// First, let's get all signins for this user to debug
-	var allSignins []model.Signin
-	if err := database.Connection.Where("user_id = ?", session.ActiveSignin.UserID).Find(&allSignins).Error; err != nil {
-		return handler.SendInternalServerError(
-			c,
-			nil,
-			"Failed to get user sessions",
-			handler.ErrInternal,
-		)
-	}
 
 	// Now get the filtered signins
 	if err := database.Connection.Where("user_id = ? AND (expires_at > ? OR expires_at IS NULL)", session.ActiveSignin.UserID, time.Now()).Find(&signins).Error; err != nil {
@@ -1534,6 +1126,9 @@ func (h *Handler) UploadProfilePicture(c *fiber.Ctx) error {
 			"Failed to save user",
 		)
 	}
+
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+
 	return handler.SendSuccess[any](c, nil)
 }
 
@@ -1951,7 +1546,7 @@ func (h *Handler) MakeEmailPrimary(c *fiber.Ctx) error {
 
 	utils.PublishWebhookEvent(deployment.ID, "user.email.primary.changed", user.ID, "user")
 
-	utils.RemoveCachedSession(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, "Primary email updated successfully")
 }
@@ -1984,7 +1579,7 @@ func (h *Handler) MakePhonePrimary(c *fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 	utils.PublishWebhookEvent(deployment.ID, "user.phone.primary.changed", user.ID, "user")
 
-	utils.RemoveCachedSession(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, "Primary phone updated successfully")
 }
@@ -2038,7 +1633,7 @@ func (h *Handler) UpdatePassword(c *fiber.Ctx) error {
 
 	utils.PublishWebhookEvent(deployment.ID, "user.password.updated", user.ID, "user")
 
-	utils.RemoveCachedSession(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, "Password updated successfully")
 }
@@ -2088,7 +1683,7 @@ func (h *Handler) RemovePassword(c *fiber.Ctx) error {
 		}
 	}
 
-	utils.RemoveCachedSession(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, "Password removed successfully")
 }
@@ -2099,19 +1694,9 @@ func (h *Handler) DeleteAccount(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
 	}
 
-	b, validation := handler.Validate[DeleteAccountSchema](c)
-	if validation != nil {
-		return handler.SendBadRequest(c, validation, "Bad request body")
-	}
-
 	var user model.User
 	if err := database.Connection.First(&user, session.ActiveSignin.UserID).Error; err != nil {
 		return handler.SendInternalServerError(c, nil, "Failed to load user")
-	}
-
-	isValid, err := utils.ComparePassword(user.Password, b.Password)
-	if err != nil || !isValid {
-		return handler.SendBadRequest(c, nil, "Password is incorrect")
 	}
 
 	tx := database.Connection.Begin()
@@ -2121,14 +1706,27 @@ func (h *Handler) DeleteAccount(c *fiber.Ctx) error {
 		}
 	}()
 
-	if err := tx.Where("user_id = ?", user.ID).Delete(&model.Signin{}).Error; err != nil {
+	// Consolidate all deletions into a single roundtrip
+	deleteQuery := `
+		DELETE FROM social_connections WHERE user_id = $1;
+		DELETE FROM user_email_addresses WHERE user_id = $1;
+		DELETE FROM user_phone_numbers WHERE user_id = $1;
+		DELETE FROM user_segments WHERE user_id = $1;
+		DELETE FROM user_authenticators WHERE user_id = $1;
+		DELETE FROM user_passkeys WHERE user_id = $1;
+		DELETE FROM notifications WHERE user_id = $1;
+		DELETE FROM scim_external_ids WHERE user_id = $1;
+		DELETE FROM scim_group_members WHERE user_id = $1;
+		DELETE FROM workspace_membership_roles WHERE workspace_membership_id IN (SELECT id FROM workspace_memberships WHERE user_id = $1);
+		DELETE FROM workspace_memberships WHERE user_id = $1;
+		DELETE FROM organization_membership_roles WHERE organization_membership_id IN (SELECT id FROM organization_memberships WHERE user_id = $1);
+		DELETE FROM organization_memberships WHERE user_id = $1;
+		DELETE FROM signins WHERE user_id = $1;
+		DELETE FROM users WHERE id = $1;
+	`
+	if err := tx.Exec(deleteQuery, user.ID).Error; err != nil {
 		tx.Rollback()
-		return handler.SendInternalServerError(c, nil, "Failed to delete user sessions")
-	}
-
-	if err := tx.Delete(&user).Error; err != nil {
-		tx.Rollback()
-		return handler.SendInternalServerError(c, nil, "Failed to delete account")
+		return handler.SendInternalServerError(c, nil, "Failed to hard delete account")
 	}
 
 	deployment := handler.GetDeployment(c)
@@ -2163,6 +1761,8 @@ func (h *Handler) DisconnectSocialConnection(c *fiber.Ctx) error {
 	if query.RowsAffected == 0 {
 		return handler.SendBadRequest(c, nil, "Social connection not found")
 	}
+
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, "Social connection disconnected successfully")
 }
@@ -2449,7 +2049,7 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to connect social account")
 	}
 
-	utils.RemoveCachedSession(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, fiber.Map{
 		"message":      "Social account connected successfully",

@@ -29,6 +29,7 @@ type PreludeSignals struct {
 
 type PreludeOptions struct {
 	CallbackURL string `json:"callback_url,omitempty"`
+	CodeSize    uint16 `json:"code_size,omitempty"`
 }
 
 type CreateVerificationRequest struct {
@@ -65,7 +66,7 @@ func InitPrelude() error {
 
 	preludeService = &PreludeService{
 		APIKey:  apiKey,
-		BaseURL: "https://api.prelude.so/v2",
+		BaseURL: "https://api.prelude.dev/v2",
 		Client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -97,6 +98,7 @@ func (p *PreludeService) SendVerification(phoneNumber string, deploymentID, user
 		},
 		Options: &PreludeOptions{
 			CallbackURL: callbackURL,
+			CodeSize:    6,
 		},
 	}
 
@@ -105,7 +107,7 @@ func (p *PreludeService) SendVerification(phoneNumber string, deploymentID, user
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", p.BaseURL+"/verifications", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", p.BaseURL+"/verification", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -154,7 +156,7 @@ func (p *PreludeService) CheckVerification(phoneNumber, code string) (bool, erro
 		return false, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", p.BaseURL+"/verifications/check", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", p.BaseURL+"/verification/check", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return false, fmt.Errorf("failed to create request: %w", err)
 	}

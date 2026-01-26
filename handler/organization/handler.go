@@ -148,7 +148,7 @@ func (h *Handler) CreateOrganization(
 
 	utils.PublishWebhookEvent(d.ID, "organization.created", org.ID, "organization")
 
-	utils.RemoveCachedSession(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, fiber.Map{
 		"organization": org,
@@ -238,6 +238,8 @@ func (h *Handler) LeaveOrganization(
 		return handler.SendInternalServerError(c, err, "Failed to leave organization")
 	}
 
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+
 	return handler.SendSuccess(c, fiber.Map{
 		"success": true,
 	})
@@ -318,6 +320,8 @@ func (h *Handler) UpdateOrganization(
 
 	deployment := handler.GetDeployment(c)
 	utils.PublishWebhookEvent(deployment.ID, "organization.updated", org.ID, "organization")
+
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, org)
 }
@@ -419,7 +423,7 @@ func (h *Handler) DeleteOrganization(
 
 	utils.PublishWebhookEvent(deployment.ID, "organization.deleted", orgIDUint, "organization")
 
-	utils.RemoveCachedSession(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, fiber.Map{
 		"success": true,
@@ -1086,6 +1090,8 @@ func (h *Handler) AcceptInvitation(
 	)
 	utils.PublishWebhookEvent(deployment.ID, "organization.member.added", membership.ID, "organization_membership")
 
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+
 	return handler.SendSuccess(c, response)
 }
 
@@ -1218,6 +1224,10 @@ func (h *Handler) AddMemberRole(
 		"organization_membership",
 	)
 
+	if assignedMember.UserID == *session.ActiveSignin.UserID {
+		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+	}
+
 	return handler.SendSuccess(c, fiber.Map{
 		"success": true,
 	})
@@ -1305,6 +1315,10 @@ func (h *Handler) RemoveMemberRole(
 		targetMembershipIDuint64,
 		"organization_membership",
 	)
+
+	if targetMemberShip.UserID == *session.ActiveSignin.UserID {
+		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+	}
 
 	return handler.SendSuccess(c, fiber.Map{
 		"success": true,

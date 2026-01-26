@@ -140,6 +140,22 @@ func (s *UserService) ValidateEmailRestrictions(email string, restrictions model
 	return nil
 }
 
+func (s *UserService) CheckEmailExists(email string, deploymentID uint64) bool {
+	var count int64
+	s.db.Model(&model.UserEmailAddress{}).
+		Where("email_address = ? AND deployment_id = ?", email, deploymentID).
+		Count(&count)
+	return count > 0
+}
+
+func (s *UserService) CheckUserphoneExists(phone string, countryCode string, deploymentID uint64) bool {
+	var count int64
+	s.db.Model(&model.UserPhoneNumber{}).
+		Where("phone_number = ? AND country_code = ? AND deployment_id = ?", phone, countryCode, deploymentID).
+		Count(&count)
+	return count > 0
+}
+
 func (s *UserService) ValidatePhoneRestrictions(phoneNumber string, countryCode string, restrictions model.DeploymentRestrictions) error {
 	if restrictions.CountryRestrictions.Enabled && len(restrictions.CountryRestrictions.CountryCodes) > 0 {
 		allowed := false

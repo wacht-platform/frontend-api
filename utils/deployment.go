@@ -26,21 +26,32 @@ func GetDeploymentByHost(host string) (*model.Deployment, error) {
 
 	queryResult := new(DeploymentQueryResult)
 	rawSQL := `
-		WITH social_connections_agg AS (
-			SELECT
-				deployment_id,
-				json_agg(sc) as social_connections
-			FROM deployment_social_connections sc
-			GROUP BY deployment_id
-		)
-		SELECT d.*, das.*, dbs.*, dds.*, dr.*, sca.social_connections, kp.*
+		SELECT 
+			d.*, 
+			das.*, 
+			dbs.*, 
+			dds.*, 
+			dr.*, 
+			kp.*,
+			COALESCE(
+				(SELECT json_agg(json_build_object(
+					'id', sc.id::text,
+					'created_at', to_char(sc.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+					'updated_at', to_char(sc.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+					'deployment_id', sc.deployment_id,
+					'provider', sc.provider,
+					'enabled', sc.enabled
+				))
+				 FROM deployment_social_connections sc
+				 WHERE sc.deployment_id = d.id AND sc.deleted_at IS NULL
+				), '[]'::json
+			) as social_connections
 		FROM deployments d
 		LEFT JOIN deployment_auth_settings das ON d.id = das.deployment_id
 		LEFT JOIN deployment_b2b_settings dbs ON d.id = dbs.deployment_id
 		LEFT JOIN deployment_ui_settings dds ON d.id = dds.deployment_id
 		LEFT JOIN deployment_restrictions dr ON d.id = dr.deployment_id
 		LEFT JOIN deployment_key_pairs kp ON d.id = kp.deployment_id
-		LEFT JOIN social_connections_agg sca ON d.id = sca.deployment_id
 		WHERE d.backend_host = ? AND d.deleted_at IS NULL
 	`
 	err := database.Connection.Clauses(dbresolver.Read).Raw(rawSQL, host).Scan(queryResult).Error

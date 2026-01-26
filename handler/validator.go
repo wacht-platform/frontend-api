@@ -2,6 +2,7 @@ package handler
 
 import (
 	"log"
+	"strconv"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
@@ -49,11 +50,20 @@ func SendResponse[T any](
 ) error {
 	session := GetSession(c)
 
+	var safeSession any
+	if session != nil {
+		safeSession = map[string]any{
+			"id":         strconv.FormatUint(session.ID, 10),
+			"created_at": session.CreatedAt,
+			"updated_at": session.UpdatedAt,
+		}
+	}
+
 	return c.Status(status).JSON(fiber.Map{
 		"status":  status,
 		"message": message,
 		"data":    data,
-		"session": session,
+		"session": safeSession,
 		"errors":  errors,
 	})
 }

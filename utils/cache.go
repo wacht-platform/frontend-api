@@ -34,7 +34,7 @@ func GetCachedDeployment(key string) (*model.Deployment, bool) {
 
 // SetCachedDeployment stores a deployment in cache
 func SetCachedDeployment(key string, deployment *model.Deployment) {
-	Cache.Set(key, deployment, ttlcache.DefaultTTL)
+	Cache.Set(key, deployment, 300*time.Second)
 }
 
 // GetCachedSession attempts to retrieve a session from cache
@@ -51,7 +51,7 @@ func GetCachedSession(sessionID uint64) (*model.Session, bool) {
 
 // SetCachedSession stores a session in cache
 func SetCachedSession(sessionID uint64, session *model.Session) {
-	Cache.Set(fmt.Sprintf("%d", sessionID), session, ttlcache.DefaultTTL)
+	Cache.Set(fmt.Sprintf("%d", sessionID), session, 5*time.Second)
 }
 
 // RemoveCachedSession removes a session from cache

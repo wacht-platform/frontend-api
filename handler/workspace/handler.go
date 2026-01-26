@@ -177,7 +177,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 
 	utils.PublishWebhookEvent(deployment.ID, "workspace.created", workspace.ID, "workspace")
 
-	utils.RemoveCachedSession(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	var creatorMembership *model.WorkspaceMembership
 	for _, member := range finalWorkspace.Members {
@@ -574,6 +574,10 @@ func (h *Handler) AddWorkspaceMemberRole(c *fiber.Ctx) error {
 		"workspace_membership",
 	)
 
+	if targetMembership.UserID == *session.ActiveSignin.UserID {
+		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+	}
+
 	return handler.SendSuccess(c, fiber.Map{"success": true})
 }
 
@@ -658,6 +662,10 @@ func (h *Handler) RemoveWorkspaceMemberRole(c *fiber.Ctx) error {
 
 	utils.PublishWebhookEvent(d.ID, "workspace.member.role.updated", targetMembershipID, "workspace_membership")
 
+	if targetMembership.UserID == *session.ActiveSignin.UserID {
+		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+	}
+
 	return handler.SendSuccess(c, fiber.Map{"success": true})
 }
 
@@ -733,6 +741,8 @@ func (h *Handler) UpdateWorkspace(c *fiber.Ctx) error {
 
 	deployment := handler.GetDeployment(c)
 	utils.PublishWebhookEvent(deployment.ID, "workspace.updated", workspace.ID, "workspace")
+
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, fiber.Map{
 		"workspace": workspace,
@@ -824,7 +834,7 @@ func (h *Handler) DeleteWorkspace(c *fiber.Ctx) error {
 
 	utils.PublishWebhookEvent(deployment.ID, "workspace.deleted", workspaceID, "workspace")
 
-	utils.RemoveCachedSession(session.ID)
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	return handler.SendSuccess(c, fiber.Map{
 		"success": true,
@@ -920,6 +930,10 @@ func (h *Handler) RemoveMember(c *fiber.Ctx) error {
 			txErr,
 			"Failed to remove member",
 		)
+	}
+
+	if targetMembership.UserID == *session.ActiveSignin.UserID {
+		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 	}
 
 	return handler.SendSuccess(c, fiber.Map{

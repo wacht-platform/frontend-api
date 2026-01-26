@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/ilabs/wacht-fe/pkg/idgen"
-	"gorm.io/gorm"
 )
 
 type Signin struct {
@@ -39,8 +38,4 @@ func NewSignIn(sessionID, userID uint64, validityPeriodSeconds uint64) *Signin {
 		ExpiresAt:    now.Add(time.Duration(validityPeriodSeconds) * time.Second),
 		LastActiveAt: now,
 	}
-}
-
-func (s *Signin) LoadUser(db *gorm.DB) {
-	db.Preload("User").First(s)
 }

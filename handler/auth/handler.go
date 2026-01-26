@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"log"
 	"slices"
 	"strconv"
 	"strings"
@@ -1595,37 +1596,22 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 					)
 				}
 
-				var user model.User
-				if err := database.Connection.Preload("PrimaryPhoneNumber").Where("id = ?", *attempt.UserID).First(&user).Error; err != nil {
-					return handler.SendInternalServerError(
-						c,
-						err,
-						"Error fetching user",
-					)
-				}
-
-				if user.PrimaryPhoneNumber == nil || !user.PrimaryPhoneNumber.Verified {
-					return handler.SendBadRequest(
-						c,
-						nil,
-						"No verified phone number available for 2FA",
-					)
-				}
-
 				lastDigits := c.Query("last_digits")
-				phoneNumber := user.PrimaryPhoneNumber.PhoneNumber
-
 				if len(lastDigits) != 4 {
 					return handler.SendBadRequest(c, nil, "Last digits must be 4 characters")
 				}
 
-				actualLastDigits := phoneNumber[len(phoneNumber)-4:]
-				if actualLastDigits != lastDigits {
+				var phoneNumber model.UserPhoneNumber
+				if err := database.Connection.Where(
+					"user_id = ? AND verified = true AND can_use_for_second_factor = true AND phone_number LIKE ?",
+					*attempt.UserID,
+					"%"+lastDigits,
+				).First(&phoneNumber).Error; err != nil {
 					return handler.SendBadRequest(c, nil, "Phone number verification failed")
 				}
 
 				if err := database.Connection.Model(&model.SignInAttempt{}).Where("id = ?", attempt.ID).
-					Update("identifier_id", *user.PrimaryPhoneNumberID).
+					Update("identifier_id", phoneNumber.ID).
 					Error; err != nil {
 					return handler.SendInternalServerError(
 						c,
@@ -1634,7 +1620,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 					)
 				}
 
-				if err := h.service.SendSmsOTPVerificationAsync(user.PrimaryPhoneNumber.PhoneNumber, user.PrimaryPhoneNumber.CountryCode, user.ID, deployment, c.IP(), c.Get("User-Agent")); err != nil {
+				if err := h.service.SendSmsOTPVerificationAsync(phoneNumber.PhoneNumber, phoneNumber.CountryCode, phoneNumber.UserID, deployment, c.IP(), c.Get("User-Agent")); err != nil {
 					return handler.SendInternalServerError(
 						c,
 						err,
@@ -1642,7 +1628,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 					)
 				}
 
-				maskedPhone := h.service.MaskPhoneNumber(user.PrimaryPhoneNumber.CountryCode, phoneNumber)
+				maskedPhone := h.service.MaskPhoneNumber(phoneNumber.CountryCode, phoneNumber.PhoneNumber)
 				return handler.SendSuccess(c, fiber.Map{
 					"masked_phone": maskedPhone,
 					"method":       "phone_otp",
@@ -1873,426 +1859,253 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 	}
 
 	if identifierType == "signin" {
-		attempt, err := h.service.GetSignInAttempt(
-			uint64(attemptIdentifier),
+		return h.handleSignInVerification(c, b, attemptIdentifier, session, deployment)
+	} else {
+		return h.handleSignUpVerification(c, b, attemptIdentifier, session, deployment)
+	}
+}
+
+func (h *Handler) handleSignInVerification(
+	c *fiber.Ctx,
+	b *VerifyOTPRequest,
+	attemptIdentifier int,
+	session *model.Session,
+	deployment model.Deployment,
+) error {
+	attempt, err := h.service.GetSignInAttempt(
+		uint64(attemptIdentifier),
+	)
+	if err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Error fetching sign in attempt",
 		)
-		if err != nil {
-			return handler.SendInternalServerError(
-				c,
-				err,
-				"Error fetching sign in attempt",
-			)
-		}
-		if attempt.Completed {
-			return handler.SendBadRequest(
-				c,
-				nil,
-				"Sign in attempt already completed",
-			)
-		}
+	}
+	if attempt.Completed {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			"Sign in attempt already completed",
+		)
+	}
 
-		var signin *model.Signin
+	var signin *model.Signin
 
-		switch attempt.CurrentStep {
-		case model.SignInAttemptStepVerifyEmail,
-			model.SignInAttemptStepVerifyEmailOTP:
-			{
+	switch attempt.CurrentStep {
+	case model.SignInAttemptStepVerifyEmail,
+		model.SignInAttemptStepVerifyEmailOTP:
+		{
+			valid, err := h.service.VerifyOTPFromRedis(fmt.Sprintf("signin:%d", attempt.ID), b.VerificationCode)
+			if err != nil || !valid {
+				return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
+			}
 
-				valid, err := h.service.VerifyOTPFromRedis(fmt.Sprintf("signin:%d", attempt.ID), b.VerificationCode)
-				if err != nil || !valid {
-					return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
-				}
+			var emailAddress string
+			var userID uint64
+			var user *model.User
 
-				var emailAddress string
-				var userID uint64
-				var user *model.User
+			if attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.Email != "" {
+				emailAddress = attempt.ProfileCompletionData.Email
+				if attempt.UserID != nil {
+					userID = *attempt.UserID
 
-				if attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.Email != "" {
-
-					emailAddress = attempt.ProfileCompletionData.Email
-					if attempt.UserID != nil {
-						userID = *attempt.UserID
-
-						var u model.User
-						if err := database.Connection.Where("id = ?", userID).First(&u).Error; err != nil {
-							return handler.SendInternalServerError(c, err, "Error fetching user")
-						}
-						user = &u
-					}
-				} else if attempt.IdentifierID != nil {
-
-					email, err := h.service.FindUserByEmailID(*attempt.IdentifierID, deployment.ID)
-					if err != nil {
+					var u model.User
+					if err := database.Connection.Where("id = ?", userID).First(&u).Error; err != nil {
 						return handler.SendInternalServerError(c, err, "Error fetching user")
 					}
-					emailAddress = email.EmailAddress
-					if email.UserID != nil {
-						userID = *email.UserID
-					}
-				} else {
-					return handler.SendBadRequest(c, nil, "Invalid verification attempt")
+					user = &u
 				}
-
-				if len(attempt.RemainingSteps) == 1 {
-					attempt.Completed = true
-					attempt.RemainingSteps = nil
-					signin = h.service.CreateSignin(
-						userID,
-						session.ID,
-						c,
-						deployment.AuthSettings.SessionValidityPeriod,
-					)
-					session.Signins = append(session.Signins, *signin)
-					session.ActiveSigninID = &signin.ID
-
-					utils.PublishWebhookEvent(deployment.ID, "session.created", session.ID, "session")
-				} else {
-					attempt.RemainingSteps = attempt.RemainingSteps[1:]
-					attempt.CurrentStep = attempt.RemainingSteps[0]
-				}
-
-				if err := database.Connection.Transaction(func(tx *gorm.DB) error {
-
-					if attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.Email != "" && user != nil {
-						emailID := idgen.NextID()
-						emailRecord := model.UserEmailAddress{
-							Model:        model.Model{ID: emailID},
-							EmailAddress: emailAddress,
-							Verified:     true,
-							VerifiedAt:   time.Now().UTC(),
-							DeploymentID: deployment.ID,
-							UserID:       &userID,
-						}
-						if err := tx.Create(&emailRecord).Error; err != nil {
-							return err
-						}
-
-						if user.PrimaryEmailAddressID == nil {
-							user.PrimaryEmailAddressID = &emailID
-							if err := tx.Save(user).Error; err != nil {
-								return err
-							}
-						}
-					}
-
-					if attempt.Completed {
-						d := handler.GetDeployment(c)
-						if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
-							return err
-						}
-						if err := tx.Create(signin).Error; err != nil {
-							return err
-						}
-						_ = h.service.nats.SendSignInNotificationEmail(d.ID, userID, signin.ID, emailAddress)
-					}
-
-					if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]interface{}{
-						"active_signin_id": session.ActiveSigninID,
-					}).Error; err != nil {
-						return err
-					}
-
-					handler.RemoveSessionFromCacheAndLocals(c, session.ID)
-					return tx.Save(attempt).Error
-				}); err != nil {
-					return handler.SendInternalServerError(
-						c,
-						err,
-						"Something went wrong",
-					)
-				}
-
-				if attempt.Completed {
-					h.service.TrackMAU(deployment.ID, userID)
-				}
-
-				h.service.DeleteOTPFromRedis(
-					fmt.Sprintf("signin:%d", attempt.ID),
-				)
-
-				for i, sa := range session.SigninAttempts {
-					if sa.ID == attempt.ID {
-						session.SigninAttempts[i] = attempt
-						break
-					}
-				}
-			}
-		case model.SignInAttemptStepVerifyPhone,
-			model.SignInAttemptStepVerifyPhoneOTP:
-			{
-				var phoneNumber string
-				var userID uint64
-				var user *model.User
-				var phone *model.UserPhoneNumber
-
-				if attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.PhoneNumber != "" {
-
-					phoneNumber = attempt.ProfileCompletionData.PhoneNumber
-					if attempt.UserID != nil {
-						userID = *attempt.UserID
-
-						var u model.User
-						if err := database.Connection.Where("id = ?", userID).First(&u).Error; err != nil {
-							return handler.SendInternalServerError(c, err, "Error fetching user")
-						}
-						user = &u
-					}
-				} else if attempt.IdentifierID != nil {
-					p, err := h.service.FindUserByPhoneNumberID(*attempt.IdentifierID, deployment.ID)
-					if err != nil {
-						return handler.SendInternalServerError(c, err, "Error fetching user")
-					}
-					phone = p
-					phoneNumber = p.PhoneNumber
-					userID = p.User.ID
-				} else {
-					return handler.SendBadRequest(c, nil, "Invalid verification attempt")
-				}
-
-				isValid, err := h.service.VerifyPhoneOTP(phoneNumber, phone.CountryCode, b.VerificationCode)
-				if err != nil {
-					return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
-				}
-
-				if !isValid {
-					return handler.SendBadRequest(c, nil, "Invalid OTP")
-				}
-
-				attempt.FirstMethodAuthenticated = true
-				if len(attempt.RemainingSteps) > 1 {
-
-					attempt.RemainingSteps = attempt.RemainingSteps[1:]
-					attempt.CurrentStep = attempt.RemainingSteps[0]
-
-					if attempt.CurrentStep == model.SignInAttemptStepVerifySecondFactor {
-						attempt.SecondMethodAuthenticationRequired = true
-					}
-				} else {
-					attempt.Completed = true
-					attempt.RemainingSteps = nil
-					signin = h.service.CreateSignin(userID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
-					session.Signins = append(session.Signins, *signin)
-					session.ActiveSigninID = &signin.ID
-
-					utils.PublishWebhookEvent(deployment.ID, "session.created", session.ID, "session")
-				}
-
-				if err := database.Connection.Transaction(func(tx *gorm.DB) error {
-
-					if attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.PhoneNumber != "" && user != nil {
-						phoneID := idgen.NextID()
-						phoneRecord := model.UserPhoneNumber{
-							Model:        model.Model{ID: phoneID},
-							PhoneNumber:  phoneNumber,
-							CountryCode:  attempt.ProfileCompletionData.PhoneCountryCode,
-							Verified:     true,
-							VerifiedAt:   time.Now().UTC(),
-							DeploymentID: deployment.ID,
-							UserID:       userID,
-						}
-						if err := tx.Create(&phoneRecord).Error; err != nil {
-							return err
-						}
-
-						if user.PrimaryPhoneNumberID == nil {
-							user.PrimaryPhoneNumberID = &phoneID
-							if err := tx.Save(user).Error; err != nil {
-								return err
-							}
-						}
-					} else if phone != nil {
-
-						phone.Verified = true
-						phone.VerifiedAt = time.Now().UTC()
-						if err := tx.Save(phone).Error; err != nil {
-							return err
-						}
-					}
-
-					if attempt.Completed {
-						d := handler.GetDeployment(c)
-						if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
-							return err
-						}
-
-						if err := tx.Create(signin).Error; err != nil {
-							return err
-						}
-
-						if user != nil && user.PrimaryEmailAddressID != nil {
-							var email model.UserEmailAddress
-							if err := tx.Where("id = ?", *user.PrimaryEmailAddressID).First(&email).Error; err == nil {
-								_ = h.service.nats.SendSignInNotificationEmail(d.ID, userID, signin.ID, email.EmailAddress)
-							}
-						}
-					}
-
-					if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]any{
-						"active_signin_id": session.ActiveSigninID,
-					}).Error; err != nil {
-						return err
-					}
-
-					handler.RemoveSessionFromCacheAndLocals(c, session.ID)
-					return tx.Save(attempt).Error
-				}); err != nil {
-					return handler.SendInternalServerError(
-						c,
-						err,
-						"Something went wrong",
-					)
-				}
-
-				if attempt.Completed {
-					h.service.TrackMAU(deployment.ID, userID)
-				}
-
-				h.service.DeleteOTPFromRedis(
-					fmt.Sprintf("signin:%d", attempt.ID),
-				)
-
-				for i, sa := range session.SigninAttempts {
-					if sa.ID == attempt.ID {
-						session.SigninAttempts[i] = attempt
-						break
-					}
-				}
-			}
-		case model.SignInAttemptStepVerifySecondFactor:
-			if attempt.UserID == nil {
-				return handler.SendBadRequest(
-					c,
-					nil,
-					"User ID not found in sign-in attempt",
-				)
-			}
-
-			var user model.User
-			if err := database.Connection.Preload("UserAuthenticator").Preload("UserEmailAddresses").Where("id = ?", *attempt.UserID).First(&user).Error; err != nil {
-				return handler.SendInternalServerError(
-					c,
-					err,
-					"Error fetching user",
-				)
-			}
-
-			method, err := h.service.Get2FAMethodFromCache(fmt.Sprintf("2fa_method:%d", attempt.ID))
-			if err != nil {
-				method = c.Query("method", "authenticator")
-			}
-			verified := false
-
-			switch method {
-			case "authenticator":
-				if user.UserAuthenticator == nil || user.UserAuthenticator.TotpSecret == "" {
-					return handler.SendBadRequest(
-						c,
-						nil,
-						"Authenticator not set up",
-					)
-				}
-				verified = totp.Validate(b.VerificationCode, user.UserAuthenticator.TotpSecret)
-				if !verified {
-					return handler.SendBadRequest(
-						c,
-						nil,
-						"Invalid authentication code",
-					)
-				}
-
-			case "phone_otp":
-				p, err := h.service.FindUserByPhoneNumberID(*attempt.IdentifierID, deployment.ID)
+			} else if attempt.IdentifierID != nil {
+				email, err := h.service.FindUserByEmailID(*attempt.IdentifierID, deployment.ID)
 				if err != nil {
 					return handler.SendInternalServerError(c, err, "Error fetching user")
 				}
-
-				verified, err = h.service.VerifyPhoneOTP(p.PhoneNumber, p.CountryCode, b.VerificationCode)
-				if err != nil {
-					return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
+				emailAddress = email.EmailAddress
+				if email.UserID != nil {
+					userID = *email.UserID
 				}
-
-				h.service.Delete2FAMethodFromCache(fmt.Sprintf("2fa_method:%d", attempt.ID))
-
-			case "backup_code":
-				if !user.BackupCodesGenerated || len(user.BackupCodes) == 0 {
-					return handler.SendBadRequest(
-						c,
-						nil,
-						"No backup codes available",
-					)
-				}
-
-				for i, code := range user.BackupCodes {
-					match, err := utils.ComparePassword(code, b.VerificationCode)
-					if err == nil && match {
-						verified = true
-						user.BackupCodes = slices.Delete(user.BackupCodes, i, i+1)
-						if err := database.Connection.Model(&user).Update("backup_codes", user.BackupCodes).Error; err != nil {
-							return handler.SendInternalServerError(
-								c,
-								err,
-								"Error updating backup codes",
-							)
-						}
-						break
-					}
-				}
-
-				if !verified {
-					return handler.SendBadRequest(
-						c,
-						nil,
-						"Invalid backup code",
-					)
-				}
-
-			default:
-				return handler.SendBadRequest(
-					c,
-					nil,
-					"Invalid 2FA method",
-				)
+			} else {
+				return handler.SendBadRequest(c, nil, "Invalid verification attempt")
 			}
-
-			if !verified {
-				return handler.SendBadRequest(
-					c,
-					nil,
-					"Invalid verification code",
-				)
-			}
-
-			attempt.SecondMethodAuthenticated = true
-			attempt.SecondMethodAuthenticationRequired = false
 
 			if len(attempt.RemainingSteps) == 1 {
 				attempt.Completed = true
 				attempt.RemainingSteps = nil
-				attempt.RemainingSteps = datatypes.JSONSlice[model.SignInAttemptStep]{}
-				attempt.CurrentStep = ""
-				signin = h.service.CreateSignin(user.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
+				signin = h.service.CreateSignin(
+					userID,
+					session.ID,
+					c,
+					deployment.AuthSettings.SessionValidityPeriod,
+				)
 				session.Signins = append(session.Signins, *signin)
 				session.ActiveSigninID = &signin.ID
 
 				utils.PublishWebhookEvent(deployment.ID, "session.created", session.ID, "session")
-
-				var primaryEmail *string
-				if user.PrimaryEmailAddressID != nil {
-					for _, email := range user.UserEmailAddresses {
-						if email.ID == *user.PrimaryEmailAddressID {
-							primaryEmail = &email.EmailAddress
-							break
-						}
-					}
-				}
-
-				utils.PublishSignInEvent(deployment.ID, &user, "otp", primaryEmail, c)
 			} else {
 				attempt.RemainingSteps = attempt.RemainingSteps[1:]
 				attempt.CurrentStep = attempt.RemainingSteps[0]
 			}
 
+			log.Println("attempt", attempt)
+
 			if err := database.Connection.Transaction(func(tx *gorm.DB) error {
+				if attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.Email != "" && user != nil {
+					emailID := idgen.NextID()
+					emailRecord := model.UserEmailAddress{
+						Model:        model.Model{ID: emailID},
+						EmailAddress: emailAddress,
+						Verified:     true,
+						VerifiedAt:   time.Now().UTC(),
+						DeploymentID: deployment.ID,
+						UserID:       &userID,
+					}
+					if err := tx.Create(&emailRecord).Error; err != nil {
+						return err
+					}
+
+					if user.PrimaryEmailAddressID == nil {
+						user.PrimaryEmailAddressID = &emailID
+						if err := tx.Save(user).Error; err != nil {
+							return err
+						}
+					}
+				}
+
+				if attempt.Completed {
+					d := handler.GetDeployment(c)
+					if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
+						return err
+					}
+					if err := tx.Create(signin).Error; err != nil {
+						return err
+					}
+					_ = h.service.nats.SendSignInNotificationEmail(d.ID, userID, signin.ID, emailAddress)
+				}
+
+				if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]interface{}{
+					"active_signin_id": session.ActiveSigninID,
+				}).Error; err != nil {
+					return err
+				}
+
+				handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+				return tx.Save(&attempt).Error
+			}); err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Something went wrong",
+				)
+			}
+
+			if attempt.Completed {
+				h.service.TrackMAU(deployment.ID, userID)
+			}
+
+			h.service.DeleteOTPFromRedis(
+				fmt.Sprintf("signin:%d", attempt.ID),
+			)
+
+			for i, sa := range session.SigninAttempts {
+				if sa.ID == attempt.ID {
+					session.SigninAttempts[i] = attempt
+					break
+				}
+			}
+		}
+	case model.SignInAttemptStepVerifyPhone,
+		model.SignInAttemptStepVerifyPhoneOTP:
+		{
+			var phoneNumber string
+			var userID uint64
+			var user *model.User
+			var phone *model.UserPhoneNumber
+
+			if attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.PhoneNumber != "" {
+
+				phoneNumber = attempt.ProfileCompletionData.PhoneNumber
+				if attempt.UserID != nil {
+					userID = *attempt.UserID
+
+					var u model.User
+					if err := database.Connection.Where("id = ?", userID).First(&u).Error; err != nil {
+						return handler.SendInternalServerError(c, err, "Error fetching user")
+					}
+					user = &u
+				}
+			} else if attempt.IdentifierID != nil {
+				p, err := h.service.FindUserByPhoneNumberID(*attempt.IdentifierID, deployment.ID)
+				if err != nil {
+					return handler.SendInternalServerError(c, err, "Error fetching user")
+				}
+				phone = p
+				phoneNumber = p.PhoneNumber
+				userID = p.User.ID
+			} else {
+				return handler.SendBadRequest(c, nil, "Invalid verification attempt")
+			}
+
+			isValid, err := h.service.VerifyPhoneOTP(phoneNumber, phone.CountryCode, b.VerificationCode)
+			if err != nil {
+				return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
+			}
+
+			if !isValid {
+				return handler.SendBadRequest(c, nil, "Invalid OTP")
+			}
+
+			attempt.FirstMethodAuthenticated = true
+			if len(attempt.RemainingSteps) > 1 {
+
+				attempt.RemainingSteps = attempt.RemainingSteps[1:]
+				attempt.CurrentStep = attempt.RemainingSteps[0]
+
+				if attempt.CurrentStep == model.SignInAttemptStepVerifySecondFactor {
+					attempt.SecondMethodAuthenticationRequired = true
+				}
+			} else {
+				attempt.Completed = true
+				attempt.RemainingSteps = nil
+				signin = h.service.CreateSignin(userID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
+				session.Signins = append(session.Signins, *signin)
+				session.ActiveSigninID = &signin.ID
+
+				utils.PublishWebhookEvent(deployment.ID, "session.created", session.ID, "session")
+			}
+
+			if err := database.Connection.Transaction(func(tx *gorm.DB) error {
+
+				if attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.PhoneNumber != "" && user != nil {
+					phoneID := idgen.NextID()
+					phoneRecord := model.UserPhoneNumber{
+						Model:        model.Model{ID: phoneID},
+						PhoneNumber:  phoneNumber,
+						CountryCode:  attempt.ProfileCompletionData.PhoneCountryCode,
+						Verified:     true,
+						VerifiedAt:   time.Now().UTC(),
+						DeploymentID: deployment.ID,
+						UserID:       userID,
+					}
+					if err := tx.Create(&phoneRecord).Error; err != nil {
+						return err
+					}
+
+					if user.PrimaryPhoneNumberID == nil {
+						user.PrimaryPhoneNumberID = &phoneID
+						if err := tx.Save(user).Error; err != nil {
+							return err
+						}
+					}
+				} else if phone != nil {
+
+					phone.Verified = true
+					phone.VerifiedAt = time.Now().UTC()
+					if err := tx.Save(phone).Error; err != nil {
+						return err
+					}
+				}
+
 				if attempt.Completed {
 					d := handler.GetDeployment(c)
 					if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
@@ -2303,38 +2116,221 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 						return err
 					}
 
-					if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]any{
-						"active_signin_id": session.ActiveSigninID,
-					}).Error; err != nil {
-						return err
-					}
-
-					handler.RemoveSessionFromCacheAndLocals(c, session.ID)
-
-					h.service.Delete2FAMethodFromCache(fmt.Sprintf("2fa_method:%d", attempt.ID))
-
-					if user.PrimaryEmailAddressID != nil {
-						for _, email := range user.UserEmailAddresses {
-							if email.ID == *user.PrimaryEmailAddressID {
-								_ = h.service.nats.SendSignInNotificationEmail(deployment.ID, user.ID, signin.ID, email.EmailAddress)
-								break
-							}
+					if user != nil && user.PrimaryEmailAddressID != nil {
+						var email model.UserEmailAddress
+						if err := tx.Where("id = ?", *user.PrimaryEmailAddressID).First(&email).Error; err == nil {
+							_ = h.service.nats.SendSignInNotificationEmail(d.ID, userID, signin.ID, email.EmailAddress)
 						}
 					}
 				}
 
-				return tx.Save(attempt).Error
+				if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]any{
+					"active_signin_id": session.ActiveSigninID,
+				}).Error; err != nil {
+					return err
+				}
+
+				handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+				return tx.Save(&attempt).Error
 			}); err != nil {
 				return handler.SendInternalServerError(
 					c,
 					err,
-					"Error completing 2FA verification",
+					"Something went wrong",
 				)
 			}
 
 			if attempt.Completed {
-				h.service.TrackMAU(deployment.ID, user.ID)
+				h.service.TrackMAU(deployment.ID, userID)
 			}
+
+			h.service.DeleteOTPFromRedis(
+				fmt.Sprintf("signin:%d", attempt.ID),
+			)
+
+			for i, sa := range session.SigninAttempts {
+				if sa.ID == attempt.ID {
+					session.SigninAttempts[i] = attempt
+					break
+				}
+			}
+		}
+	case model.SignInAttemptStepVerifySecondFactor:
+		if attempt.UserID == nil {
+			return handler.SendBadRequest(
+				c,
+				nil,
+				"User ID not found in sign-in attempt",
+			)
+		}
+
+		var user model.User
+		if err := database.Connection.Preload("UserAuthenticator").Preload("UserEmailAddresses").Where("id = ?", *attempt.UserID).First(&user).Error; err != nil {
+			return handler.SendInternalServerError(
+				c,
+				err,
+				"Error fetching user",
+			)
+		}
+
+		method, err := h.service.Get2FAMethodFromCache(fmt.Sprintf("2fa_method:%d", attempt.ID))
+		if err != nil {
+			method = c.Query("method", "authenticator")
+		}
+		verified := false
+
+		switch method {
+		case "authenticator":
+			if user.UserAuthenticator == nil || user.UserAuthenticator.TotpSecret == "" {
+				return handler.SendBadRequest(
+					c,
+					nil,
+					"Authenticator not set up",
+				)
+			}
+			verified = totp.Validate(b.VerificationCode, user.UserAuthenticator.TotpSecret)
+			if !verified {
+				return handler.SendBadRequest(
+					c,
+					nil,
+					"Invalid authentication code",
+				)
+			}
+
+		case "phone_otp":
+			p, err := h.service.FindUserByPhoneNumberID(*attempt.IdentifierID, deployment.ID)
+			if err != nil {
+				return handler.SendInternalServerError(c, err, "Error fetching user")
+			}
+
+			verified, err = h.service.VerifyPhoneOTP(p.PhoneNumber, p.CountryCode, b.VerificationCode)
+			if err != nil {
+				return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
+			}
+
+			h.service.Delete2FAMethodFromCache(fmt.Sprintf("2fa_method:%d", attempt.ID))
+
+		case "backup_code":
+			if !user.BackupCodesGenerated || len(user.BackupCodes) == 0 {
+				return handler.SendBadRequest(
+					c,
+					nil,
+					"No backup codes available",
+				)
+			}
+
+			for i, code := range user.BackupCodes {
+				match, err := utils.ComparePassword(code, b.VerificationCode)
+				if err == nil && match {
+					verified = true
+					user.BackupCodes = slices.Delete(user.BackupCodes, i, i+1)
+					if err := database.Connection.Model(&user).Update("backup_codes", user.BackupCodes).Error; err != nil {
+						return handler.SendInternalServerError(
+							c,
+							err,
+							"Error updating backup codes",
+						)
+					}
+					break
+				}
+			}
+
+			if !verified {
+				return handler.SendBadRequest(
+					c,
+					nil,
+					"Invalid backup code",
+				)
+			}
+
+		default:
+			return handler.SendBadRequest(
+				c,
+				nil,
+				"Invalid 2FA method",
+			)
+		}
+
+		if !verified {
+			return handler.SendBadRequest(
+				c,
+				nil,
+				"Invalid verification code",
+			)
+		}
+
+		attempt.SecondMethodAuthenticated = true
+		attempt.SecondMethodAuthenticationRequired = false
+
+		if len(attempt.RemainingSteps) == 1 {
+			attempt.Completed = true
+			attempt.RemainingSteps = nil
+			attempt.RemainingSteps = datatypes.JSONSlice[model.SignInAttemptStep]{}
+			attempt.CurrentStep = ""
+			signin = h.service.CreateSignin(user.ID, session.ID, c, deployment.AuthSettings.SessionValidityPeriod)
+			session.Signins = append(session.Signins, *signin)
+			session.ActiveSigninID = &signin.ID
+
+			utils.PublishWebhookEvent(deployment.ID, "session.created", session.ID, "session")
+
+			var primaryEmail *string
+			if user.PrimaryEmailAddressID != nil {
+				for _, email := range user.UserEmailAddresses {
+					if email.ID == *user.PrimaryEmailAddressID {
+						primaryEmail = &email.EmailAddress
+						break
+					}
+				}
+			}
+
+			utils.PublishSignInEvent(deployment.ID, &user, "otp", primaryEmail, c)
+		} else {
+			attempt.RemainingSteps = attempt.RemainingSteps[1:]
+			attempt.CurrentStep = attempt.RemainingSteps[0]
+		}
+
+		if err := database.Connection.Transaction(func(tx *gorm.DB) error {
+			if attempt.Completed {
+				d := handler.GetDeployment(c)
+				if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
+					return err
+				}
+
+				if err := tx.Create(signin).Error; err != nil {
+					return err
+				}
+
+				if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Updates(map[string]any{
+					"active_signin_id": session.ActiveSigninID,
+				}).Error; err != nil {
+					return err
+				}
+
+				handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+
+				h.service.Delete2FAMethodFromCache(fmt.Sprintf("2fa_method:%d", attempt.ID))
+
+				if user.PrimaryEmailAddressID != nil {
+					for _, email := range user.UserEmailAddresses {
+						if email.ID == *user.PrimaryEmailAddressID {
+							_ = h.service.nats.SendSignInNotificationEmail(deployment.ID, user.ID, signin.ID, email.EmailAddress)
+							break
+						}
+					}
+				}
+			}
+
+			return tx.Save(&attempt).Error
+		}); err != nil {
+			return handler.SendInternalServerError(
+				c,
+				err,
+				"Error completing 2FA verification",
+			)
+		}
+
+		if attempt.Completed {
+			h.service.TrackMAU(deployment.ID, user.ID)
 		}
 
 		for i, sa := range session.SigninAttempts {
@@ -2343,140 +2339,150 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 				break
 			}
 		}
-	} else {
-		attempt, err := h.service.GetSignupAttempt(uint64(attemptIdentifier))
+	}
+
+	return handler.SendSuccess(c, session)
+}
+
+func (h *Handler) handleSignUpVerification(
+	c *fiber.Ctx,
+	b *VerifyOTPRequest,
+	attemptIdentifier int,
+	session *model.Session,
+	deployment model.Deployment,
+) error {
+	attempt, err := h.service.GetSignupAttempt(uint64(attemptIdentifier))
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Error fetching sign up attempt")
+	}
+
+	if attempt.CurrentStep == model.SignupAttemptStepVerifyPhone {
+		isValid, err := h.service.VerifyPhoneOTP(
+			attempt.PhoneNumber,
+			attempt.PhoneCountryCode,
+			b.VerificationCode,
+		)
 		if err != nil {
-			return handler.SendInternalServerError(c, err, "Error fetching sign up attempt")
+			return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
+		}
+		if !isValid {
+			return handler.SendBadRequest(c, nil, "Invalid OTP")
+		}
+	} else {
+		valid, err := h.service.VerifyOTPFromRedis(fmt.Sprintf("signup:%d", attempt.ID), b.VerificationCode)
+		if err != nil || !valid {
+			return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
+		}
+	}
+
+	d := handler.GetDeployment(c)
+
+	attempt.RemainingSteps = attempt.RemainingSteps[1:]
+	if len(attempt.RemainingSteps) > 0 {
+		attempt.CurrentStep = attempt.RemainingSteps[0]
+
+		if err := database.Connection.Save(&attempt).Error; err != nil {
+			return handler.SendInternalServerError(c, err, "Error saving attempt")
 		}
 
-		if attempt.CurrentStep == model.SignupAttemptStepVerifyPhone {
-			isValid, err := h.service.VerifyPhoneOTP(
-				attempt.PhoneNumber,
-				attempt.PhoneCountryCode,
-				b.VerificationCode,
-			)
-			if err != nil {
-				return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
-			}
-			if !isValid {
-				return handler.SendBadRequest(c, nil, "Invalid OTP")
-			}
-		} else {
-			valid, err := h.service.VerifyOTPFromRedis(fmt.Sprintf("signup:%d", attempt.ID), b.VerificationCode)
-			if err != nil || !valid {
-				return handler.SendBadRequest(c, nil, "Invalid or expired OTP")
+		for i, sa := range session.SignupAttempts {
+			if sa.ID == attempt.ID {
+				session.SignupAttempts[i] = *attempt
+				break
 			}
 		}
+	} else {
+		attempt.CurrentStep = ""
+		attempt.Completed = true
+		user, err := h.service.CreateVerifiedUser(attempt, d)
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Error creating user")
+		}
 
-		d := handler.GetDeployment(c)
+		if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
+			return handler.SendBadRequest(c, nil, err.Error(), handler.ErrCountryRestricted)
+		}
 
-		attempt.RemainingSteps = attempt.RemainingSteps[1:]
-		if len(attempt.RemainingSteps) > 0 {
-			attempt.CurrentStep = attempt.RemainingSteps[0]
+		if err := database.Connection.Transaction(func(tx *gorm.DB) error {
+			email := user.UserEmailAddresses[0]
+			user.UserEmailAddresses = []model.UserEmailAddress{}
 
-			if err := database.Connection.Save(attempt).Error; err != nil {
-				return handler.SendInternalServerError(c, err, "Error saving attempt")
+			email.UserID = nil
+
+			if err := tx.Create(&email).Error; err != nil {
+				return err
 			}
 
-			for i, sa := range session.SignupAttempts {
-				if sa.ID == attempt.ID {
-					session.SignupAttempts[i] = *attempt
-					break
-				}
-			}
-		} else {
-			attempt.CurrentStep = ""
-			attempt.Completed = true
-			user, err := h.service.CreateVerifiedUser(attempt, d)
-			if err != nil {
-				return handler.SendInternalServerError(c, err, "Error creating user")
+			if err := tx.Create(user).Error; err != nil {
+				return err
 			}
 
-			if err := h.service.ValidateIPCountryRestrictions(c, d.Restrictions); err != nil {
-				return handler.SendBadRequest(c, nil, err.Error(), handler.ErrCountryRestricted)
+			if err := h.service.CheckAndAddUserToOrganizationByDomain(tx, user.ID, email.EmailAddress, d.ID); err != nil {
+				return err
 			}
 
-			if err := database.Connection.Transaction(func(tx *gorm.DB) error {
-				email := user.UserEmailAddresses[0]
-				user.UserEmailAddresses = []model.UserEmailAddress{}
+			if err := tx.Model(&model.UserEmailAddress{}).
+				Where("id = ?", email.ID).
+				Update("user_id", user.ID).
+				Error; err != nil {
+				return err
+			}
 
-				email.UserID = nil
+			signIn := h.service.CreateSignin(user.ID, session.ID, c, d.AuthSettings.SessionValidityPeriod)
 
-				if err := tx.Create(&email).Error; err != nil {
-					return err
-				}
+			if err := tx.Create(signIn).Error; err != nil {
+				return err
+			}
 
-				if err := tx.Create(user).Error; err != nil {
-					return err
-				}
+			if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error; err != nil {
+				return err
+			}
 
-				if err := h.service.CheckAndAddUserToOrganizationByDomain(tx, user.ID, email.EmailAddress, d.ID); err != nil {
-					return err
-				}
+			if err := tx.Preload("UserEmailAddresses").First(&user, user.ID).Error; err != nil {
+				return err
+			}
 
-				if err := tx.Model(&model.UserEmailAddress{}).
-					Where("id = ?", email.ID).
-					Update("user_id", user.ID).
-					Error; err != nil {
-					return err
-				}
+			signIn.User = user
+			session.ActiveSigninID = &signIn.ID
+			session.ActiveSignin = signIn
 
-				signIn := h.service.CreateSignin(user.ID, session.ID, c, d.AuthSettings.SessionValidityPeriod)
-
-				if err := tx.Create(signIn).Error; err != nil {
-					return err
-				}
-
-				if err := tx.Model(&model.Session{}).Where("id = ?", session.ID).Update("active_signin_id", signIn.ID).Error; err != nil {
-					return err
-				}
-
-				if err := tx.Preload("UserEmailAddresses").First(&user, user.ID).Error; err != nil {
-					return err
-				}
-
-				signIn.User = user
-				session.ActiveSigninID = &signIn.ID
-				session.ActiveSignin = signIn
-
-				inviteToken := c.Query("invite_token")
-				if inviteToken != "" {
-					var invitation model.DeploymentInvitation
-					// First check if invitation exists and is valid
-					if err := tx.Where("token = ? AND deployment_id = ? AND expiry > ?",
-						inviteToken, d.ID, time.Now()).
-						First(&invitation).Error; err == nil {
-						// Verify the email matches the invitation
-						if invitation.EmailAddress == email.EmailAddress {
-							// Delete the invitation as it's been accepted
-							tx.Delete(&invitation)
-						}
+			inviteToken := c.Query("invite_token")
+			if inviteToken != "" {
+				var invitation model.DeploymentInvitation
+				// First check if invitation exists and is valid
+				if err := tx.Where("token = ? AND deployment_id = ? AND expiry > ?",
+					inviteToken, d.ID, time.Now()).
+					First(&invitation).Error; err == nil {
+					// Verify the email matches the invitation
+					if invitation.EmailAddress == email.EmailAddress {
+						// Delete the invitation as it's been accepted
+						tx.Delete(&invitation)
 					}
 				}
-
-				return tx.Save(attempt).Error
-			}); err != nil {
-				return handler.SendInternalServerError(c, err, "Something went wrong")
 			}
 
-			h.service.TrackMAU(d.ID, user.ID)
+			return tx.Save(&attempt).Error
+		}); err != nil {
+			return handler.SendInternalServerError(c, err, "Something went wrong")
+		}
 
-			utils.PublishSignUpEvent(d.ID, user, "email_password", &attempt.Email, c)
-			utils.PublishSignInEvent(d.ID, user, "email_password", &attempt.Email, c)
+		h.service.TrackMAU(d.ID, user.ID)
 
-			handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+		utils.PublishSignUpEvent(d.ID, user, "email_password", &attempt.Email, c)
+		utils.PublishSignInEvent(d.ID, user, "email_password", &attempt.Email, c)
 
-			for i, sa := range session.SignupAttempts {
-				if sa.ID == attempt.ID {
-					session.SignupAttempts[i] = *attempt
-					break
-				}
+		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+
+		for i, sa := range session.SignupAttempts {
+			if sa.ID == attempt.ID {
+				session.SignupAttempts[i] = *attempt
+				break
 			}
 		}
+	}
 
-		if attempt.CurrentStep != model.SignupAttemptStepVerifyPhone {
-			h.service.DeleteOTPFromRedis(fmt.Sprintf("signup:%d", attempt.ID))
-		}
+	if attempt.CurrentStep != model.SignupAttemptStepVerifyPhone {
+		h.service.DeleteOTPFromRedis(fmt.Sprintf("signup:%d", attempt.ID))
 	}
 
 	return handler.SendSuccess(c, session)
@@ -2755,7 +2761,7 @@ func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
 		if err := tx.Save(&user).Error; err != nil {
 			return err
 		}
-		return tx.Save(attempt).Error
+		return tx.Save(&attempt).Error
 	}); err != nil {
 		return handler.SendInternalServerError(c, err, "Error saving attempt")
 	}
