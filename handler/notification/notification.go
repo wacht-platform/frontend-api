@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -20,112 +21,94 @@ func List(c *fiber.Ctx) error {
 
 	deployment := handler.GetDeployment(c)
 
-	// Parse query parameters
 	var req model.NotificationListRequest
 	if err := c.QueryParser(&req); err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid query parameters")
 	}
 	req.SetDefaults()
 
-	baseQuery := database.Connection.Model(&model.Notification{}).
-		Where("deployment_id = ?", deployment.ID)
-
-	baseQuery = ApplyChannelFilters(baseQuery, &req, *session.ActiveSignin.UserID, session)
-
-	baseQuery = req.ApplyFilters(baseQuery)
-
-	var total int64
-	if err := baseQuery.Count(&total).Error; err != nil {
-		log.Printf("Failed to count notifications: %v", err)
-		return handler.SendInternalServerError(c, nil, "Failed to count notifications")
+	type notificationResult struct {
+		model.Notification
+		FullCount    int64 `gorm:"column:full_count"`
+		UnreadCapped int64 `gorm:"column:unread_capped"`
 	}
 
-	// Get unread count
-	var unreadCount int64
-	if err := database.Connection.Model(&model.Notification{}).
-		Where("user_id = ?", session.ActiveSignin.UserID).
-		Where("deployment_id = ?", deployment.ID).
-		Where("is_read = false").
-		Where("is_archived = false").
-		Where("(expires_at IS NULL OR expires_at > ?)", time.Now()).
-		Count(&unreadCount).Error; err != nil {
-		log.Printf("Failed to count unread notifications: %v", err)
-		return handler.SendInternalServerError(c, nil, "Failed to count unread notifications")
-	}
+	var results []notificationResult
 
-	// Get notifications with pagination
-	var notifications []model.Notification
-	if err := baseQuery.
-		Order("created_at DESC").
-		Limit(req.Limit).
-		Offset(req.Offset).
-		Find(&notifications).Error; err != nil {
-		log.Printf("Failed to fetch notifications: %v", err)
+	filterSQL := database.Connection.ToSQL(func(tx *gorm.DB) *gorm.DB {
+		q := tx.Model(&model.Notification{}).
+			Where("deployment_id = ?", deployment.ID)
+
+		q = ApplyScopeFilters(q, &req, *session.ActiveSignin.UserID, session)
+		q = req.ApplyFilters(q)
+
+		return q.Find(&[]model.Notification{})
+	})
+
+	cteQuery := fmt.Sprintf(`
+		WITH filtered AS (
+			%s
+		),
+		counts AS (
+			SELECT 
+				(SELECT COUNT(*) FROM filtered) as full_count,
+				(SELECT COUNT(*) FROM (SELECT 1 FROM filtered WHERE is_read = false LIMIT 10) AS u) as unread_capped
+		),
+		paginated AS (
+			SELECT * FROM filtered ORDER BY created_at DESC LIMIT ? OFFSET ?
+		)
+		SELECT p.*, c.full_count, c.unread_capped
+		FROM counts c
+		LEFT JOIN paginated p ON true`, filterSQL)
+
+	if err := database.Connection.Raw(cteQuery, req.Limit, req.Offset).Scan(&results).Error; err != nil {
+		log.Printf("Failed optimized notification fetch: %v", err)
 		return handler.SendInternalServerError(c, nil, "Failed to fetch notifications")
 	}
 
-	// If no notifications found, return empty array instead of null
-	if notifications == nil {
-		notifications = []model.Notification{}
-	}
+	var total int64
+	var unreadCount int64
+	notifications := make([]model.Notification, 0)
 
-	channelCounts := CalculateChannelCounts(*session.ActiveSignin.UserID, session)
+	if len(results) > 0 {
+		total = results[0].FullCount
+		unreadCount = results[0].UnreadCapped
 
-	channels := req.Channels
-	if len(channels) == 0 {
-		channels = []string{"user"}
+		for _, r := range results {
+			if r.ID != 0 {
+				notifications = append(notifications, r.Notification)
+			}
+		}
 	}
 
 	response := model.NotificationListResponse{
 		Notifications: notifications,
 		Total:         total,
-		UnreadCount:   channelCounts.Total,
+		UnreadCount:   unreadCount,
 		HasMore:       int64(req.Offset+req.Limit) < total,
-		Channels:      channels,
-		UnreadCounts:  channelCounts,
 	}
 
 	return handler.SendSuccess(c, response)
 }
 
-// GetUnreadCount returns the count of unread notifications
-func GetUnreadCount(c *fiber.Ctx) error {
+func GetScopeUnread(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
 	}
 
-	deployment := handler.GetDeployment(c)
-
-	var count int64
-	if err := database.Connection.Model(&model.Notification{}).
-		Where("user_id = ?", session.ActiveSignin.UserID).
-		Where("deployment_id = ?", deployment.ID).
-		Where("is_read = false").
-		Where("is_archived = false").
-		Where("(expires_at IS NULL OR expires_at > ?)", time.Now()).
-		Count(&count).Error; err != nil {
-		log.Printf("Failed to count unread notifications: %v", err)
-		return handler.SendInternalServerError(c, nil, "Failed to count unread notifications")
+	var req model.NotificationListRequest
+	if err := c.QueryParser(&req); err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid query parameters")
 	}
 
-	return handler.SendSuccess(c, model.UnreadCountResponse{
+	count := GetScopeUnreadCount(*session.ActiveSignin.UserID, session, &req)
+
+	return handler.SendSuccess(c, model.ScopeUnreadResponse{
 		Count: count,
 	})
 }
 
-func GetChannelCounts(c *fiber.Ctx) error {
-	session := handler.GetSession(c)
-	if session == nil {
-		return handler.SendUnauthorized(c, nil, "Unauthorized")
-	}
-
-	channelCounts := CalculateChannelCounts(*session.ActiveSignin.UserID, session)
-
-	return handler.SendSuccess(c, channelCounts)
-}
-
-// MarkAsRead marks a notification as read
 func MarkAsRead(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session == nil {
@@ -134,13 +117,11 @@ func MarkAsRead(c *fiber.Ctx) error {
 
 	deployment := handler.GetDeployment(c)
 
-	// Parse notification ID
 	notificationID, err := strconv.ParseUint(c.Params("id"), 10, 64)
 	if err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid notification ID")
 	}
 
-	// Find and update the notification
 	var notification model.Notification
 	result := database.Connection.Model(&model.Notification{}).
 		Where("id = ?", notificationID).
@@ -156,10 +137,8 @@ func MarkAsRead(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, nil, "Failed to find notification")
 	}
 
-	// Mark as read
 	notification.MarkAsRead()
 
-	// Update in database
 	if err := database.Connection.Save(&notification).Error; err != nil {
 		log.Printf("Failed to update notification: %v", err)
 		return handler.SendInternalServerError(c, nil, "Failed to update notification")
@@ -171,7 +150,47 @@ func MarkAsRead(c *fiber.Ctx) error {
 	})
 }
 
-// MarkAllAsRead marks all notifications as read for the current user
+func MarkAsUnread(c *fiber.Ctx) error {
+	session := handler.GetSession(c)
+	if session == nil {
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
+	}
+
+	deployment := handler.GetDeployment(c)
+
+	notificationID, err := strconv.ParseUint(c.Params("id"), 10, 64)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid notification ID")
+	}
+
+	var notification model.Notification
+	result := database.Connection.Model(&model.Notification{}).
+		Where("id = ?", notificationID).
+		Where("user_id = ?", session.ActiveSignin.UserID).
+		Where("deployment_id = ?", deployment.ID).
+		First(&notification)
+
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return handler.SendNotFound(c, nil, "Notification not found")
+		}
+		log.Printf("Failed to find notification: %v", result.Error)
+		return handler.SendInternalServerError(c, nil, "Failed to find notification")
+	}
+
+	notification.MarkAsUnread()
+
+	if err := database.Connection.Save(&notification).Error; err != nil {
+		log.Printf("Failed to update notification: %v", err)
+		return handler.SendInternalServerError(c, nil, "Failed to update notification")
+	}
+
+	return handler.SendSuccess(c, fiber.Map{
+		"message": "Notification marked as unread",
+		"success": true,
+	})
+}
+
 func MarkAllAsRead(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session == nil {
@@ -180,12 +199,19 @@ func MarkAllAsRead(c *fiber.Ctx) error {
 
 	deployment := handler.GetDeployment(c)
 
-	// Update all unread notifications
-	result := database.Connection.Model(&model.Notification{}).
+	var req model.NotificationListRequest
+	if err := c.QueryParser(&req); err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid query parameters")
+	}
+
+	db := database.Connection.Model(&model.Notification{}).
 		Where("user_id = ?", session.ActiveSignin.UserID).
-		Where("deployment_id = ?", deployment.ID).
-		Where("is_read = false").
-		Where("is_archived = false").
+		Where("deployment_id = ?", deployment.ID)
+
+	db = ApplyScopeFilters(db, &req, *session.ActiveSignin.UserID, session)
+	db = req.ApplyFilters(db)
+
+	result := db.Where("is_read = false").
 		Updates(map[string]interface{}{
 			"is_read":    true,
 			"read_at":    time.Now(),
@@ -202,8 +228,7 @@ func MarkAllAsRead(c *fiber.Ctx) error {
 	})
 }
 
-// Delete archives a notification (soft delete)
-func Delete(c *fiber.Ctx) error {
+func ArchiveAllRead(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -211,13 +236,50 @@ func Delete(c *fiber.Ctx) error {
 
 	deployment := handler.GetDeployment(c)
 
-	// Parse notification ID
+	var req model.NotificationListRequest
+	if err := c.QueryParser(&req); err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid query parameters")
+	}
+
+	db := database.Connection.Model(&model.Notification{}).
+		Where("user_id = ?", session.ActiveSignin.UserID).
+		Where("deployment_id = ?", deployment.ID)
+
+	db = ApplyScopeFilters(db, &req, *session.ActiveSignin.UserID, session)
+	db = req.ApplyFilters(db)
+
+	result := db.Where("is_read = true").
+		Where("is_archived = false").
+		Updates(map[string]interface{}{
+			"is_archived": true,
+			"archived_at": time.Now(),
+			"updated_at":  time.Now(),
+		})
+
+	if result.Error != nil {
+		log.Printf("Failed to archive all read notifications: %v", result.Error)
+		return handler.SendInternalServerError(c, nil, "Failed to archive all read notifications")
+	}
+
+	return handler.SendSuccess(c, model.BulkUpdateResponse{
+		Affected: result.RowsAffected,
+	})
+}
+
+// Archive archives a notification (soft delete)
+func Archive(c *fiber.Ctx) error {
+	session := handler.GetSession(c)
+	if session == nil {
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
+	}
+
+	deployment := handler.GetDeployment(c)
+
 	notificationID, err := strconv.ParseUint(c.Params("id"), 10, 64)
 	if err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid notification ID")
 	}
 
-	// Find the notification
 	var notification model.Notification
 	result := database.Connection.Model(&model.Notification{}).
 		Where("id = ?", notificationID).
@@ -233,22 +295,62 @@ func Delete(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, nil, "Failed to find notification")
 	}
 
-	// Archive the notification
-	notification.Archive()
+	notification.ToggleArchive()
 
-	// Update in database
 	if err := database.Connection.Save(&notification).Error; err != nil {
 		log.Printf("Failed to archive notification: %v", err)
-		return handler.SendInternalServerError(c, nil, "Failed to archive notification")
+		return handler.SendInternalServerError(c, nil, "Failed to update notification archive status")
 	}
 
 	return handler.SendSuccess(c, fiber.Map{
-		"message": "Notification deleted",
-		"success": true,
+		"message":     "Notification archive status updated",
+		"is_archived": notification.IsArchived,
+		"success":     true,
 	})
 }
 
-// Get retrieves a single notification
+func Star(c *fiber.Ctx) error {
+	session := handler.GetSession(c)
+	if session == nil {
+		return handler.SendUnauthorized(c, nil, "Unauthorized")
+	}
+
+	deployment := handler.GetDeployment(c)
+
+	notificationID, err := strconv.ParseUint(c.Params("id"), 10, 64)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid notification ID")
+	}
+
+	var notification model.Notification
+	result := database.Connection.Model(&model.Notification{}).
+		Where("id = ?", notificationID).
+		Where("user_id = ?", session.ActiveSignin.UserID).
+		Where("deployment_id = ?", deployment.ID).
+		First(&notification)
+
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return handler.SendNotFound(c, nil, "Notification not found")
+		}
+		log.Printf("Failed to find notification: %v", result.Error)
+		return handler.SendInternalServerError(c, nil, "Failed to find notification")
+	}
+
+	notification.ToggleStar()
+
+	if err := database.Connection.Save(&notification).Error; err != nil {
+		log.Printf("Failed to update notification star status: %v", err)
+		return handler.SendInternalServerError(c, nil, "Failed to update notification")
+	}
+
+	return handler.SendSuccess(c, fiber.Map{
+		"message":    "Notification star status updated",
+		"is_starred": notification.IsStarred,
+		"success":    true,
+	})
+}
+
 func Get(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session == nil {
@@ -257,13 +359,11 @@ func Get(c *fiber.Ctx) error {
 
 	deployment := handler.GetDeployment(c)
 
-	// Parse notification ID
 	notificationID, err := strconv.ParseUint(c.Params("id"), 10, 64)
 	if err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid notification ID")
 	}
 
-	// Find the notification
 	var notification model.Notification
 	result := database.Connection.Model(&model.Notification{}).
 		Where("id = ?", notificationID).

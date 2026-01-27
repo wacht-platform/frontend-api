@@ -8,16 +8,13 @@ import (
 func setupNotificationRoutes(app *fiber.App) {
 	router := app.Group("/notifications")
 
-	// List and count endpoints
 	router.Get("/", notification.List)
-	router.Get("/unread-count", notification.GetUnreadCount)
-	router.Get("/channel-counts", notification.GetChannelCounts)
-
-	// Single notification operations
+	router.Get("/scope-unread", notification.GetScopeUnread)
 	router.Get("/:id", notification.Get)
 	router.Post("/:id/read", notification.MarkAsRead)
-	router.Post("/:id/delete", notification.Delete)
-
-	// Bulk operations
+	router.Post("/:id/unread", notification.MarkAsUnread)
+	router.Post("/:id/archive", notification.Archive)
+	router.Post("/:id/star", notification.Star)
 	router.Post("/mark-all-read", notification.MarkAllAsRead)
+	router.Post("/archive-all-read", notification.ArchiveAllRead)
 }
