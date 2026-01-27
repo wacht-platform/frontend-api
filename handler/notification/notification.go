@@ -1,7 +1,6 @@
 package notification
 
 import (
-	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -27,65 +26,35 @@ func List(c *fiber.Ctx) error {
 	}
 	req.SetDefaults()
 
-	type notificationResult struct {
-		model.Notification
-		FullCount    int64 `gorm:"column:full_count"`
-		UnreadCapped int64 `gorm:"column:unread_capped"`
+	var notifications []model.Notification
+
+	db := database.Connection.Model(&model.Notification{}).
+		Where("deployment_id = ?", deployment.ID)
+
+	db = ApplyScopeFilters(db, &req, *session.ActiveSignin.UserID, session)
+	db = req.ApplyFilters(db)
+
+	if req.Cursor != nil {
+		db = db.Where("id < ?", *req.Cursor)
 	}
 
-	var results []notificationResult
-
-	filterSQL := database.Connection.ToSQL(func(tx *gorm.DB) *gorm.DB {
-		q := tx.Model(&model.Notification{}).
-			Where("deployment_id = ?", deployment.ID)
-
-		q = ApplyScopeFilters(q, &req, *session.ActiveSignin.UserID, session)
-		q = req.ApplyFilters(q)
-
-		return q.Find(&[]model.Notification{})
-	})
-
-	cteQuery := fmt.Sprintf(`
-		WITH filtered AS (
-			%s
-		),
-		counts AS (
-			SELECT 
-				(SELECT COUNT(*) FROM filtered) as full_count,
-				(SELECT COUNT(*) FROM (SELECT 1 FROM filtered WHERE is_read = false LIMIT 10) AS u) as unread_capped
-		),
-		paginated AS (
-			SELECT * FROM filtered ORDER BY created_at DESC LIMIT ? OFFSET ?
-		)
-		SELECT p.*, c.full_count, c.unread_capped
-		FROM counts c
-		LEFT JOIN paginated p ON true`, filterSQL)
-
-	if err := database.Connection.Raw(cteQuery, req.Limit, req.Offset).Scan(&results).Error; err != nil {
-		log.Printf("Failed optimized notification fetch: %v", err)
+	// Fetch limit + 1 to determine hasMore
+	if err := db.Order("created_at DESC, id DESC").
+		Limit(req.Limit + 1).
+		Find(&notifications).Error; err != nil {
+		log.Printf("Failed to fetch notifications: %v", err)
 		return handler.SendInternalServerError(c, nil, "Failed to fetch notifications")
 	}
 
-	var total int64
-	var unreadCount int64
-	notifications := make([]model.Notification, 0)
-
-	if len(results) > 0 {
-		total = results[0].FullCount
-		unreadCount = results[0].UnreadCapped
-
-		for _, r := range results {
-			if r.ID != 0 {
-				notifications = append(notifications, r.Notification)
-			}
-		}
+	hasMore := false
+	if len(notifications) > req.Limit {
+		hasMore = true
+		notifications = notifications[:req.Limit]
 	}
 
 	response := model.NotificationListResponse{
 		Notifications: notifications,
-		Total:         total,
-		UnreadCount:   unreadCount,
-		HasMore:       int64(req.Offset+req.Limit) < total,
+		HasMore:       hasMore,
 	}
 
 	return handler.SendSuccess(c, response)
@@ -266,7 +235,6 @@ func ArchiveAllRead(c *fiber.Ctx) error {
 	})
 }
 
-// Archive archives a notification (soft delete)
 func Archive(c *fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session == nil {
@@ -349,35 +317,4 @@ func Star(c *fiber.Ctx) error {
 		"is_starred": notification.IsStarred,
 		"success":    true,
 	})
-}
-
-func Get(c *fiber.Ctx) error {
-	session := handler.GetSession(c)
-	if session == nil {
-		return handler.SendUnauthorized(c, nil, "Unauthorized")
-	}
-
-	deployment := handler.GetDeployment(c)
-
-	notificationID, err := strconv.ParseUint(c.Params("id"), 10, 64)
-	if err != nil {
-		return handler.SendBadRequest(c, nil, "Invalid notification ID")
-	}
-
-	var notification model.Notification
-	result := database.Connection.Model(&model.Notification{}).
-		Where("id = ?", notificationID).
-		Where("user_id = ?", session.ActiveSignin.UserID).
-		Where("deployment_id = ?", deployment.ID).
-		First(&notification)
-
-	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
-			return handler.SendNotFound(c, nil, "Notification not found")
-		}
-		log.Printf("Failed to find notification: %v", result.Error)
-		return handler.SendInternalServerError(c, nil, "Failed to find notification")
-	}
-
-	return handler.SendSuccess(c, notification)
 }

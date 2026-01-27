@@ -10,7 +10,6 @@ func setupNotificationRoutes(app *fiber.App) {
 
 	router.Get("/", notification.List)
 	router.Get("/scope-unread", notification.GetScopeUnread)
-	router.Get("/:id", notification.Get)
 	router.Post("/:id/read", notification.MarkAsRead)
 	router.Post("/:id/unread", notification.MarkAsUnread)
 	router.Post("/:id/archive", notification.Archive)

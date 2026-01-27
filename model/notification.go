@@ -49,7 +49,7 @@ func (Notification) TableName() string {
 
 type NotificationListRequest struct {
 	Limit      int                   `json:"limit"                 form:"limit"            query:"limit"            validate:"min=1,max=100"`
-	Offset     int                   `json:"offset"                form:"offset"           query:"offset"           validate:"min=0"`
+	Cursor     *uint64               `json:"cursor,omitempty"      form:"cursor"           query:"cursor"`
 	Scope      string                `json:"scope"                 form:"scope"            query:"scope"`
 	IsRead     *bool                 `json:"is_read,omitempty"     form:"is_read"          query:"is_read"`
 	IsStarred  *bool                 `json:"is_starred,omitempty"  form:"is_starred"       query:"is_starred"`
@@ -67,8 +67,6 @@ type ChannelCounts struct {
 
 type NotificationListResponse struct {
 	Notifications []Notification `json:"notifications"`
-	Total         int64          `json:"total"`
-	UnreadCount   int64          `json:"unread_count"`
 	HasMore       bool           `json:"has_more"`
 }
 
