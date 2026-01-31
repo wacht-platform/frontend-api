@@ -288,7 +288,6 @@ func (h *Handler) createSignInAttempt(
 	attempt.UserID = userID
 	attempt.SessionID = sessionID
 	attempt.Completed = true
-	database.Connection.Create(attempt)
 	return attempt
 }
 
