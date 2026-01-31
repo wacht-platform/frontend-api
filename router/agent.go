@@ -21,6 +21,5 @@ func setupAgentRoutes(app *fiber.App) {
 	agentGroup.Get("/integrations", h.GetActiveIntegrations)
 	agentGroup.Post("/integrations/:integration_id/remove", h.RemoveIntegration)
 	agentGroup.Post("/integrations/:integration_id/consent-url", h.GenerateConsentURL)
-	agentGroup.Post("/ticket/exchange", h.ExchangeConnectionTicket)
 	agentGroup.Post("/contexts/:id/execute", h.ExecuteAgent)
 }

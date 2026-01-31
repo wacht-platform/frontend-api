@@ -15,4 +15,5 @@ func setupSessionRoutes(app *fiber.App) {
 	router.Post("/sign-out", sessionHandler.SignOut)
 	router.Post("/switch-organization", sessionHandler.SwitchOrganization)
 	router.Post("/switch-workspace", sessionHandler.SwitchWorkspace)
+	router.Get("/ticket/exchange", sessionHandler.ExchangeTicket)
 }
