@@ -11,7 +11,7 @@ func setupWorkspaceRoutes(app *fiber.App) {
 	router := app.Group("/workspaces")
 
 	// Public/Global workspace routes
-	router.Post("/", middleware.EnforceB2BSettings, workspaceHandler.CreateWorkspace)
+	router.Post("/", workspaceHandler.CreateWorkspace)
 
 	// Workspace context routes
 	workspaceContext := router.Group("/:id")

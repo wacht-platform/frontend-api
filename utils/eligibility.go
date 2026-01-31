@@ -75,7 +75,7 @@ func CalculateOrganizationEligibility(
 	clientIP string,
 	deployment *model.Deployment,
 ) *model.EligibilityRestriction {
-	// Admin users can always access
+	// Only organization:admin users can always access regardless of IP/MFA
 	if CheckUserHasAdminPermission(roles, "organization:admin") {
 		return &model.EligibilityRestriction{
 			Type:    model.EligibilityRestrictionNone,
@@ -94,7 +94,7 @@ func CalculateOrganizationEligibility(
 	}
 
 	// Check MFA requirement if enforced
-	if deployment.B2BSettings.EnforceMfaPerOrgEnabled && !CheckUserHasMFA(user) {
+	if deployment.B2BSettings.EnforceMfaPerOrgEnabled && org.EnforceMFASetup && !CheckUserHasMFA(user) {
 		mfaRestricted = true
 	}
 
@@ -126,12 +126,13 @@ func CalculateOrganizationEligibility(
 func CalculateWorkspaceEligibility(
 	user *model.User,
 	workspace *model.PublicWorkspaceData,
-	roles []*model.WorkspaceRole,
+	workspaceRoles []*model.WorkspaceRole,
+	orgRoles []*model.OrganizationRole,
 	clientIP string,
 	deployment *model.Deployment,
 ) *model.EligibilityRestriction {
-	// Admin users can always access
-	if CheckUserHasWorkspaceAdminPermission(roles) {
+	// Only workspace:admin or organization:admin users can always access
+	if CheckUserHasWorkspaceAdminPermission(workspaceRoles) || CheckUserHasAdminPermission(orgRoles, "organization:admin") {
 		return &model.EligibilityRestriction{
 			Type:    model.EligibilityRestrictionNone,
 			Message: "",
@@ -150,7 +151,7 @@ func CalculateWorkspaceEligibility(
 	}
 
 	// Check MFA requirement if enforced
-	if deployment.B2BSettings.EnforceMfaPerWorkspaceEnabled && !CheckUserHasMFA(user) {
+	if deployment.B2BSettings.EnforceMfaPerWorkspaceEnabled && workspace.EnforceMFASetup && !CheckUserHasMFA(user) {
 		mfaRestricted = true
 	}
 

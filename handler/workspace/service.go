@@ -12,14 +12,16 @@ import (
 
 var (
 	workspaceAdminPermissions = map[string]bool{
-		"workspace:admin": true,
+		"workspace:admin":  true,
+		"workspace:manage": true,
 	}
 	workspaceManagementPermissions = map[string]bool{
 		"workspace:admin":  true,
 		"workspace:manage": true,
 	}
 	workspaceDeletePermissions = map[string]bool{
-		"workspace:admin": true,
+		"workspace:admin":  true,
+		"workspace:manage": true,
 	}
 )
 

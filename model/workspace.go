@@ -17,7 +17,7 @@ type Workspace struct {
 	Roles               []*WorkspaceRole       `json:"roles"`
 	Members             []*WorkspaceMembership `json:"members"`
 	Segments            []*Segment             `json:"segments"              gorm:"many2many:workspace_segments;"`
-	EnforceMFASetup     bool                   `json:"enforce_2fa"           gorm:"not null;default:false"`
+	EnforceMFASetup     bool                   `json:"enforce_mfa"           gorm:"not null;default:false"`
 	EnableIPRestriction bool                   `json:"enable_ip_restriction" gorm:"not null;default:false"`
 	WhitelistedIPs      pq.StringArray         `json:"whitelisted_ips"       gorm:"type:text[]"`
 	MemberCount         uint64                 `json:"member_count"          gorm:"not null"`
@@ -32,7 +32,7 @@ type PublicWorkspaceData struct {
 	Description         string            `json:"description"`
 	MemberCount         uint64            `json:"member_count"`
 	WhitelistedIPs      pq.StringArray    `json:"whitelisted_ips"       gorm:"type:text[]"`
-	EnforceMFASetup     bool              `json:"enforce_2fa"           gorm:"not null;default:false"`
+	EnforceMFASetup     bool              `json:"enforce_mfa"           gorm:"not null;default:false"`
 	EnableIPRestriction bool              `json:"enable_ip_restriction" gorm:"not null;default:false"`
 	PublicMetadata      datatypes.JSONMap `json:"public_metadata"       gorm:"not null"`
 	Segments            []*Segment        `json:"segments"              gorm:"many2many:workspace_segments;"`
