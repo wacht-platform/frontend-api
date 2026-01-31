@@ -43,6 +43,16 @@ type OrganizationMemberQueryResult struct {
 	PublicMetadataJSON string `gorm:"column:public_metadata_json"`
 }
 
+type OrganizationInvitationQueryResult struct {
+	model.OrganizationInvitation
+	InitialOrganizationRoleJSON string `gorm:"column:initial_organization_role_json"`
+	InitialWorkspaceRoleJSON    string `gorm:"column:initial_workspace_role_json"`
+	WorkspaceJSON               string `gorm:"column:workspace_json"`
+	InviterUserJSON             string `gorm:"column:inviter_user_json"`
+	InviterRolesJSON            string `gorm:"column:inviter_roles_json"`
+	InviterPublicMetadataJSON   string `gorm:"column:inviter_public_metadata_json"`
+}
+
 type AcceptInvitationRequest struct {
 	Token string `json:"token" form:"token" validate:"required"`
 }

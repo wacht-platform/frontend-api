@@ -24,6 +24,6 @@ type InviteWorkspaceMemberRequest struct {
 type WorkspaceMemberQueryResult struct {
 	model.WorkspaceMembership
 	RolesJSON          string `gorm:"column:roles_json"`
-	PublicUserDataJSON string `gorm:"column:public_user_data_json"`
+	PublicUserDataJSON string `gorm:"column:user_json"`
 	PublicMetadataJSON string `gorm:"column:public_metadata_json"`
 }

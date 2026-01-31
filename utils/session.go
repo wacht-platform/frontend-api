@@ -270,6 +270,9 @@ const (
 						SELECT json_agg(json_build_object(
 							'id', r.id::text,
 							'name', r.name,
+							'deployment_id', r.deployment_id::text,
+							'created_at', to_char(r.created_at, ` + fmtTime + `),
+							'updated_at', to_char(r.updated_at, ` + fmtTime + `),
 							'permissions', r.permissions
 						))
 						FROM organization_membership_roles omr 

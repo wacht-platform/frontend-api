@@ -150,6 +150,8 @@ func (h *Handler) UpdateUser(c *fiber.Ctx) error {
 
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
+	database.SyncUserWrapper(database.Connection, *session.ActiveSignin.UserID, "user.updated")
+
 	return handler.SendSuccess(c, "Profile updated successfully")
 }
 
@@ -249,6 +251,8 @@ func (h *Handler) DeleteUserEmailAddress(c *fiber.Ctx) error {
 
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
+	database.SyncUserWrapper(database.Connection, *session.ActiveSignin.UserID, "user.email.removed")
+
 	return handler.SendSuccess(c, "Deleted successfully")
 }
 
@@ -295,6 +299,8 @@ func (h *Handler) CreateUserEmailAddress(c *fiber.Ctx) error {
 	}
 
 	utils.PublishWebhookEvent(deployment.ID, "user.email.added", newEmail.ID, "user_email")
+
+	database.SyncUserWrapper(database.Connection, *session.ActiveSignin.UserID, "user.email.added")
 
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
@@ -1278,30 +1284,26 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 		memberships[i].Organization.Segments = parseSegmentsJSON(result.SegmentsJSON)
 
 		var roles []*model.OrganizationRole
-		log.Println(result.RolesJSON)
 		err := json.Unmarshal([]byte(result.RolesJSON), &roles)
 		if err == nil {
 			memberships[i].Roles = roles
-		} else {
-			log.Println(err)
 		}
 	}
 
-	var user model.User
 	deployment := handler.GetDeployment(c)
 	clientIP := c.IP()
 
-	if err := database.Connection.Preload("UserAuthenticator").First(&user, session.ActiveSignin.UserID).Error; err == nil {
-		for i := range memberships {
-			eligibility := utils.CalculateOrganizationEligibility(
-				&user,
-				memberships[i].Organization,
-				memberships[i].Roles,
-				clientIP,
-				&deployment,
-			)
-			memberships[i].EligibilityRestriction = eligibility
-		}
+	user := session.ActiveSignin.User
+
+	for i := range memberships {
+		eligibility := utils.CalculateOrganizationEligibility(
+			user,
+			memberships[i].Organization,
+			memberships[i].Roles,
+			clientIP,
+			&deployment,
+		)
+		memberships[i].EligibilityRestriction = eligibility
 	}
 
 	return handler.SendSuccess(c, memberships)
@@ -1461,31 +1463,25 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 		memberships[i].Workspace.Segments = parseSegmentsJSON(result.SegmentsJSON)
 
 		var roles []*model.WorkspaceRole
-		log.Println(result.RolesJSON)
 		err := json.Unmarshal([]byte(result.RolesJSON), &roles)
 		if err == nil {
 			memberships[i].Roles = roles
-		} else {
-			log.Println(err)
 		}
 	}
 
-	// Calculate eligibility restrictions for all workspace memberships
-	var user model.User
+	user := session.ActiveSignin.User
 	deployment := handler.GetDeployment(c)
 	clientIP := c.IP()
 
-	if err := database.Connection.Preload("UserAuthenticator").First(&user, session.ActiveSignin.UserID).Error; err == nil {
-		for i := range memberships {
-			eligibility := utils.CalculateWorkspaceEligibility(
-				&user,
-				memberships[i].Workspace,
-				memberships[i].Roles,
-				clientIP,
-				&deployment,
-			)
-			memberships[i].EligibilityRestriction = eligibility
-		}
+	for i := range memberships {
+		eligibility := utils.CalculateWorkspaceEligibility(
+			user,
+			memberships[i].Workspace,
+			memberships[i].Roles,
+			clientIP,
+			&deployment,
+		)
+		memberships[i].EligibilityRestriction = eligibility
 	}
 
 	return handler.SendSuccess(c, memberships)

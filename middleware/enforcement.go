@@ -92,7 +92,6 @@ func checkIPAllowlist(c *fiber.Ctx, clientIP string, whitelistedIPs []string) er
 			allowed = true
 			break
 		}
-		// Check CIDR
 		_, ipNet, err := net.ParseCIDR(ip)
 		if err == nil && ipNet.Contains(net.ParseIP(clientIP)) {
 			allowed = true
