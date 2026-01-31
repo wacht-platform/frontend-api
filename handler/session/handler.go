@@ -31,6 +31,17 @@ func NewHandler() *Handler {
 	return &Handler{}
 }
 
+type switchOrgCTEResult struct {
+	EligibilityType string `gorm:"column:eligibility_type"`
+	MembershipID    uint64 `gorm:"column:membership_id"`
+}
+
+type switchWorkspaceCTEResult struct {
+	EligibilityType string `gorm:"column:eligibility_type"`
+	MembershipID    uint64 `gorm:"column:membership_id"`
+	OrgMembershipID uint64 `gorm:"column:org_membership_id"`
+}
+
 func (h *Handler) GetCurrentSession(
 	c *fiber.Ctx,
 ) error {
@@ -197,62 +208,87 @@ func (h *Handler) SwitchOrganization(
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid org ID")
 	}
 
-	membership := new(model.OrganizationMembership)
-	if err := database.Connection.
-		Preload("Roles").
-		Model(&model.OrganizationMembership{}).
-		Where("user_id = ? AND organization_id = ?", session.ActiveSignin.UserID, orgIDuint64).
-		First(membership).Error; err != nil || membership.ID == 0 {
+	deployment := handler.GetDeployment(c)
+	var result switchOrgCTEResult
+
+	rawSQL := `
+		WITH member_info AS (
+			SELECT 
+				om.id as membership_id,
+				o.whitelisted_ips as org_ips,
+				o.enforce_mfa_setup as org_mfa_setup,
+				o.enable_ip_restriction as org_ip_restriction,
+				(u.backup_codes_generated OR EXISTS(SELECT 1 FROM user_authenticators WHERE user_id = u.id)) as user_has_mfa,
+				EXISTS (
+					SELECT 1 FROM organization_membership_roles omr
+					JOIN organization_roles orr ON omr.organization_role_id = orr.id
+					WHERE omr.organization_membership_id = om.id AND orr.permissions @> ARRAY['organization:admin']
+				) as is_admin
+			FROM organization_memberships om
+			JOIN organizations o ON om.organization_id = o.id
+			JOIN users u ON om.user_id = u.id
+			WHERE om.user_id = ? AND om.organization_id = ?
+			LIMIT 1
+		),
+		eligibility AS (
+			SELECT 
+				m.*,
+				CASE 
+					WHEN m.is_admin THEN 'none'
+					WHEN ? AND m.org_ip_restriction AND cardinality(m.org_ips) > 0 AND NOT (?::inet <<= ANY(m.org_ips::inet[])) 
+						 AND ? AND m.org_mfa_setup AND NOT m.user_has_mfa THEN 'ip_and_mfa_required'
+					WHEN ? AND m.org_ip_restriction AND cardinality(m.org_ips) > 0 AND NOT (?::inet <<= ANY(m.org_ips::inet[])) THEN 'ip_not_allowed'
+					WHEN ? AND m.org_mfa_setup AND NOT m.user_has_mfa THEN 'mfa_required'
+					ELSE 'none'
+				END as eligibility_type
+			FROM member_info m
+		),
+		do_update_user AS (
+			UPDATE users 
+			SET active_organization_membership_id = e.membership_id,
+				active_workspace_membership_id = NULL
+			FROM eligibility e
+			WHERE users.id = ? AND e.eligibility_type = 'none'
+		),
+		do_update_signin AS (
+			UPDATE signins
+			SET active_organization_membership_id = e.membership_id,
+				active_workspace_membership_id = NULL
+			FROM eligibility e
+			WHERE signins.id = ? AND e.eligibility_type = 'none'
+		)
+		SELECT eligibility_type, membership_id FROM eligibility;
+	`
+
+	err = database.Connection.Raw(rawSQL,
+		session.ActiveSignin.UserID, orgIDuint64,
+		deployment.B2BSettings.IpAllowlistPerOrgEnabled, c.IP(), deployment.B2BSettings.EnforceMfaPerOrgEnabled,
+		deployment.B2BSettings.IpAllowlistPerOrgEnabled, c.IP(),
+		deployment.B2BSettings.EnforceMfaPerOrgEnabled,
+		session.ActiveSignin.UserID, session.ActiveSignin.ID,
+	).Scan(&result).Error
+
+	if err != nil || result.MembershipID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "You are not a member of this organization")
 	}
 
-	var org model.Organization
-	if err := database.Connection.First(&org, orgIDuint64).Error; err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to load organization")
+	if result.EligibilityType != "none" {
+		var message string
+		switch result.EligibilityType {
+		case "ip_and_mfa_required":
+			message = "You must connect from an allowed IP address and set up Multi-Factor Authentication to access this organization."
+		case "ip_not_allowed":
+			message = "You must connect from an allowed IP address to access this organization."
+		case "mfa_required":
+			message = "You must set up Multi-Factor Authentication to access this organization."
+		}
+		return fiber.NewError(fiber.StatusForbidden, message)
 	}
 
-	var user model.User
-	if err := database.Connection.Preload("UserAuthenticator").First(&user, session.ActiveSignin.UserID).Error; err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to load user")
-	}
+	// Update session in memory
+	session.ActiveSignin.ActiveOrganizationMembershipID = &result.MembershipID
+	session.ActiveSignin.ActiveWorkspaceMembershipID = nil
 
-	deployment := handler.GetDeployment(c)
-	orgData := model.PublicOrganizationData{
-		WhitelistedIPs:      org.WhitelistedIPs,
-		EnforceMFASetup:     org.EnforceMFASetup,
-		EnableIPRestriction: org.EnableIPRestriction,
-	}
-
-	eligibility := utils.CalculateOrganizationEligibility(
-		&user,
-		&orgData,
-		membership.Roles,
-		c.IP(),
-		&deployment,
-	)
-
-	if eligibility.Type != model.EligibilityRestrictionNone {
-		return fiber.NewError(fiber.StatusForbidden, eligibility.Message)
-	}
-
-	tx := database.Connection.Begin()
-	if err := tx.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).
-		Updates(map[string]interface{}{
-			"active_organization_membership_id": membership.ID,
-			"active_workspace_membership_id":    nil,
-		}).Error; err != nil {
-		tx.Rollback()
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to update user")
-	}
-	if err := tx.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).
-		Updates(map[string]interface{}{
-			"active_organization_membership_id": membership.ID,
-			"active_workspace_membership_id":    nil,
-		}).Error; err != nil {
-		tx.Rollback()
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to update signin")
-	}
-	tx.Commit()
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
 	natsService := service.GetNATS()
@@ -300,70 +336,95 @@ func (h *Handler) SwitchWorkspace(
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid workspace ID")
 	}
 
-	membership := new(model.WorkspaceMembership)
-	if err := database.Connection.
-		Preload("Roles").
-		Model(&model.WorkspaceMembership{}).
-		Where("user_id = ? AND workspace_id = ?", session.ActiveSignin.UserID, workspaceIDuint64).
-		Joins("Organization").
-		First(membership).Error; err != nil {
-		log.Println(err)
+	deployment := handler.GetDeployment(c)
+	var result switchWorkspaceCTEResult
+
+	rawSQL := `
+		WITH member_info AS (
+			SELECT 
+				wm.id as membership_id,
+				wm.organization_membership_id as org_membership_id,
+				w.whitelisted_ips as ws_ips,
+				w.enforce_mfa_setup as ws_mfa_setup,
+				w.enable_ip_restriction as ws_ip_restriction,
+				(u.backup_codes_generated OR EXISTS(SELECT 1 FROM user_authenticators WHERE user_id = u.id)) as user_has_mfa,
+				EXISTS (
+					SELECT 1 FROM workspace_membership_roles wmr
+					JOIN workspace_roles wr ON wmr.workspace_role_id = wr.id
+					WHERE wmr.workspace_membership_id = wm.id AND wr.permissions @> ARRAY['workspace:admin']
+				) OR EXISTS (
+					SELECT 1 FROM organization_membership_roles omr
+					JOIN organization_roles orr ON omr.organization_role_id = orr.id
+					WHERE omr.organization_membership_id = om.id AND orr.permissions @> ARRAY['organization:admin']
+				) as is_admin
+			FROM workspace_memberships wm
+			JOIN workspaces w ON wm.workspace_id = w.id
+			JOIN organization_memberships om ON wm.organization_membership_id = om.id
+			JOIN users u ON wm.user_id = u.id
+			WHERE wm.user_id = ? AND wm.workspace_id = ?
+			LIMIT 1
+		),
+		eligibility AS (
+			SELECT 
+				m.*,
+				CASE 
+					WHEN m.is_admin THEN 'none'
+					WHEN ? AND m.ws_ip_restriction AND cardinality(m.ws_ips) > 0 AND NOT (?::inet <<= ANY(m.ws_ips::inet[])) 
+						 AND ? AND m.ws_mfa_setup AND NOT m.user_has_mfa THEN 'ip_and_mfa_required'
+					WHEN ? AND m.ws_ip_restriction AND cardinality(m.ws_ips) > 0 AND NOT (?::inet <<= ANY(m.ws_ips::inet[])) THEN 'ip_not_allowed'
+					WHEN ? AND m.ws_mfa_setup AND NOT m.user_has_mfa THEN 'mfa_required'
+					ELSE 'none'
+				END as eligibility_type
+			FROM member_info m
+		),
+		do_update_user AS (
+			UPDATE users 
+			SET active_workspace_membership_id = e.membership_id,
+				active_organization_membership_id = e.org_membership_id
+			FROM eligibility e
+			WHERE users.id = ? AND e.eligibility_type = 'none'
+		),
+		do_update_signin AS (
+			UPDATE signins
+			SET active_workspace_membership_id = e.membership_id,
+				active_organization_membership_id = e.org_membership_id
+			FROM eligibility e
+			WHERE signins.id = ? AND e.eligibility_type = 'none'
+		)
+		SELECT eligibility_type, membership_id, org_membership_id FROM eligibility;
+	`
+
+	err = database.Connection.Raw(rawSQL,
+		session.ActiveSignin.UserID, workspaceIDuint64,
+		deployment.B2BSettings.IpAllowlistPerWorkspaceEnabled, c.IP(), deployment.B2BSettings.EnforceMfaPerWorkspaceEnabled,
+		deployment.B2BSettings.IpAllowlistPerWorkspaceEnabled, c.IP(),
+		deployment.B2BSettings.EnforceMfaPerWorkspaceEnabled,
+		session.ActiveSignin.UserID, session.ActiveSignin.ID,
+	).Scan(&result).Error
+
+	if err != nil || result.MembershipID == 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "You are not a member of this workspace")
 	}
 
-	// Load workspace details
-	var workspace model.Workspace
-	if err := database.Connection.First(&workspace, workspaceIDuint64).Error; err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to load workspace")
+	if result.EligibilityType != "none" {
+		var message string
+		switch result.EligibilityType {
+		case "ip_and_mfa_required":
+			message = "You must connect from an allowed IP address and set up Multi-Factor Authentication to access this workspace."
+		case "ip_not_allowed":
+			message = "You must connect from an allowed IP address to access this workspace."
+		case "mfa_required":
+			message = "You must set up Multi-Factor Authentication to access this workspace."
+		}
+		return fiber.NewError(fiber.StatusForbidden, message)
 	}
 
-	// Load user with MFA details
-	var user model.User
-	if err := database.Connection.Preload("UserAuthenticator").First(&user, session.ActiveSignin.UserID).Error; err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to load user")
-	}
+	// Update session in memory
+	session.ActiveSignin.ActiveWorkspaceMembershipID = &result.MembershipID
+	session.ActiveSignin.ActiveOrganizationMembershipID = &result.OrgMembershipID
 
-	// Check eligibility before allowing switch
-	deployment := handler.GetDeployment(c)
-	workspaceData := model.PublicWorkspaceData{
-		WhitelistedIPs:      workspace.WhitelistedIPs,
-		EnforceMFASetup:     workspace.EnforceMFASetup,
-		EnableIPRestriction: workspace.EnableIPRestriction,
-	}
-
-	eligibility := utils.CalculateWorkspaceEligibility(
-		&user,
-		&workspaceData,
-		membership.Roles,
-		c.IP(),
-		&deployment,
-	)
-
-	if eligibility.Type != model.EligibilityRestrictionNone {
-		return fiber.NewError(fiber.StatusForbidden, eligibility.Message)
-	}
-
-	tx := database.Connection.Begin()
-	if err := tx.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).
-		Updates(map[string]interface{}{
-			"active_workspace_membership_id":    membership.ID,
-			"active_organization_membership_id": membership.OrganizationMembershipID,
-		}).Error; err != nil {
-		tx.Rollback()
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to update user")
-	}
-	if err := tx.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).
-		Updates(map[string]interface{}{
-			"active_workspace_membership_id":    membership.ID,
-			"active_organization_membership_id": membership.OrganizationMembershipID,
-		}).Error; err != nil {
-		tx.Rollback()
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to update signin")
-	}
-	tx.Commit()
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
-	deployment = handler.GetDeployment(c)
 	natsService := service.GetNATS()
 	go natsService.PublishBillingEvent(deployment.ID, workspaceIDuint64, "workspace_accessed")
 
@@ -420,8 +481,6 @@ func (h *Handler) GetToken(
 	tok.Set("sid", strconv.FormatUint(session.ID, 10))
 
 	tokenPermissions := map[string][]string{}
-
-	log.Println("here", session.ActiveSignin.ActiveOrganizationMembership)
 
 	if session.ActiveSignin.ActiveOrganizationMembership != nil {
 		permissionsMap := map[string]bool{}

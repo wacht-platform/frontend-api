@@ -304,7 +304,11 @@ func (h *Handler) UpdateOrganization(
 	}
 
 	if b.AutoAssignedWorkspaceID != nil {
-		org.AutoAssignedWorkspaceID = b.AutoAssignedWorkspaceID
+		if *b.AutoAssignedWorkspaceID == 0 {
+			org.AutoAssignedWorkspaceID = nil
+		} else {
+			org.AutoAssignedWorkspaceID = b.AutoAssignedWorkspaceID
+		}
 	}
 
 	if b.EnforceMFASetup != nil {

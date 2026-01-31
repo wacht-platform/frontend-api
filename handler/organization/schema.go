@@ -8,12 +8,12 @@ type CreateOrgRequest struct {
 }
 
 type UpdateOrgRequest struct {
-	Name                    *string  `form:"name"`
-	Description             *string  `form:"description"`
-	WhitelistedIPs          []string `form:"whitelisted_ips"`
-	AutoAssignedWorkspaceID *uint64  `form:"auto_assigned_workspace_id,string"`
-	EnableIPRestriction     *bool    `form:"enable_ip_restriction"`
-	EnforceMFASetup         *bool    `form:"enforce_mfa_setup"`
+	Name                    *string  `json:"name"                       form:"name"`
+	Description             *string  `json:"description"                form:"description"`
+	WhitelistedIPs          []string `json:"whitelisted_ips"            form:"whitelisted_ips"`
+	AutoAssignedWorkspaceID *uint64  `json:"auto_assigned_workspace_id,string" form:"auto_assigned_workspace_id,string"`
+	EnableIPRestriction     *bool    `json:"enable_ip_restriction"      form:"enable_ip_restriction"`
+	EnforceMFASetup         *bool    `json:"enforce_mfa"                form:"enforce_mfa"`
 }
 
 type CreateRoleRequest struct {

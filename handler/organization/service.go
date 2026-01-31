@@ -19,7 +19,8 @@ var (
 	}
 
 	orgOwnerPermissions = map[string]bool{
-		"organization:admin": true,
+		"organization:admin":  true,
+		"organization:manage": true,
 	}
 )
 

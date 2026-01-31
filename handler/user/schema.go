@@ -104,4 +104,5 @@ type WorkspaceMembershipQueryResult struct {
 	MembershipPublicMetadata            string  `gorm:"column:membership_public_metadata"`
 	RolesJSON                           string  `gorm:"column:roles_json"`
 	SegmentsJSON                        string  `gorm:"column:segments_json"`
+	OrganizationRolesJSON               string  `gorm:"column:organization_roles_json"`
 }

@@ -1374,7 +1374,24 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 				JOIN segments s ON ws.segment_id = s.id
 				WHERE ws.workspace_id = workspaces.id AND s.deleted_at IS NULL
 				), '[]'::json
-			) as segments_json
+			) as segments_json,
+			COALESCE(
+				(SELECT json_agg(
+					json_build_object(
+						'id', organization_roles.id::text,
+						'organization_id', organization_roles.organization_id::text,
+						'name', organization_roles.name,
+						'permissions', organization_roles.permissions,
+						'deployment_id', organization_roles.deployment_id::text,
+						'created_at', organization_roles.created_at,
+						'updated_at', organization_roles.updated_at
+					) ORDER BY organization_roles.name
+				)
+				FROM organization_membership_roles
+				JOIN organization_roles ON organization_membership_roles.organization_role_id = organization_roles.id
+				WHERE organization_membership_roles.organization_membership_id = workspace_memberships.organization_membership_id
+				), '[]'::json
+			) as organization_roles_json
 		FROM workspace_memberships
 		JOIN workspaces ON workspace_memberships.workspace_id = workspaces.id
 		JOIN organizations ON workspace_memberships.organization_id = organizations.id
@@ -1467,6 +1484,15 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 		if err == nil {
 			memberships[i].Roles = roles
 		}
+
+		var orgRoles []*model.OrganizationRole
+		err = json.Unmarshal([]byte(result.OrganizationRolesJSON), &orgRoles)
+		if err == nil {
+			if memberships[i].OrganizationMembership == nil {
+				memberships[i].OrganizationMembership = &model.OrganizationMembership{}
+			}
+			memberships[i].OrganizationMembership.Roles = orgRoles
+		}
 	}
 
 	user := session.ActiveSignin.User
@@ -1478,6 +1504,7 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 			user,
 			memberships[i].Workspace,
 			memberships[i].Roles,
+			memberships[i].OrganizationMembership.Roles,
 			clientIP,
 			&deployment,
 		)

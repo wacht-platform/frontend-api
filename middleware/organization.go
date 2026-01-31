@@ -100,7 +100,7 @@ func SetOrganizationContext(c *fiber.Ctx) error {
 	}
 
 	shouldEnforceMFA := false
-	if org != nil && org.EnforceMFASetup {
+	if org.EnforceMFASetup {
 		shouldEnforceMFA = true
 	}
 

@@ -84,17 +84,89 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 		imgurl = url
 	}
 
-	var orgMembership model.OrganizationMembership
-	if err := database.Connection.Where(
-		"organization_id = ? AND user_id = ?",
-		b.OrganizationID,
-		session.ActiveSignin.UserID,
-	).First(&orgMembership).Error; err != nil {
+	type membershipData struct {
+		model.OrganizationMembership
+		OrganizationJSON string `gorm:"column:organization_json"`
+		RolesJSON        string `gorm:"column:roles_json"`
+	}
+	var data membershipData
+
+	if err := database.Connection.Raw(`
+		SELECT 
+			om.id,
+			om.organization_id,
+			om.user_id,
+			om.created_at,
+			om.updated_at,
+			(
+				SELECT json_build_object(
+					'id', o.id::text,
+					'name', o.name,
+					'image_url', o.image_url,
+					'description', o.description,
+					'member_count', o.member_count,
+					'whitelisted_ips', o.whitelisted_ips,
+					'auto_assigned_workspace_id', o.auto_assigned_workspace_id::text,
+					'enforce_mfa', o.enforce_mfa_setup,
+					'enable_ip_restriction', o.enable_ip_restriction,
+					'public_metadata', o.public_metadata
+				)
+				FROM organizations o
+				WHERE o.id = om.organization_id
+			) as organization_json,
+			COALESCE(
+				(SELECT json_agg(json_build_object(
+					'id', r.id::text,
+					'name', r.name,
+					'permissions', r.permissions
+				))
+				FROM organization_membership_roles omr
+				JOIN organization_roles r ON omr.organization_role_id = r.id
+				WHERE omr.organization_membership_id = om.id
+				), '[]'::json
+			) as roles_json
+		FROM organization_memberships om
+		WHERE om.organization_id = ? AND om.user_id = ? AND om.deleted_at IS NULL
+		LIMIT 1
+	`, b.OrganizationID, *session.ActiveSignin.UserID).Scan(&data).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to load organization membership")
+	}
+
+	if data.ID == 0 {
 		return handler.SendForbidden(
 			c,
 			nil,
 			"Not a member of this organization or insufficient permissions to create a workspace.",
 		)
+	}
+
+	var orgMembership model.OrganizationMembership
+	orgMembership = data.OrganizationMembership
+	var org model.PublicOrganizationData
+
+	if data.OrganizationJSON != "" {
+		if err := json.Unmarshal([]byte(data.OrganizationJSON), &org); err != nil {
+			return handler.SendInternalServerError(c, err, "Failed to parse organization data")
+		}
+		orgMembership.Organization = &org
+	}
+
+	if data.RolesJSON != "" && data.RolesJSON != "[]" {
+		if err := json.Unmarshal([]byte(data.RolesJSON), &orgMembership.Roles); err != nil {
+			return handler.SendInternalServerError(c, err, "Failed to parse organization roles")
+		}
+	}
+
+	eligibility := utils.CalculateOrganizationEligibility(
+		session.ActiveSignin.User,
+		&org,
+		orgMembership.Roles,
+		c.IP(),
+		&deployment,
+	)
+
+	if eligibility.Type != model.EligibilityRestrictionNone {
+		return handler.SendForbidden(c, nil, eligibility.Message)
 	}
 
 	workspace := model.Workspace{
