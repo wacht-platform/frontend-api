@@ -22,6 +22,7 @@ type SignUpRequest struct {
 	PhoneCountryCode string `form:"phone_country_code"`
 	Email            string `form:"email"`
 	Password         string `form:"password"`
+	InviteToken      string `form:"invite_token"`
 }
 
 type SSOCallbackResponse struct {
