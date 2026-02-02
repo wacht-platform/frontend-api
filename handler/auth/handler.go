@@ -710,7 +710,9 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 		)
 	}
 
-	if d.Restrictions.SignUpMode == model.DeploymentRestrictionsSignUpModeWaitlist {
+	inviteToken := b.InviteToken
+
+	if d.Restrictions.SignUpMode == model.DeploymentRestrictionsSignUpModeWaitlist && inviteToken == "" {
 		return handler.SendBadRequest(
 			c,
 			nil,
@@ -728,7 +730,6 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 		)
 	}
 
-	inviteToken := c.Query("invite_token")
 	if inviteToken != "" && b.Email != "" {
 		var invitation model.DeploymentInvitation
 		err := database.Connection.
