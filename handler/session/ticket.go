@@ -10,6 +10,7 @@ import (
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
@@ -23,12 +24,12 @@ const (
 )
 
 type SessionTicketPayload struct {
-	TicketType    TicketType `json:"ticket_type"`
-	DeploymentID  string     `json:"deployment_id"`
-	UserID        *string    `json:"user_id,omitempty"`
-	AgentIDs      []string   `json:"agent_ids,omitempty"`
-	ContextGroup  *string    `json:"context_group,omitempty"`
-	ExpiresAt     int64      `json:"expires_at"`
+	TicketType   TicketType `json:"ticket_type"`
+	DeploymentID string     `json:"deployment_id"`
+	UserID       *string    `json:"user_id,omitempty"`
+	AgentIDs     []string   `json:"agent_ids,omitempty"`
+	ContextGroup *string    `json:"context_group,omitempty"`
+	ExpiresAt    int64      `json:"expires_at"`
 }
 
 type ExchangeTicketRequest struct {
@@ -36,21 +37,19 @@ type ExchangeTicketRequest struct {
 }
 
 type AgentInfo struct {
-	ID           string                      `json:"id"`
-	Name         string                      `json:"name"`
-	Description  string                      `json:"description"`
-	Integrations []model.AgentIntegration    `json:"integrations"`
+	ID           string                   `json:"id"`
+	Name         string                   `json:"name"`
+	Description  string                   `json:"description"`
+	Integrations []model.AgentIntegration `json:"integrations"`
 }
 
 type ExchangeTicketResponse struct {
-	Success bool                   `json:"success"`
-	Message string                  `json:"message,omitempty"`
-	// Agent access fields
-	SessionID    *string     `json:"session_id,omitempty"`
-	ContextGroup *string     `json:"context_group,omitempty"`
-	Agents       []AgentInfo `json:"agents,omitempty"`
-	// Impersonation fields
-	Session *model.Session `json:"session,omitempty"`
+	Success      bool           `json:"success"`
+	Message      string         `json:"message,omitempty"`
+	SessionID    *string        `json:"session_id,omitempty"`
+	ContextGroup *string        `json:"context_group,omitempty"`
+	Agents       []AgentInfo    `json:"agents,omitempty"`
+	Session      *model.Session `json:"session,omitempty"`
 }
 
 func (h *Handler) ExchangeTicket(c *fiber.Ctx) error {
@@ -59,7 +58,6 @@ func (h *Handler) ExchangeTicket(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "ticket is required")
 	}
 
-	// Fetch ticket from Redis
 	redisKey := fmt.Sprintf("session:ticket:%s", ticket)
 	ticketJSON, err := database.Redis.Get(c.Context(), redisKey).Result()
 	if err != nil {
@@ -135,9 +133,8 @@ func (h *Handler) handleImpersonationExchange(
 		}
 	}
 
-	// Create SignIn attempt and SignIn
 	steps := []model.SignInAttemptStep{}
-	attempt := h.createSignInAttempt(&userID, session.ID, deployment, steps)
+	attempt := h.createSignInAttempt(&userID, session.ID, steps)
 	attempt.FirstMethodAuthenticated = true
 
 	var signIn *model.Signin
@@ -146,7 +143,7 @@ func (h *Handler) handleImpersonationExchange(
 			return err
 		}
 
-		signIn = h.createSignIn(&userID, session.ID, 120000)
+		signIn = h.createSignIn(&userID, session.ID, 1200)
 		if err := tx.Create(signIn).Error; err != nil {
 			return err
 		}
@@ -183,7 +180,7 @@ func (h *Handler) handleImpersonationExchange(
 	return handler.SendSuccess(c, ExchangeTicketResponse{
 		Success: true,
 		Message: "Impersonation successful",
-		Session:  session,
+		Session: session,
 	})
 }
 
@@ -250,7 +247,6 @@ func (h *Handler) handleAgentAccessExchange(
 		return handler.SendInternalServerError(c, err, "Failed to create agent session")
 	}
 
-	// Fetch allowlisted agents
 	agents, err := h.getAllowlistedAgents(deployment.ID, agentIDs)
 	if err != nil {
 		return handler.SendInternalServerError(c, err, err.Error())
@@ -259,7 +255,6 @@ func (h *Handler) handleAgentAccessExchange(
 	// Delete ticket from Redis (single-use enforcement)
 	redisKey := fmt.Sprintf("session:ticket:%s", ticket)
 	if err := database.Redis.Del(c.Context(), redisKey).Err(); err != nil {
-		// Log error but don't fail the request
 		fmt.Printf("Warning: Failed to delete ticket after exchange: %v\n", err)
 	}
 
@@ -272,12 +267,9 @@ func (h *Handler) handleAgentAccessExchange(
 	})
 }
 
-// Helper functions
-
 func (h *Handler) createSignInAttempt(
 	userID *uint64,
 	sessionID uint64,
-	deployment *model.Deployment,
 	steps []model.SignInAttemptStep,
 ) *model.SignInAttempt {
 	attempt := model.NewSignInAttempt(model.SignInMethodImpersonation)
@@ -288,19 +280,21 @@ func (h *Handler) createSignInAttempt(
 	attempt.UserID = userID
 	attempt.SessionID = sessionID
 	attempt.Completed = true
-	database.Connection.Create(attempt)
 	return attempt
 }
 
 func (h *Handler) createSignIn(
 	userID *uint64,
 	sessionID uint64,
-	expiresInMilli uint64,
+	expiresInSec uint64,
 ) *model.Signin {
 	return &model.Signin{
+		Model: model.Model{
+			ID: idgen.NextID(),
+		},
 		UserID:    userID,
 		SessionID: sessionID,
-		ExpiresAt: time.Now().Add(time.Duration(expiresInMilli) * time.Millisecond),
+		ExpiresAt: time.Now().Add(time.Duration(expiresInSec) * time.Second),
 	}
 }
 
