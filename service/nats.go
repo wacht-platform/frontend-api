@@ -189,6 +189,9 @@ type WebhookReplayBatchByDateRangePayload struct {
 	AppSlug      string     `json:"app_slug"`
 	StartDate    time.Time  `json:"start_date"`
 	EndDate      *time.Time `json:"end_date,omitempty"`
+	Status       string     `json:"status,omitempty"`
+	EventName    string     `json:"event_name,omitempty"`
+	EndpointID   *int64     `json:"endpoint_id,omitempty"`
 }
 
 var natsService *NatsService
@@ -610,13 +613,25 @@ func (s *NatsService) PublishWebhookReplayBatchByIDs(ctx context.Context, deploy
 	return s.publishTaskWithID(ctx, "webhook.replay_batch", task)
 }
 
-func (s *NatsService) PublishWebhookReplayBatchByDateRange(ctx context.Context, deploymentID uint64, appSlug string, startDate time.Time, endDate *time.Time) (string, error) {
+func (s *NatsService) PublishWebhookReplayBatchByDateRange(
+	ctx context.Context,
+	deploymentID uint64,
+	appSlug string,
+	startDate time.Time,
+	endDate *time.Time,
+	status string,
+	eventName string,
+	endpointID *int64,
+) (string, error) {
 	task := WebhookReplayBatchByDateRangePayload{
 		Type:         "by_date_range",
 		DeploymentID: fmt.Sprintf("%d", deploymentID),
 		AppSlug:      appSlug,
 		StartDate:    startDate,
 		EndDate:      endDate,
+		Status:       status,
+		EventName:    eventName,
+		EndpointID:   endpointID,
 	}
 	return s.publishTaskWithID(ctx, "webhook.replay_batch", task)
 }

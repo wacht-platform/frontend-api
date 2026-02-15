@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -313,11 +314,20 @@ type AuditLogsResponse struct {
 
 func (s *Service) GetAuditLogs(deploymentID uint64, appSlug string, limit int, offset int, cursorTS *time.Time, cursorID string, outcome, keyID, startDate, endDate string) (*AuditLogsResponse, error) {
 	ctx := context.Background()
-
-	whereParts := []string{
-		fmt.Sprintf("deployment_id = %d", deploymentID),
-		fmt.Sprintf("app_slug = '%s'", appSlug),
+	parsedKeyID, err := parseOptionalInt64String(keyID, "key_id")
+	if err != nil {
+		return nil, err
 	}
+	startDateTime, err := parseAuditDateTime(startDate)
+	if err != nil {
+		return nil, err
+	}
+	endDateTime, err := parseAuditDateTime(endDate)
+	if err != nil {
+		return nil, err
+	}
+	whereParts := []string{"deployment_id = ?", "app_slug = ?"}
+	whereArgs := []any{deploymentID, appSlug}
 
 	if outcome != "" && (outcome == "allowed" || outcome == "blocked") {
 		if outcome == "allowed" {
@@ -327,31 +337,34 @@ func (s *Service) GetAuditLogs(deploymentID uint64, appSlug string, limit int, o
 		}
 	}
 
-	if keyID != "" {
-		whereParts = append(whereParts, fmt.Sprintf("key_id = %s", keyID))
+	if parsedKeyID != nil {
+		whereParts = append(whereParts, "key_id = ?")
+		whereArgs = append(whereArgs, *parsedKeyID)
 	}
 
-	if startDate != "" {
-		whereParts = append(whereParts, fmt.Sprintf("timestamp >= parseDateTime64BestEffort('%s')", startDate))
-		if endDate != "" {
-			whereParts = append(whereParts, fmt.Sprintf("timestamp <= parseDateTime64BestEffort('%s')", endDate))
+	if startDateTime != nil {
+		whereParts = append(whereParts, "timestamp >= ?")
+		whereArgs = append(whereArgs, *startDateTime)
+		if endDateTime != nil {
+			whereParts = append(whereParts, "timestamp <= ?")
+			whereArgs = append(whereArgs, *endDateTime)
 		}
 	} else {
 		whereParts = append(whereParts, "timestamp >= now() - INTERVAL 7 DAY")
 	}
 
 	if cursorTS != nil {
-		cursorTime := cursorTS.UTC().Format("2006-01-02 15:04:05")
+		cursorTime := cursorTS.UTC()
 		if cursorID != "" {
-			whereParts = append(whereParts, fmt.Sprintf("(timestamp < toDateTime('%s') OR (timestamp = toDateTime('%s') AND request_id < '%s'))", cursorTime, cursorTime, cursorID))
+			whereParts = append(whereParts, "(timestamp < ? OR (timestamp = ? AND request_id < ?))")
+			whereArgs = append(whereArgs, cursorTime, cursorTime, cursorID)
 		} else {
-			whereParts = append(whereParts, fmt.Sprintf("timestamp < toDateTime('%s')", cursorTime))
+			whereParts = append(whereParts, "timestamp < ?")
+			whereArgs = append(whereArgs, cursorTime)
 		}
 	}
 
 	whereClause := strings.Join(whereParts, " AND ")
-
-	var err error
 
 	query := fmt.Sprintf(
 		"SELECT request_id, deployment_id, app_slug, key_id, key_name, outcome, blocked_by_rule, "+
@@ -363,7 +376,7 @@ func (s *Service) GetAuditLogs(deploymentID uint64, appSlug string, limit int, o
 		query += fmt.Sprintf(" OFFSET %d", offset)
 	}
 
-	rows, err := database.ClickHouseClient.Query(ctx, query)
+	rows, err := database.ClickHouseClient.Query(ctx, query, whereArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch audit logs: %w", err)
 	}
@@ -455,20 +468,33 @@ type RateLimitStatsItem struct {
 
 func (s *Service) GetAuditAnalytics(deploymentID uint64, appSlug string, startDate, endDate, keyID string, includeTopKeys, includeTopPaths, includeBlockedReasons, includeRateLimits bool, topLimit int) (*AuditAnalyticsResponse, error) {
 	ctx := context.Background()
-
-	whereParts := []string{
-		fmt.Sprintf("deployment_id = %d", deploymentID),
-		fmt.Sprintf("app_slug = '%s'", appSlug),
+	parsedKeyID, err := parseOptionalInt64String(keyID, "key_id")
+	if err != nil {
+		return nil, err
+	}
+	startDateTime, err := parseAuditDateTime(startDate)
+	if err != nil {
+		return nil, err
+	}
+	endDateTime, err := parseAuditDateTime(endDate)
+	if err != nil {
+		return nil, err
 	}
 
-	if keyID != "" {
-		whereParts = append(whereParts, fmt.Sprintf("key_id = %s", keyID))
+	whereParts := []string{"deployment_id = ?", "app_slug = ?"}
+	whereArgs := []any{deploymentID, appSlug}
+
+	if parsedKeyID != nil {
+		whereParts = append(whereParts, "key_id = ?")
+		whereArgs = append(whereArgs, *parsedKeyID)
 	}
 
-	if startDate != "" {
-		whereParts = append(whereParts, fmt.Sprintf("timestamp >= parseDateTime64BestEffort('%s')", startDate))
-		if endDate != "" {
-			whereParts = append(whereParts, fmt.Sprintf("timestamp <= parseDateTime64BestEffort('%s')", endDate))
+	if startDateTime != nil {
+		whereParts = append(whereParts, "timestamp >= ?")
+		whereArgs = append(whereArgs, *startDateTime)
+		if endDateTime != nil {
+			whereParts = append(whereParts, "timestamp <= ?")
+			whereArgs = append(whereArgs, *endDateTime)
 		}
 	} else {
 		whereParts = append(whereParts, "timestamp >= now() - INTERVAL 30 DAY")
@@ -487,7 +513,7 @@ func (s *Service) GetAuditAnalytics(deploymentID uint64, appSlug string, startDa
 	)
 
 	var stats model.ApiAuditStatsRow
-	err := database.ClickHouseClient.QueryRow(ctx, query).Scan(
+	err = database.ClickHouseClient.QueryRow(ctx, query, whereArgs...).Scan(
 		&stats.TotalRequests,
 		&stats.AllowedRequests,
 		&stats.BlockedRequests,
@@ -515,29 +541,29 @@ func (s *Service) GetAuditAnalytics(deploymentID uint64, appSlug string, startDa
 	}
 
 	if includeTopKeys {
-		topKeys := s.fetchTopKeys(ctx, whereClause, topLimit)
+		topKeys := s.fetchTopKeys(ctx, whereClause, whereArgs, topLimit)
 		response.TopKeys = topKeys
 	}
 
 	if includeTopPaths {
-		topPaths := s.fetchTopPaths(ctx, whereClause, topLimit)
+		topPaths := s.fetchTopPaths(ctx, whereClause, whereArgs, topLimit)
 		response.TopPaths = topPaths
 	}
 
 	if includeBlockedReasons {
-		blockedReasons := s.fetchBlockedReasons(ctx, deploymentID, appSlug, startDate, endDate, topLimit)
+		blockedReasons := s.fetchBlockedReasons(ctx, whereClause, whereArgs, topLimit)
 		response.BlockedReasons = blockedReasons
 	}
 
 	if includeRateLimits {
-		rateLimitStats := s.fetchRateLimitStats(ctx, deploymentID, appSlug, startDate, endDate, stats.BlockedRequests, topLimit)
+		rateLimitStats := s.fetchRateLimitStats(ctx, whereClause, whereArgs, stats.BlockedRequests, topLimit)
 		response.RateLimitStats = rateLimitStats
 	}
 
 	return response, nil
 }
 
-func (s *Service) fetchTopKeys(ctx context.Context, whereClause string, limit int) []KeyStatsItem {
+func (s *Service) fetchTopKeys(ctx context.Context, whereClause string, whereArgs []any, limit int) []KeyStatsItem {
 	query := fmt.Sprintf(
 		"SELECT "+
 			"key_id, "+
@@ -551,7 +577,7 @@ func (s *Service) fetchTopKeys(ctx context.Context, whereClause string, limit in
 		whereClause, limit,
 	)
 
-	rows, err := database.ClickHouseClient.Query(ctx, query)
+	rows, err := database.ClickHouseClient.Query(ctx, query, whereArgs...)
 	if err != nil {
 		return nil
 	}
@@ -568,7 +594,7 @@ func (s *Service) fetchTopKeys(ctx context.Context, whereClause string, limit in
 	return items
 }
 
-func (s *Service) fetchTopPaths(ctx context.Context, whereClause string, limit int) []PathStatsItem {
+func (s *Service) fetchTopPaths(ctx context.Context, whereClause string, whereArgs []any, limit int) []PathStatsItem {
 	query := fmt.Sprintf(
 		"SELECT "+
 			"path, "+
@@ -581,7 +607,7 @@ func (s *Service) fetchTopPaths(ctx context.Context, whereClause string, limit i
 		whereClause, limit,
 	)
 
-	rows, err := database.ClickHouseClient.Query(ctx, query)
+	rows, err := database.ClickHouseClient.Query(ctx, query, whereArgs...)
 	if err != nil {
 		return nil
 	}
@@ -598,28 +624,12 @@ func (s *Service) fetchTopPaths(ctx context.Context, whereClause string, limit i
 	return items
 }
 
-func (s *Service) fetchBlockedReasons(ctx context.Context, deploymentID uint64, appSlug string, startDate, endDate string, limit int) []BlockedReasonItem {
-	whereParts := []string{
-		fmt.Sprintf("deployment_id = %d", deploymentID),
-		fmt.Sprintf("app_slug = '%s'", appSlug),
-		"outcome IN ('blocked','BLOCKED','RATE_LIMITED')",
-		"blocked_by_rule IS NOT NULL",
-	}
+func (s *Service) fetchBlockedReasons(ctx context.Context, whereClause string, whereArgs []any, limit int) []BlockedReasonItem {
+	blockedWhere := whereClause + " AND outcome IN ('blocked','BLOCKED','RATE_LIMITED') AND blocked_by_rule IS NOT NULL"
 
-	if startDate != "" {
-		whereParts = append(whereParts, fmt.Sprintf("timestamp >= parseDateTime64BestEffort('%s')", startDate))
-		if endDate != "" {
-			whereParts = append(whereParts, fmt.Sprintf("timestamp <= parseDateTime64BestEffort('%s')", endDate))
-		}
-	} else {
-		whereParts = append(whereParts, "timestamp >= now() - INTERVAL 30 DAY")
-	}
-
-	whereClause := strings.Join(whereParts, " AND ")
-
-	totalQuery := fmt.Sprintf("SELECT count() FROM api_audit_logs WHERE %s", whereClause)
+	totalQuery := fmt.Sprintf("SELECT count() FROM api_audit_logs WHERE %s", blockedWhere)
 	var totalCount int64
-	if err := database.ClickHouseClient.QueryRow(ctx, totalQuery).Scan(&totalCount); err != nil {
+	if err := database.ClickHouseClient.QueryRow(ctx, totalQuery, whereArgs...).Scan(&totalCount); err != nil {
 		return nil
 	}
 
@@ -632,10 +642,10 @@ func (s *Service) fetchBlockedReasons(ctx context.Context, deploymentID uint64, 
 			"GROUP BY blocked_by_rule "+
 			"ORDER BY count DESC "+
 			"LIMIT %d",
-		whereClause, limit,
+		blockedWhere, limit,
 	)
 
-	rows, err := database.ClickHouseClient.Query(ctx, query)
+	rows, err := database.ClickHouseClient.Query(ctx, query, whereArgs...)
 	if err != nil {
 		return nil
 	}
@@ -655,28 +665,12 @@ func (s *Service) fetchBlockedReasons(ctx context.Context, deploymentID uint64, 
 	return items
 }
 
-func (s *Service) fetchRateLimitStats(ctx context.Context, deploymentID uint64, appSlug string, startDate, endDate string, totalBlocked uint64, limit int) *RateLimitBreakdown {
-	whereParts := []string{
-		fmt.Sprintf("deployment_id = %d", deploymentID),
-		fmt.Sprintf("app_slug = '%s'", appSlug),
-		"outcome IN ('blocked','BLOCKED','RATE_LIMITED')",
-		"blocked_by_rule LIKE 'rate_limit:%'",
-	}
+func (s *Service) fetchRateLimitStats(ctx context.Context, whereClause string, whereArgs []any, totalBlocked uint64, limit int) *RateLimitBreakdown {
+	rlWhere := whereClause + " AND outcome IN ('blocked','BLOCKED','RATE_LIMITED') AND blocked_by_rule LIKE 'rate_limit:%'"
 
-	if startDate != "" {
-		whereParts = append(whereParts, fmt.Sprintf("timestamp >= parseDateTime64BestEffort('%s')", startDate))
-		if endDate != "" {
-			whereParts = append(whereParts, fmt.Sprintf("timestamp <= parseDateTime64BestEffort('%s')", endDate))
-		}
-	} else {
-		whereParts = append(whereParts, "timestamp >= now() - INTERVAL 30 DAY")
-	}
-
-	whereClause := strings.Join(whereParts, " AND ")
-
-	totalQuery := fmt.Sprintf("SELECT count() FROM api_audit_logs WHERE %s", whereClause)
+	totalQuery := fmt.Sprintf("SELECT count() FROM api_audit_logs WHERE %s", rlWhere)
 	var totalHits int64
-	if err := database.ClickHouseClient.QueryRow(ctx, totalQuery).Scan(&totalHits); err != nil {
+	if err := database.ClickHouseClient.QueryRow(ctx, totalQuery, whereArgs...).Scan(&totalHits); err != nil {
 		return nil
 	}
 
@@ -689,10 +683,10 @@ func (s *Service) fetchRateLimitStats(ctx context.Context, deploymentID uint64, 
 			"GROUP BY rule "+
 			"ORDER BY hit_count DESC "+
 			"LIMIT %d",
-		whereClause, limit,
+		rlWhere, limit,
 	)
 
-	rows, err := database.ClickHouseClient.Query(ctx, query)
+	rows, err := database.ClickHouseClient.Query(ctx, query, whereArgs...)
 	if err != nil {
 		return nil
 	}
@@ -723,13 +717,10 @@ func (s *Service) fetchRateLimitStats(ctx context.Context, deploymentID uint64, 
 }
 
 func (s *Service) fetchKeysUsedLast24h(ctx context.Context, deploymentID uint64, appSlug string) (uint64, error) {
-	query := fmt.Sprintf(
-		"SELECT countDistinct(key_id) FROM api_audit_logs WHERE deployment_id = %d AND app_slug = '%s' AND timestamp >= now() - INTERVAL 24 HOUR",
-		deploymentID, appSlug,
-	)
+	query := "SELECT countDistinct(key_id) FROM api_audit_logs WHERE deployment_id = ? AND app_slug = ? AND timestamp >= now() - INTERVAL 24 HOUR"
 
 	var total uint64
-	if err := database.ClickHouseClient.QueryRow(ctx, query).Scan(&total); err != nil {
+	if err := database.ClickHouseClient.QueryRow(ctx, query, deploymentID, appSlug).Scan(&total); err != nil {
 		return 0, err
 	}
 	return total, nil
@@ -750,6 +741,18 @@ type AuditTimeseriesResponse struct {
 
 func (s *Service) GetAuditTimeseries(deploymentID uint64, appSlug string, startDate, endDate, interval, keyID string) (*AuditTimeseriesResponse, error) {
 	ctx := context.Background()
+	parsedKeyID, err := parseOptionalInt64String(keyID, "key_id")
+	if err != nil {
+		return nil, err
+	}
+	startDateTime, err := parseAuditDateTime(startDate)
+	if err != nil {
+		return nil, err
+	}
+	endDateTime, err := parseAuditDateTime(endDate)
+	if err != nil {
+		return nil, err
+	}
 
 	intervalFunc := "toStartOfHour"
 	switch interval {
@@ -765,19 +768,20 @@ func (s *Service) GetAuditTimeseries(deploymentID uint64, appSlug string, startD
 		intervalFunc = "toStartOfMonth"
 	}
 
-	whereParts := []string{
-		fmt.Sprintf("deployment_id = %d", deploymentID),
-		fmt.Sprintf("app_slug = '%s'", appSlug),
+	whereParts := []string{"deployment_id = ?", "app_slug = ?"}
+	whereArgs := []any{deploymentID, appSlug}
+
+	if parsedKeyID != nil {
+		whereParts = append(whereParts, "key_id = ?")
+		whereArgs = append(whereArgs, *parsedKeyID)
 	}
 
-	if keyID != "" {
-		whereParts = append(whereParts, fmt.Sprintf("key_id = %s", keyID))
-	}
-
-	if startDate != "" {
-		whereParts = append(whereParts, fmt.Sprintf("timestamp >= parseDateTime64BestEffort('%s')", startDate))
-		if endDate != "" {
-			whereParts = append(whereParts, fmt.Sprintf("timestamp <= parseDateTime64BestEffort('%s')", endDate))
+	if startDateTime != nil {
+		whereParts = append(whereParts, "timestamp >= ?")
+		whereArgs = append(whereArgs, *startDateTime)
+		if endDateTime != nil {
+			whereParts = append(whereParts, "timestamp <= ?")
+			whereArgs = append(whereArgs, *endDateTime)
 		}
 	} else {
 		whereParts = append(whereParts, "timestamp >= now() - INTERVAL 30 DAY")
@@ -797,7 +801,7 @@ func (s *Service) GetAuditTimeseries(deploymentID uint64, appSlug string, startD
 		intervalFunc, whereClause,
 	)
 
-	rows, err := database.ClickHouseClient.Query(ctx, query)
+	rows, err := database.ClickHouseClient.Query(ctx, query, whereArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch audit timeseries: %w", err)
 	}
@@ -859,4 +863,34 @@ func generateApiKey(prefix string) (string, string, string, error) {
 func encodeAuditLogCursor(ts time.Time, requestID string) string {
 	payload := fmt.Sprintf("%d|%s", ts.UTC().UnixMilli(), requestID)
 	return base64.RawURLEncoding.EncodeToString([]byte(payload))
+}
+
+func parseOptionalInt64String(value string, field string) (*int64, error) {
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s", field)
+	}
+	return &parsed, nil
+}
+
+func parseAuditDateTime(value string) (*time.Time, error) {
+	if value == "" {
+		return nil, nil
+	}
+	layouts := []string{
+		time.RFC3339,
+		"2006-01-02",
+		"2006-01-02 15:04:05",
+	}
+	for _, layout := range layouts {
+		parsed, err := time.Parse(layout, value)
+		if err == nil {
+			utc := parsed.UTC()
+			return &utc, nil
+		}
+	}
+	return nil, fmt.Errorf("invalid date format")
 }

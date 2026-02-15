@@ -504,8 +504,8 @@ func parseOptionalInt64(value string) (*int64, error) {
 	if value == "" {
 		return nil, nil
 	}
-	var parsed int64
-	if _, err := fmt.Sscanf(value, "%d", &parsed); err != nil {
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
 		return nil, validationError("invalid endpoint_id")
 	}
 	return &parsed, nil
@@ -781,36 +781,56 @@ func (s *Service) GetDeliveries(deploymentID uint64, appSlug string, limit int, 
 	if err != nil {
 		return nil, err
 	}
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	whereParts := []string{
+		"deployment_id = ?",
+		"app_slug = ?",
+	}
+	whereArgs := []any{deploymentID, appSlug}
+
+	if endpointIDParsed != nil {
+		whereParts = append(whereParts, "endpoint_id = ?")
+		whereArgs = append(whereArgs, *endpointIDParsed)
+	}
+
+	if status != "" {
+		whereParts = append(whereParts, "status = ?")
+		whereArgs = append(whereArgs, status)
+	}
+
+	if eventName != "" {
+		whereParts = append(whereParts, "event_name = ?")
+		whereArgs = append(whereArgs, eventName)
+	}
+
+	if cursorTS != nil {
+		cursorTime := cursorTS.UTC()
+		if cursorID != nil {
+			whereParts = append(whereParts, "(timestamp < ? OR (timestamp = ? AND delivery_id < ?))")
+			whereArgs = append(whereArgs, cursorTime, cursorTime, *cursorID)
+		} else {
+			whereParts = append(whereParts, "timestamp < ?")
+			whereArgs = append(whereArgs, cursorTime)
+		}
+	}
 
 	query := fmt.Sprintf(
 		"SELECT delivery_id, deployment_id, app_slug, endpoint_id, event_name, "+
 			"status, http_status_code, response_time_ms, attempt_number, max_attempts, "+
 			"timestamp "+
 			"FROM webhook_logs_light "+
-			"WHERE deployment_id = %d AND app_slug = '%s'",
-		deploymentID, appSlug,
+			"WHERE %s",
+		strings.Join(whereParts, " AND "),
 	)
-
-	if endpointIDParsed != nil {
-		query += fmt.Sprintf(" AND endpoint_id = %d", *endpointIDParsed)
-	}
-
-	if status != "" {
-		query += fmt.Sprintf(" AND status = '%s'", status)
-	}
-
-	if eventName != "" {
-		query += fmt.Sprintf(" AND event_name = '%s'", eventName)
-	}
-
-	if cursorTS != nil {
-		cursorTime := cursorTS.UTC().Format("2006-01-02 15:04:05")
-		if cursorID != nil {
-			query += fmt.Sprintf(" AND (timestamp < toDateTime('%s') OR (timestamp = toDateTime('%s') AND delivery_id < %d))", cursorTime, cursorTime, *cursorID)
-		} else {
-			query += fmt.Sprintf(" AND timestamp < toDateTime('%s')", cursorTime)
-		}
-	}
 
 	// Get paginated results
 	query += fmt.Sprintf(" ORDER BY timestamp DESC, delivery_id DESC LIMIT 1 BY delivery_id LIMIT %d", limit+1)
@@ -818,7 +838,7 @@ func (s *Service) GetDeliveries(deploymentID uint64, appSlug string, limit int, 
 		query += fmt.Sprintf(" OFFSET %d", offset)
 	}
 
-	rows, err := database.ClickHouseClient.Query(ctx, query)
+	rows, err := database.ClickHouseClient.Query(ctx, query, whereArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch deliveries: %w", err)
 	}
@@ -900,7 +920,7 @@ func (s *Service) GetDelivery(deploymentID uint64, appSlug string, deliveryID in
 		return nil, err
 	}
 
-	query := fmt.Sprintf(`
+	query := `
 		WITH delivery_info AS (
 			SELECT
 				delivery_id,
@@ -916,7 +936,7 @@ func (s *Service) GetDelivery(deploymentID uint64, appSlug string, deliveryID in
 				payload_size_bytes,
 				timestamp
 			FROM webhook_logs_light
-			WHERE deployment_id = %d AND app_slug = '%s' AND delivery_id = %d
+			WHERE deployment_id = ? AND app_slug = ? AND delivery_id = ?
 		)
 		SELECT
 			d.delivery_id,
@@ -940,12 +960,10 @@ func (s *Service) GetDelivery(deploymentID uint64, appSlug string, deliveryID in
 			AND d.deployment_id = f.deployment_id
 			AND d.app_slug = f.app_slug
 			AND d.attempt_number = f.attempt_number
-		WHERE d.delivery_id = %d
-		ORDER BY d.attempt_number ASC`,
-		deploymentID, appSlug, deliveryID, deliveryID,
-	)
+		WHERE d.delivery_id = ?
+		ORDER BY d.attempt_number ASC`
 
-	rows, err := database.ClickHouseClient.Query(ctx, query)
+	rows, err := database.ClickHouseClient.Query(ctx, query, deploymentID, appSlug, deliveryID, deliveryID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch delivery: %w", err)
 	}
@@ -1047,11 +1065,11 @@ func (s *Service) GetAnalytics(deploymentID uint64, appSlug string, startDate, e
 	if err := validateToken("app_slug", appSlug); err != nil {
 		return nil, err
 	}
-	startDateFormatted, err := parseOptionalDate(startDate)
+	startDateTime, err := parseOptionalDateTime(startDate)
 	if err != nil {
 		return nil, err
 	}
-	endDateFormatted, err := parseOptionalDate(endDate)
+	endDateTime, err := parseOptionalDateTime(endDate)
 	if err != nil {
 		return nil, err
 	}
@@ -1060,18 +1078,22 @@ func (s *Service) GetAnalytics(deploymentID uint64, appSlug string, startDate, e
 		return nil, err
 	}
 
-	whereClause := fmt.Sprintf("deployment_id = %d AND app_slug = '%s'", deploymentID, appSlug)
+	whereParts := []string{"deployment_id = ?", "app_slug = ?"}
+	whereArgs := []any{deploymentID, appSlug}
 	if endpointIDParsed != nil {
-		whereClause += fmt.Sprintf(" AND endpoint_id = %d", *endpointIDParsed)
+		whereParts = append(whereParts, "endpoint_id = ?")
+		whereArgs = append(whereArgs, *endpointIDParsed)
 	}
 
-	if startDateFormatted != "" {
-		whereClause += fmt.Sprintf(" AND timestamp >= '%s'", startDateFormatted)
-		if endDateFormatted != "" {
-			whereClause += fmt.Sprintf(" AND timestamp <= '%s'", endDateFormatted)
+	if startDateTime != nil {
+		whereParts = append(whereParts, "timestamp >= ?")
+		whereArgs = append(whereArgs, *startDateTime)
+		if endDateTime != nil {
+			whereParts = append(whereParts, "timestamp <= ?")
+			whereArgs = append(whereArgs, *endDateTime)
 		}
 	} else {
-		whereClause += " AND timestamp >= now() - INTERVAL 30 DAY"
+		whereParts = append(whereParts, "timestamp >= now() - INTERVAL 30 DAY")
 	}
 
 	if len(fields) == 0 {
@@ -1136,10 +1158,10 @@ func (s *Service) GetAnalytics(deploymentID uint64, appSlug string, startDate, e
 	query := fmt.Sprintf(
 		"SELECT %s FROM webhook_logs_light WHERE %s",
 		strings.Join(selectParts, ", "),
-		whereClause,
+		strings.Join(whereParts, " AND "),
 	)
 
-	err = database.ClickHouseClient.QueryRow(ctx, query).Scan(scanTargets...)
+	err = database.ClickHouseClient.QueryRow(ctx, query, whereArgs...).Scan(scanTargets...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch analytics: %w", err)
 	}
@@ -1211,11 +1233,11 @@ func (s *Service) GetTimeseries(deploymentID uint64, appSlug string, startDate, 
 	if err != nil {
 		return nil, err
 	}
-	startDateFormatted, err := parseOptionalDate(startDate)
+	startDateTime, err := parseOptionalDateTime(startDate)
 	if err != nil {
 		return nil, err
 	}
-	endDateFormatted, err := parseOptionalDate(endDate)
+	endDateTime, err := parseOptionalDateTime(endDate)
 	if err != nil {
 		return nil, err
 	}
@@ -1238,17 +1260,18 @@ func (s *Service) GetTimeseries(deploymentID uint64, appSlug string, startDate, 
 		intervalFunc = "toStartOfMonth"
 	}
 
-	whereParts := []string{
-		fmt.Sprintf("deployment_id = %d", deploymentID),
-		fmt.Sprintf("app_slug = '%s'", appSlug),
-	}
+	whereParts := []string{"deployment_id = ?", "app_slug = ?"}
+	whereArgs := []any{deploymentID, appSlug}
 	if endpointIDParsed != nil {
-		whereParts = append(whereParts, fmt.Sprintf("endpoint_id = %d", *endpointIDParsed))
+		whereParts = append(whereParts, "endpoint_id = ?")
+		whereArgs = append(whereArgs, *endpointIDParsed)
 	}
-	if startDateFormatted != "" {
-		whereParts = append(whereParts, fmt.Sprintf("timestamp >= '%s'", startDateFormatted))
-		if endDateFormatted != "" {
-			whereParts = append(whereParts, fmt.Sprintf("timestamp <= '%s'", endDateFormatted))
+	if startDateTime != nil {
+		whereParts = append(whereParts, "timestamp >= ?")
+		whereArgs = append(whereArgs, *startDateTime)
+		if endDateTime != nil {
+			whereParts = append(whereParts, "timestamp <= ?")
+			whereArgs = append(whereArgs, *endDateTime)
 		}
 	} else {
 		whereParts = append(whereParts, "timestamp >= now() - INTERVAL 30 DAY")
@@ -1269,7 +1292,7 @@ func (s *Service) GetTimeseries(deploymentID uint64, appSlug string, startDate, 
 		intervalFunc, whereClause,
 	)
 
-	rows, err := database.ClickHouseClient.Query(ctx, deliveryQuery)
+	rows, err := database.ClickHouseClient.Query(ctx, deliveryQuery, whereArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch delivery timeseries: %w", err)
 	}
@@ -1602,9 +1625,11 @@ func (s *Service) RotateSecret(deploymentID uint64, appSlug string) (*model.Webh
 
 func (s *Service) ReplayDelivery(deploymentID uint64, appSlug string, req *ReplayDeliveryRequest) (*ReplayDeliveryResponse, error) {
 	normalizedIDs := make([]string, 0, len(req.DeliveryIDs))
-	var queuedByDateRange bool
 	var rangeStartDate *time.Time
 	var rangeEndDate *time.Time
+	var rangeStatus string
+	var rangeEventName string
+	var rangeEndpointID *int64
 	var idempotencyRedisKey string
 	var idempotencyPendingValue string
 	idempotencyKey := strings.TrimSpace(req.IdempotencyKey)
@@ -1641,18 +1666,6 @@ func (s *Service) ReplayDelivery(deploymentID uint64, appSlug string, req *Repla
 		if err != nil {
 			return nil, err
 		}
-		startDate, err := parseOptionalDate(req.StartDate)
-		if err != nil {
-			return nil, err
-		}
-		endDate, err := parseOptionalDate(req.EndDate)
-		if err != nil {
-			return nil, err
-		}
-		if startDate == "" {
-			return nil, validationError("start_date is required when delivery_ids are not provided")
-		}
-
 		startDT, err := parseOptionalDateTime(req.StartDate)
 		if err != nil {
 			return nil, err
@@ -1668,57 +1681,11 @@ func (s *Service) ReplayDelivery(deploymentID uint64, appSlug string, req *Repla
 			return nil, err
 		}
 
-		// For pure date-range replay, let worker resolve IDs from ClickHouse.
-		// This avoids frontend-api returning no_op due to local prefetch mismatch.
-		if req.Status == "" && req.EventName == "" && endpointIDParsed == nil {
-			rangeStartDate = startDT
-			rangeEndDate = endDT
-			queuedByDateRange = true
-		}
-
-		if !queuedByDateRange {
-			ctx := context.Background()
-			query := fmt.Sprintf(
-				"SELECT DISTINCT delivery_id FROM webhook_logs_light "+
-					"WHERE deployment_id = %d AND app_slug = '%s' AND timestamp >= toDateTime('%s')",
-				deploymentID, appSlug, startDate,
-			)
-
-			if endDate != "" {
-				query += fmt.Sprintf(" AND timestamp <= toDateTime('%s')", endDate)
-			}
-			if req.Status != "" {
-				query += fmt.Sprintf(" AND status = '%s'", req.Status)
-			}
-			if req.EventName != "" {
-				query += fmt.Sprintf(" AND event_name = '%s'", req.EventName)
-			}
-			if endpointIDParsed != nil {
-				query += fmt.Sprintf(" AND endpoint_id = %d", *endpointIDParsed)
-			}
-			query += " ORDER BY delivery_id DESC LIMIT 5000"
-
-			rows, err := database.ClickHouseClient.Query(ctx, query)
-			if err != nil {
-				return nil, fmt.Errorf("failed to fetch replay candidates: %w", err)
-			}
-			defer rows.Close()
-
-			for rows.Next() {
-				var id int64
-				if err := rows.Scan(&id); err != nil {
-					return nil, fmt.Errorf("failed to scan replay candidate id: %w", err)
-				}
-				normalizedIDs = append(normalizedIDs, strconv.FormatInt(id, 10))
-			}
-		}
-	}
-
-	if !queuedByDateRange && len(normalizedIDs) == 0 {
-		return &ReplayDeliveryResponse{
-			Status:  "no_op",
-			Message: "No deliveries matched replay criteria",
-		}, nil
+		rangeStartDate = startDT
+		rangeEndDate = endDT
+		rangeStatus = req.Status
+		rangeEventName = req.EventName
+		rangeEndpointID = endpointIDParsed
 	}
 
 	if idempotencyKey == "" {
@@ -1761,7 +1728,7 @@ func (s *Service) ReplayDelivery(deploymentID uint64, appSlug string, req *Repla
 	natsService := service.GetNATS()
 
 	var taskID string
-	if queuedByDateRange {
+	if len(normalizedIDs) == 0 {
 		if rangeStartDate == nil {
 			_ = rollbackReplaySlot(context.Background(), idempotencyRedisKey, activeCountRedisKey, idempotencyPendingValue)
 			return nil, validationError("start_date is required for range replay")
@@ -1772,6 +1739,9 @@ func (s *Service) ReplayDelivery(deploymentID uint64, appSlug string, req *Repla
 			appSlug,
 			*rangeStartDate,
 			rangeEndDate,
+			rangeStatus,
+			rangeEventName,
+			rangeEndpointID,
 		)
 		if err != nil {
 			_ = rollbackReplaySlot(context.Background(), idempotencyRedisKey, activeCountRedisKey, idempotencyPendingValue)
@@ -1795,7 +1765,7 @@ func (s *Service) ReplayDelivery(deploymentID uint64, appSlug string, req *Repla
 		"deployment_id":        deploymentID,
 		"status":               "queued",
 		"created_at":           now.Format(time.RFC3339),
-		"total_count":          len(normalizedIDs),
+		"total_count":          len(normalizedIDs), // worker updates this for date-range replay tasks
 		"processed_count":      0,
 		"replayed_count":       0,
 		"failed_count":         0,
