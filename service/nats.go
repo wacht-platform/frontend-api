@@ -201,7 +201,7 @@ func InitNATS() error {
 		return nil
 	}
 
-	natsURL := os.Getenv("NATS_URL")
+	natsURL := os.Getenv("NATS_HOST")
 
 	nc, err := nats.Connect(natsURL,
 		nats.MaxReconnects(-1),
