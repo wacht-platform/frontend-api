@@ -176,6 +176,21 @@ type BillingEventTask struct {
 	ResourceID   uint64 `json:"resource_id"`
 }
 
+type WebhookReplayBatchByIDsPayload struct {
+	Type         string   `json:"type"`
+	DeploymentID string   `json:"deployment_id"`
+	AppSlug      string   `json:"app_slug"`
+	DeliveryIDs  []string `json:"delivery_ids"`
+}
+
+type WebhookReplayBatchByDateRangePayload struct {
+	Type         string     `json:"type"`
+	DeploymentID string     `json:"deployment_id"`
+	AppSlug      string     `json:"app_slug"`
+	StartDate    time.Time  `json:"start_date"`
+	EndDate      *time.Time `json:"end_date,omitempty"`
+}
+
 var natsService *NatsService
 
 func InitNATS() error {
@@ -239,30 +254,36 @@ func GetNATS() *NatsService {
 	return natsService
 }
 
-func (s *NatsService) publishTask(ctx context.Context, taskType string, payload interface{}) error {
+func (s *NatsService) publishTaskWithID(ctx context.Context, taskType string, payload interface{}) (string, error) {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal payload: %w", err)
+		return "", fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
+	taskID := fmt.Sprintf("%d", idgen.NextID())
 	message := NatsTaskMessage{
 		TaskType: taskType,
-		TaskID:   fmt.Sprintf("%d", idgen.NextID()),
+		TaskID:   taskID,
 		Payload:  payloadBytes,
 	}
 
 	messageBytes, err := json.Marshal(message)
 	if err != nil {
-		return fmt.Errorf("failed to marshal message: %w", err)
+		return "", fmt.Errorf("failed to marshal message: %w", err)
 	}
 
 	subject := fmt.Sprintf("worker.tasks.%s", taskType)
 	_, err = s.js.Publish(ctx, subject, messageBytes)
 	if err != nil {
-		return fmt.Errorf("failed to publish message: %w", err)
+		return "", fmt.Errorf("failed to publish message: %w", err)
 	}
 
-	return nil
+	return taskID, nil
+}
+
+func (s *NatsService) publishTask(ctx context.Context, taskType string, payload interface{}) error {
+	_, err := s.publishTaskWithID(ctx, taskType, payload)
+	return err
 }
 
 // Email sending methods
@@ -546,6 +567,58 @@ func (s *NatsService) GetRateLimitKV(ctx context.Context) (jetstream.KeyValue, e
 		}
 	}
 	return kv, nil
+}
+
+func (s *NatsService) PublishWebhookDelivery(ctx context.Context, deliveryID, deploymentID uint64) error {
+	taskPayload := map[string]interface{}{
+		"delivery_id":   deliveryID,
+		"deployment_id": deploymentID,
+	}
+
+	payloadBytes, err := json.Marshal(taskPayload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	message := NatsTaskMessage{
+		TaskType: "webhook.deliver",
+		TaskID:   fmt.Sprintf("webhook-deliver-%d", deliveryID),
+		Payload:  payloadBytes,
+	}
+
+	messageBytes, err := json.Marshal(message)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+
+	subject := fmt.Sprintf("worker.tasks.%s", "webhook.deliver")
+	_, err = s.js.Publish(ctx, subject, messageBytes)
+	if err != nil {
+		return fmt.Errorf("failed to publish message: %w", err)
+	}
+
+	return nil
+}
+
+func (s *NatsService) PublishWebhookReplayBatchByIDs(ctx context.Context, deploymentID uint64, appSlug string, deliveryIDs []string) (string, error) {
+	task := WebhookReplayBatchByIDsPayload{
+		Type:         "by_ids",
+		DeploymentID: fmt.Sprintf("%d", deploymentID),
+		AppSlug:      appSlug,
+		DeliveryIDs:  deliveryIDs,
+	}
+	return s.publishTaskWithID(ctx, "webhook.replay_batch", task)
+}
+
+func (s *NatsService) PublishWebhookReplayBatchByDateRange(ctx context.Context, deploymentID uint64, appSlug string, startDate time.Time, endDate *time.Time) (string, error) {
+	task := WebhookReplayBatchByDateRangePayload{
+		Type:         "by_date_range",
+		DeploymentID: fmt.Sprintf("%d", deploymentID),
+		AppSlug:      appSlug,
+		StartDate:    startDate,
+		EndDate:      endDate,
+	}
+	return s.publishTaskWithID(ctx, "webhook.replay_batch", task)
 }
 
 func (s *NatsService) Close() {

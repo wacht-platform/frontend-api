@@ -30,6 +30,8 @@ func setupRoutes(app *fiber.App) {
 	setupWaitlistRoutes(app)
 	setupNotificationRoutes(app)
 	setupAgentRoutes(app)
+	setupWebhookAppRoutes(app)
+	setupApiAuthAppRoutes(app)
 	setupSCIMRoutes(app)
 }
 
@@ -81,7 +83,8 @@ func corsSettings(c *fiber.Ctx) cors.Config {
 		AllowOriginsFunc: func(origin string) bool {
 			return true
 		},
-		ExposeHeaders: "X-Development-Session",
-		AllowMethods:  "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
+		ExposeHeaders:    "X-Development-Session",
+		AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
+		AllowCredentials: true,
 	}
 }

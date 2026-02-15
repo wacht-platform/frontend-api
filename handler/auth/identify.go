@@ -11,7 +11,7 @@ import (
 )
 
 type IdentifyRequest struct {
-	Identifier string `json:"identifier" form:"identifier"`
+	Identifier string `form:"identifier"`
 }
 
 type IdentifyResponse struct {

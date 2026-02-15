@@ -252,7 +252,7 @@ func (h *Handler) DeletePasskey(c *fiber.Ctx) error {
 }
 
 type RenamePasskeyRequest struct {
-	Name string `json:"name" form:"name"`
+	Name string `form:"name"`
 }
 
 func (h *Handler) RenamePasskey(c *fiber.Ctx) error {

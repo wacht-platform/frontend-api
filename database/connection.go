@@ -5,7 +5,11 @@ func InitConnection() error {
 		return err
 	}
 
-	err := InitPgConnection()
+	if err := InitPgConnection(); err != nil {
+		return err
+	}
+
+	err := InitClickHouseConnection()
 
 	return err
 }

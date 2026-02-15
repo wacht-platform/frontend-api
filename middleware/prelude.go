@@ -209,11 +209,8 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token, deployment model.Deployment)
 			return err
 		}
 
-		// Schedule token cleanup via NATS
 		natsService := service.GetNATS()
-		if err == nil {
-			natsService.ScheduleTokenCleanup(uint64(rotatingToken.ID), sessionID, 1)
-		}
+		natsService.ScheduleTokenCleanup(uint64(rotatingToken.ID), sessionID, 1)
 
 		finalRotatingTokenID = uint64(newRotatingToken.ID)
 		return nil
@@ -250,13 +247,13 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token, deployment model.Deployment)
 }
 
 func extractTokenClaims(token jwt.Token) (uint64, uint64, error) {
-	var sessionIDClaim interface{}
+	var sessionIDClaim any
 
 	if err := token.Get("sess", &sessionIDClaim); err != nil || sessionIDClaim == nil {
 		return 0, 0, errors.New("sess not found in token")
 	}
 
-	var rotatingTokenIDClaim interface{}
+	var rotatingTokenIDClaim any
 	if err := token.Get("rotating_token", &rotatingTokenIDClaim); err != nil || rotatingTokenIDClaim == nil {
 		return 0, 0, errors.New("rotating_token not found in token")
 	}

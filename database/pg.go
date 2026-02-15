@@ -70,5 +70,8 @@ func AutoMigratePg() error {
 		&model.DeploymentWaitlistUser{},
 		&model.AgentExecutionContext{},
 		&model.UserPasskey{},
+		&model.ApiAuthApp{},
+		&model.ApiKey{},
+		&model.ApiAuthAppSession{},
 	)
 }

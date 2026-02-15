@@ -19,17 +19,21 @@ import (
 type TicketType string
 
 const (
-	TicketTypeImpersonation TicketType = "impersonation"
-	TicketTypeAgentAccess   TicketType = "agent_access"
+	TicketTypeImpersonation    TicketType = "impersonation"
+	TicketTypeAgentAccess      TicketType = "agent_access"
+	TicketTypeWebhookAppAccess TicketType = "webhook_app_access"
+	TicketTypeApiAuthAccess    TicketType = "api_auth_access"
 )
 
 type SessionTicketPayload struct {
-	TicketType   TicketType `json:"ticket_type"`
-	DeploymentID string     `json:"deployment_id"`
-	UserID       *string    `json:"user_id,omitempty"`
-	AgentIDs     []string   `json:"agent_ids,omitempty"`
-	ContextGroup *string    `json:"context_group,omitempty"`
-	ExpiresAt    int64      `json:"expires_at"`
+	TicketType     TicketType `json:"ticket_type"`
+	DeploymentID   string     `json:"deployment_id"`
+	UserID         *string    `json:"user_id,omitempty"`
+	AgentIDs       []string   `json:"agent_ids,omitempty"`
+	WebhookAppSlug *string    `json:"webhook_app_slug,omitempty"`
+	ApiAuthAppSlug *string    `json:"api_auth_app_slug,omitempty"`
+	ContextGroup   *string    `json:"context_group,omitempty"`
+	ExpiresAt      int64      `json:"expires_at"`
 }
 
 type ExchangeTicketRequest struct {
@@ -43,13 +47,31 @@ type AgentInfo struct {
 	Integrations []model.AgentIntegration `json:"integrations"`
 }
 
+type WebhookAppInfo struct {
+	AppSlug       string `json:"app_slug"`
+	Name          string `json:"name"`
+	SigningSecret string `json:"signing_secret"`
+	IsActive      bool   `json:"is_active"`
+}
+
+type ApiAuthAppInfo struct {
+	ID          string           `json:"id"`
+	AppSlug     string           `json:"app_slug"`
+	Name        string           `json:"name"`
+	Description *string          `json:"description,omitempty"`
+	IsActive    bool             `json:"is_active"`
+	RateLimits  model.RateLimits `json:"rate_limits"`
+}
+
 type ExchangeTicketResponse struct {
-	Success      bool           `json:"success"`
-	Message      string         `json:"message,omitempty"`
-	SessionID    *string        `json:"session_id,omitempty"`
-	ContextGroup *string        `json:"context_group,omitempty"`
-	Agents       []AgentInfo    `json:"agents,omitempty"`
-	Session      *model.Session `json:"session,omitempty"`
+	Success      bool            `json:"success"`
+	Message      string          `json:"message,omitempty"`
+	SessionID    *string         `json:"session_id,omitempty"`
+	ContextGroup *string         `json:"context_group,omitempty"`
+	Agents       []AgentInfo     `json:"agents,omitempty"`
+	WebhookApp   *WebhookAppInfo `json:"webhook_app,omitempty"`
+	ApiAuthApp   *ApiAuthAppInfo `json:"api_auth_app,omitempty"`
+	Session      *model.Session  `json:"session,omitempty"`
 }
 
 func (h *Handler) ExchangeTicket(c *fiber.Ctx) error {
@@ -85,6 +107,10 @@ func (h *Handler) ExchangeTicket(c *fiber.Ctx) error {
 		return h.handleImpersonationExchange(c, &payload, &deployment, ticket)
 	case TicketTypeAgentAccess:
 		return h.handleAgentAccessExchange(c, &payload, &deployment, ticket)
+	case TicketTypeWebhookAppAccess:
+		return h.handleWebhookAppAccessExchange(c, &payload, &deployment, ticket)
+	case TicketTypeApiAuthAccess:
+		return h.handleApiAuthAccessExchange(c, &payload, &deployment, ticket)
 	default:
 		return handler.SendBadRequest(c, nil, "Invalid ticket type")
 	}
@@ -325,6 +351,169 @@ func (h *Handler) getAllowlistedAgents(deploymentID uint64, agentIDs []int64) ([
 	}
 
 	return result, nil
+}
+
+func (h *Handler) handleWebhookAppAccessExchange(
+	c *fiber.Ctx,
+	payload *SessionTicketPayload,
+	deployment *model.Deployment,
+	ticket string,
+) error {
+	session := handler.GetSession(c)
+	if session == nil {
+		return handler.SendUnauthorized(c, nil, "Session required")
+	}
+
+	if payload.WebhookAppSlug == nil || *payload.WebhookAppSlug == "" {
+		return handler.SendBadRequest(c, nil, "webhook_app_slug is required for webhook_app_access tickets")
+	}
+
+	appSlug := *payload.WebhookAppSlug
+
+	// Calculate expiration
+	var expiresAt *time.Time
+	if payload.ExpiresAt > 0 {
+		t := time.Unix(payload.ExpiresAt, 0)
+		expiresAt = &t
+	}
+
+	now := time.Now()
+	if err := database.Connection.Model(&model.WebhookAppSession{}).
+		Where("session_id = ? AND app_slug = ? AND (expires_at IS NULL OR expires_at > ?)", session.ID, appSlug, now).
+		Update("expires_at", now).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to expire old sessions")
+	}
+
+	webhookAppSession := model.NewWebhookAppSession(
+		session.ID,
+		deployment.ID,
+		appSlug,
+		expiresAt,
+	)
+
+	if err := database.Connection.Create(webhookAppSession).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to create webhook app session")
+	}
+
+	webhookApp, err := h.getWebhookApp(deployment.ID, appSlug)
+	if err != nil {
+		return handler.SendInternalServerError(c, err, err.Error())
+	}
+
+	redisKey := fmt.Sprintf("session:ticket:%s", ticket)
+	if err := database.Redis.Del(c.Context(), redisKey).Err(); err != nil {
+		fmt.Printf("Warning: Failed to delete ticket after exchange: %v\n", err)
+	}
+
+	return handler.SendSuccess(c, ExchangeTicketResponse{
+		Success:    true,
+		Message:    "Webhook app session created",
+		SessionID:  ptr(strconv.FormatUint(webhookAppSession.ID, 10)),
+		WebhookApp: webhookApp,
+	})
+}
+
+func (h *Handler) getWebhookApp(deploymentID uint64, appSlug string) (*WebhookAppInfo, error) {
+	var app model.WebhookApp
+	err := database.Connection.
+		Where("deployment_id = ? AND app_slug = ?", deploymentID, appSlug).
+		First(&app).Error
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("webhook app not found")
+		}
+		return nil, fmt.Errorf("failed to fetch webhook app: %w", err)
+	}
+
+	return &WebhookAppInfo{
+		AppSlug:       app.AppSlug,
+		Name:          app.Name,
+		SigningSecret: app.SigningSecret,
+		IsActive:      app.IsActive,
+	}, nil
+}
+
+func (h *Handler) handleApiAuthAccessExchange(
+	c *fiber.Ctx,
+	payload *SessionTicketPayload,
+	deployment *model.Deployment,
+	ticket string,
+) error {
+	session := handler.GetSession(c)
+	if session == nil {
+		return handler.SendUnauthorized(c, nil, "Session required")
+	}
+
+	if payload.ApiAuthAppSlug == nil || *payload.ApiAuthAppSlug == "" {
+		return handler.SendBadRequest(c, nil, "api_auth_app_slug is required for api_auth_access tickets")
+	}
+
+	appSlug := *payload.ApiAuthAppSlug
+
+	var expiresAt *time.Time
+	if payload.ExpiresAt > 0 {
+		t := time.Unix(payload.ExpiresAt, 0)
+		expiresAt = &t
+	}
+
+	now := time.Now()
+	if err := database.Connection.Model(&model.ApiAuthAppSession{}).
+		Where("session_id = ? AND app_slug = ? AND (expires_at IS NULL OR expires_at > ?)", session.ID, appSlug, now).
+		Update("expires_at", now).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to expire old sessions")
+	}
+
+	apiAuthAppSession := model.NewApiAuthAppSession(
+		session.ID,
+		deployment.ID,
+		appSlug,
+		expiresAt,
+	)
+
+	if err := database.Connection.Create(apiAuthAppSession).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to create API auth app session")
+	}
+
+	apiAuthApp, err := h.getApiAuthApp(deployment.ID, appSlug)
+	if err != nil {
+		return handler.SendInternalServerError(c, err, err.Error())
+	}
+
+	redisKey := fmt.Sprintf("session:ticket:%s", ticket)
+	if err := database.Redis.Del(c.Context(), redisKey).Err(); err != nil {
+		fmt.Printf("Warning: Failed to delete ticket after exchange: %v\n", err)
+	}
+
+	return handler.SendSuccess(c, ExchangeTicketResponse{
+		Success:    true,
+		Message:    "API auth app session created",
+		SessionID:  ptr(strconv.FormatUint(apiAuthAppSession.ID, 10)),
+		ApiAuthApp: apiAuthApp,
+	})
+}
+
+func (h *Handler) getApiAuthApp(deploymentID uint64, appSlug string) (*ApiAuthAppInfo, error) {
+	var app model.ApiAuthApp
+	err := database.Connection.
+		Where("deployment_id = ? AND app_slug = ? AND deleted_at IS NULL", deploymentID, appSlug).
+		First(&app).Error
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("API auth app not found")
+		}
+		return nil, fmt.Errorf("failed to fetch API auth app: %w", err)
+	}
+
+	return &ApiAuthAppInfo{
+		ID:          appSlug,
+		AppSlug:     app.AppSlug,
+		Name:        app.Name,
+		Description: app.Description,
+		IsActive:    app.IsActive,
+		RateLimits:  app.RateLimits,
+	}, nil
 }
 
 func ptr[T any](v T) *T {
