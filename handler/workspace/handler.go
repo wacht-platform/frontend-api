@@ -92,7 +92,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 	var data membershipData
 
 	if err := database.Connection.Raw(`
-		SELECT 
+		SELECT
 			om.id,
 			om.organization_id,
 			om.user_id,
@@ -284,10 +284,7 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 	}
 
 	d := handler.GetDeployment(c)
-	page := c.QueryInt("page", 1)
-	if page < 1 {
-		page = 1
-	}
+	page := max(c.QueryInt("page", 1), 1)
 	limit := c.QueryInt("limit", 10)
 	if limit < 1 {
 		limit = 10
@@ -299,7 +296,7 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 	searchQuery := strings.TrimSpace(c.Query("search"))
 
 	baseWhere := "WHERE search_users.deployment_id = ? AND search_users.workspace_ids @> ?::jsonb"
-	args := []interface{}{d.ID, fmt.Sprintf("[%d]", workspaceID)}
+	args := []any{d.ID, fmt.Sprintf("[%d]", workspaceID)}
 
 	if searchQuery != "" {
 		baseWhere += " AND search_users.search_vector @@ websearch_to_tsquery('english', ?)"
@@ -322,7 +319,7 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 
 	if len(userIDs) == 0 {
 		return handler.SendSuccess(c, fiber.Map{
-			"data": []interface{}{},
+			"data": []any{},
 			"meta": fiber.Map{
 				"has_more": false,
 				"page":     page,
@@ -855,7 +852,7 @@ func (h *Handler) DeleteWorkspace(c *fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 
 	if err := database.Connection.Exec(`
-		WITH 
+		WITH
 		deleted_role_assocs AS (
 			DELETE FROM workspace_membership_roles WHERE workspace_id = ?
 		),

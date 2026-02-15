@@ -119,8 +119,8 @@ func (h *Handler) CreateOrganization(
 	rawSQL := `
 		WITH inserted_org AS (
 			INSERT INTO organizations (
-				id, deployment_id, name, description, image_url, member_count, 
-				enforce_mfa_setup, enable_ip_restriction, created_at, updated_at, 
+				id, deployment_id, name, description, image_url, member_count,
+				enforce_mfa_setup, enable_ip_restriction, created_at, updated_at,
 				public_metadata, private_metadata
 			) VALUES (?, ?, ?, ?, ?, 1, false, false, NOW(), NOW(), '{}', '{}')
 			RETURNING id
@@ -137,8 +137,8 @@ func (h *Handler) CreateOrganization(
 			) VALUES (?, ?, ?)
 			RETURNING organization_id
 		)
-		UPDATE signins 
-		SET active_organization_membership_id = ? 
+		UPDATE signins
+		SET active_organization_membership_id = ?
 		FROM inserted_org, inserted_membership, inserted_roles
 		WHERE signins.id = ?;
 	`
@@ -637,15 +637,15 @@ func (h *Handler) InviteMember(
 			IsMember         bool
 		}
 		database.Connection.Raw(`
-			SELECT 
+			SELECT
 				EXISTS(
-					SELECT 1 FROM organization_invitations 
+					SELECT 1 FROM organization_invitations
 					WHERE email = ? AND organization_id = ? AND workspace_id IS NULL AND deleted_at IS NULL
 				) as has_pending_invite,
 				EXISTS(
 					SELECT 1 FROM organization_memberships om
 					JOIN user_email_addresses uea ON uea.user_id = om.user_id
-					WHERE uea.email_address = ? AND uea.deployment_id = ? 
+					WHERE uea.email_address = ? AND uea.deployment_id = ?
 					AND om.organization_id = ? AND om.deleted_at IS NULL
 				) as is_member
 		`, b.Email, getuint64(orgID), b.Email, deployment.ID, getuint64(orgID)).Scan(&checkResult)
@@ -666,15 +666,15 @@ func (h *Handler) InviteMember(
 			IsMember         bool
 		}
 		database.Connection.Raw(`
-			SELECT 
+			SELECT
 				EXISTS(
-					SELECT 1 FROM organization_invitations 
+					SELECT 1 FROM organization_invitations
 					WHERE email = ? AND workspace_id = ? AND organization_id = ? AND deleted_at IS NULL
 				) as has_pending_invite,
 				EXISTS(
 					SELECT 1 FROM workspace_memberships wm
 					JOIN user_email_addresses uea ON uea.user_id = wm.user_id
-					WHERE uea.email_address = ? AND uea.deployment_id = ? 
+					WHERE uea.email_address = ? AND uea.deployment_id = ?
 					AND wm.workspace_id = ? AND wm.deleted_at IS NULL
 				) as is_member
 		`, b.Email, *b.WorkspaceID, getuint64(orgID), b.Email, deployment.ID, *b.WorkspaceID).Scan(&wsCheckResult)
@@ -1187,7 +1187,7 @@ func (h *Handler) RemoveMember(
 	)
 
 	if err := database.Connection.Exec(`
-		WITH 
+		WITH
 		deleted_invitations AS (
 			DELETE FROM organization_invitations WHERE inviter_id = ?
 		),
@@ -1384,7 +1384,6 @@ func (h *Handler) GetOrganizationMembers(
 		return handler.SendForbidden(c, nil, "Access denied: Not a member of this organization")
 	}
 
-	// Pagination and Search Params
 	d := handler.GetDeployment(c)
 	page := c.QueryInt("page", 1)
 	if page < 1 {
@@ -1399,8 +1398,6 @@ func (h *Handler) GetOrganizationMembers(
 	}
 	offset := (page - 1) * limit
 	searchQuery := strings.TrimSpace(c.Query("search"))
-
-	// Base SQL for counting and fetching
 
 	baseWhere := "WHERE search_users.deployment_id = ? AND search_users.organization_ids @> ?::jsonb"
 	args := []interface{}{d.ID, fmt.Sprintf("[%d]", getuint64(orgID))}
@@ -1426,7 +1423,7 @@ func (h *Handler) GetOrganizationMembers(
 
 	if len(userIDs) == 0 {
 		return handler.SendSuccess(c, fiber.Map{
-			"data": []interface{}{},
+			"data": []any{},
 			"meta": fiber.Map{
 				"has_more": false,
 				"page":     page,
@@ -1485,7 +1482,7 @@ func (h *Handler) GetOrganizationMembers(
 		FROM organization_memberships
 		JOIN users ON organization_memberships.user_id = users.id
 		LEFT JOIN user_email_addresses primary_email ON users.primary_email_address_id = primary_email.id
-		WHERE organization_memberships.organization_id = ? 
+		WHERE organization_memberships.organization_id = ?
 		AND organization_memberships.user_id IN (?)
 		AND organization_memberships.deleted_at IS NULL
 	`
