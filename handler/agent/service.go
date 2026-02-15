@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -366,21 +365,17 @@ func (s *Service) ListAvailableIntegrations(deploymentID uint64, agentName strin
 }
 
 func (s *Service) GenerateConsentURL(deploymentID uint64, contextGroup string, integrationID uint64, redirectURL string) (string, string, error) {
-	// Get the integration to get appId from config
 	var integration model.AgentIntegration
 	if err := s.db.Where("id = ? AND deployment_id = ?", integrationID, deploymentID).First(&integration).Error; err != nil {
 		return "", "", fmt.Errorf("integration not found")
 	}
-	// Parse config to get App ID / Client ID
-	var config map[string]interface{}
+	var config map[string]any
 	if err := json.Unmarshal([]byte(integration.Config), &config); err != nil {
 		return "", "", fmt.Errorf("invalid integration config")
 	}
 
-	// Generate state token
 	state := uuid.New().String()
 
-	// Store state in Redis with 15 minute TTL
 	consentState := ConsentState{
 		DeploymentID:  fmt.Sprintf("%d", deploymentID),
 		IntegrationID: fmt.Sprintf("%d", integrationID),
@@ -400,13 +395,9 @@ func (s *Service) GenerateConsentURL(deploymentID uint64, contextGroup string, i
 		return "", "", fmt.Errorf("failed to store state: %w", err)
 	}
 
-	// Build consent URL based on provider
 	switch integration.IntegrationType {
 	case "teams":
-		appID, ok := config["app_id"].(string)
-		if !ok || appID == "" {
-			appID = os.Getenv("TEAMS_APP_ID")
-		}
+		appID, _ := config["app_id"].(string)
 		if appID == "" {
 			return "", "", fmt.Errorf("Teams App ID not configured")
 		}
@@ -419,10 +410,7 @@ func (s *Service) GenerateConsentURL(deploymentID uint64, contextGroup string, i
 		), state, nil
 
 	case "clickup":
-		clientID, ok := config["app_id"].(string)
-		if !ok || clientID == "" {
-			return "", "", fmt.Errorf("ClickUp Client ID not configured")
-		}
+		clientID, _ := config["app_id"].(string)
 
 		return fmt.Sprintf(
 			"https://app.clickup.com/api?client_id=%s&redirect_uri=%s&state=%s",

@@ -9,6 +9,8 @@ RUN go build -o ./api-server ./main.go
 
 FROM alpine:latest AS runner
 WORKDIR /app
+RUN apk add --no-cache curl && \
+    curl -Ls https://cli.doppler.com/install.sh | sh
 COPY --from=builder /app/api-server .
 EXPOSE 3000
-ENTRYPOINT ["./api-server"]
+ENTRYPOINT ["doppler", "run", "--", "./api-server"]

@@ -12,7 +12,7 @@ import (
 var Connection *gorm.DB
 
 func InitPgConnection() error {
-	dsn := os.Getenv("DATABASE_URL")
+	dsn := os.Getenv("DATABASE_PRIMARY_PRIVATE")
 	db, err := gorm.Open(postgres.New(postgres.Config{
 		DSN: dsn,
 	}), &gorm.Config{
