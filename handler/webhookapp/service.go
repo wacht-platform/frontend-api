@@ -833,12 +833,15 @@ func (s *Service) GetDeliveries(deploymentID uint64, appSlug string, limit int, 
 	)
 
 	// Get paginated results
-	query += fmt.Sprintf(" ORDER BY timestamp DESC, delivery_id DESC LIMIT 1 BY delivery_id LIMIT %d", limit+1)
+	query += " ORDER BY timestamp DESC, delivery_id DESC LIMIT 1 BY delivery_id LIMIT ?"
+	queryArgs := append([]any{}, whereArgs...)
+	queryArgs = append(queryArgs, limit+1)
 	if cursorTS == nil {
-		query += fmt.Sprintf(" OFFSET %d", offset)
+		query += " OFFSET ?"
+		queryArgs = append(queryArgs, offset)
 	}
 
-	rows, err := database.ClickHouseClient.Query(ctx, query, whereArgs...)
+	rows, err := database.ClickHouseClient.Query(ctx, query, queryArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch deliveries: %w", err)
 	}

@@ -369,14 +369,17 @@ func (s *Service) GetAuditLogs(deploymentID uint64, appSlug string, limit int, o
 	query := fmt.Sprintf(
 		"SELECT request_id, deployment_id, app_slug, key_id, key_name, outcome, blocked_by_rule, "+
 			"client_ip, path, user_agent, rate_limits, timestamp "+
-			"FROM api_audit_logs WHERE %s ORDER BY timestamp DESC, request_id DESC LIMIT %d",
-		whereClause, limit+1,
+			"FROM api_audit_logs WHERE %s ORDER BY timestamp DESC, request_id DESC LIMIT ?",
+		whereClause,
 	)
+	queryArgs := append([]any{}, whereArgs...)
+	queryArgs = append(queryArgs, limit+1)
 	if cursorTS == nil {
-		query += fmt.Sprintf(" OFFSET %d", offset)
+		query += " OFFSET ?"
+		queryArgs = append(queryArgs, offset)
 	}
 
-	rows, err := database.ClickHouseClient.Query(ctx, query, whereArgs...)
+	rows, err := database.ClickHouseClient.Query(ctx, query, queryArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch audit logs: %w", err)
 	}
@@ -573,11 +576,13 @@ func (s *Service) fetchTopKeys(ctx context.Context, whereClause string, whereArg
 			"WHERE %s "+
 			"GROUP BY key_id "+
 			"ORDER BY total_requests DESC "+
-			"LIMIT %d",
-		whereClause, limit,
+			"LIMIT ?",
+		whereClause,
 	)
 
-	rows, err := database.ClickHouseClient.Query(ctx, query, whereArgs...)
+	args := append([]any{}, whereArgs...)
+	args = append(args, limit)
+	rows, err := database.ClickHouseClient.Query(ctx, query, args...)
 	if err != nil {
 		return nil
 	}
@@ -603,11 +608,13 @@ func (s *Service) fetchTopPaths(ctx context.Context, whereClause string, whereAr
 			"WHERE %s "+
 			"GROUP BY path "+
 			"ORDER BY total_requests DESC "+
-			"LIMIT %d",
-		whereClause, limit,
+			"LIMIT ?",
+		whereClause,
 	)
 
-	rows, err := database.ClickHouseClient.Query(ctx, query, whereArgs...)
+	args := append([]any{}, whereArgs...)
+	args = append(args, limit)
+	rows, err := database.ClickHouseClient.Query(ctx, query, args...)
 	if err != nil {
 		return nil
 	}
@@ -641,11 +648,13 @@ func (s *Service) fetchBlockedReasons(ctx context.Context, whereClause string, w
 			"WHERE %s "+
 			"GROUP BY blocked_by_rule "+
 			"ORDER BY count DESC "+
-			"LIMIT %d",
-		blockedWhere, limit,
+			"LIMIT ?",
+		blockedWhere,
 	)
 
-	rows, err := database.ClickHouseClient.Query(ctx, query, whereArgs...)
+	args := append([]any{}, whereArgs...)
+	args = append(args, limit)
+	rows, err := database.ClickHouseClient.Query(ctx, query, args...)
 	if err != nil {
 		return nil
 	}
@@ -682,11 +691,13 @@ func (s *Service) fetchRateLimitStats(ctx context.Context, whereClause string, w
 			"WHERE %s "+
 			"GROUP BY rule "+
 			"ORDER BY hit_count DESC "+
-			"LIMIT %d",
-		rlWhere, limit,
+			"LIMIT ?",
+		rlWhere,
 	)
 
-	rows, err := database.ClickHouseClient.Query(ctx, query, whereArgs...)
+	args := append([]any{}, whereArgs...)
+	args = append(args, limit)
+	rows, err := database.ClickHouseClient.Query(ctx, query, args...)
 	if err != nil {
 		return nil
 	}

@@ -354,27 +354,34 @@ func (h *Handler) DeleteOrganization(
 		return handler.SendForbidden(c, nil, "Only organization owner can delete the organization")
 	}
 
-	orgIDUint, _ := strconv.ParseUint(orgID, 10, 64)
+	orgIDUint, err := strconv.ParseUint(orgID, 10, 64)
+	if err != nil {
+		return handler.SendBadRequest(c, err, "Invalid organization id")
+	}
 	deployment := handler.GetDeployment(c)
 
-	rawSQL := fmt.Sprintf(`
-		DELETE FROM workspace_membership_roles WHERE organization_id = %[1]d;
-		DELETE FROM workspace_memberships WHERE organization_id = %[1]d;
-		DELETE FROM workspace_roles WHERE organization_id = %[1]d;
-		DELETE FROM workspaces WHERE organization_id = %[1]d;
-		DELETE FROM organization_membership_roles WHERE organization_id = %[1]d;
-		DELETE FROM organization_memberships WHERE organization_id = %[1]d;
-		DELETE FROM organization_invitations WHERE organization_id = %[1]d;
-		DELETE FROM scim_group_members WHERE scim_group_id IN (SELECT id FROM scim_groups WHERE organization_id = %[1]d);
-		DELETE FROM scim_groups WHERE organization_id = %[1]d;
-		DELETE FROM scim_tokens WHERE organization_id = %[1]d;
-		DELETE FROM enterprise_connections WHERE organization_id = %[1]d;
-		DELETE FROM organization_domains WHERE organization_id = %[1]d;
-		DELETE FROM organization_roles WHERE organization_id = %[1]d;
-		DELETE FROM organizations WHERE id = %[1]d;
-	`, orgIDUint)
+	rawSQL := `
+		DELETE FROM workspace_membership_roles WHERE organization_id = ?;
+		DELETE FROM workspace_memberships WHERE organization_id = ?;
+		DELETE FROM workspace_roles WHERE organization_id = ?;
+		DELETE FROM workspaces WHERE organization_id = ?;
+		DELETE FROM organization_membership_roles WHERE organization_id = ?;
+		DELETE FROM organization_memberships WHERE organization_id = ?;
+		DELETE FROM organization_invitations WHERE organization_id = ?;
+		DELETE FROM scim_group_members WHERE scim_group_id IN (SELECT id FROM scim_groups WHERE organization_id = ?);
+		DELETE FROM scim_groups WHERE organization_id = ?;
+		DELETE FROM scim_tokens WHERE organization_id = ?;
+		DELETE FROM enterprise_connections WHERE organization_id = ?;
+		DELETE FROM organization_domains WHERE organization_id = ?;
+		DELETE FROM organization_roles WHERE organization_id = ?;
+		DELETE FROM organizations WHERE id = ?;
+	`
 
-	if err := database.Connection.Exec(rawSQL).Error; err != nil {
+	if err := database.Connection.Exec(
+		rawSQL,
+		orgIDUint, orgIDUint, orgIDUint, orgIDUint, orgIDUint, orgIDUint, orgIDUint,
+		orgIDUint, orgIDUint, orgIDUint, orgIDUint, orgIDUint, orgIDUint, orgIDUint,
+	).Error; err != nil {
 		log.Printf("Failed to delete organization %s: %v", orgID, err)
 		return handler.SendInternalServerError(c, err, "Failed to delete organization")
 	}
