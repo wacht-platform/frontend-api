@@ -62,11 +62,9 @@ func (rl RateLimits) Value() (driver.Value, error) {
 	return json.Marshal(rl)
 }
 
-// ApiAuthApp represents an API authentication application
 type ApiAuthApp struct {
-	ID                  uint64     `gorm:"primarykey"                json:"id,string"`
-	DeploymentID        uint64     `json:"deployment_id,string"      gorm:"index;not null"`
-	AppSlug             string     `json:"app_slug"                  gorm:"type:varchar(255);not null"`
+	DeploymentID        uint64     `json:"deployment_id,string"      gorm:"primarykey;index;not null"`
+	AppSlug             string     `json:"app_slug"                  gorm:"primarykey;type:varchar(255);not null"`
 	Name                string     `json:"name"                      gorm:"type:varchar(255);not null"`
 	Description         *string    `json:"description,omitempty"     gorm:"type:text"`
 	IsActive            bool       `json:"is_active"                 gorm:"not null;default:true"`
@@ -81,7 +79,6 @@ type ApiAuthApp struct {
 // ApiKey represents an API key for authentication
 type ApiKey struct {
 	ID            uint64         `gorm:"primarykey"                json:"id,string"`
-	AppID         uint64         `json:"app_id,string"             gorm:"index;not null"`
 	DeploymentID  uint64         `json:"deployment_id,string"      gorm:"index;not null"`
 	AppSlug       string         `json:"app_slug"                  gorm:"column:app_slug;type:varchar(255);not null"`
 	Name          string         `json:"name"                      gorm:"type:varchar(255);not null"`

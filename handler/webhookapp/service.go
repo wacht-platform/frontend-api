@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/mail"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -570,6 +571,56 @@ func (s *Service) GetWebhookApp(deploymentID uint64, appSlug string) (*model.Web
 	}
 
 	return &app, nil
+}
+
+func normalizeNotificationEmails(emails []string) ([]string, error) {
+	if len(emails) == 0 {
+		return []string{}, nil
+	}
+
+	seen := make(map[string]struct{}, len(emails))
+	result := make([]string, 0, len(emails))
+	for _, raw := range emails {
+		email := strings.ToLower(strings.TrimSpace(raw))
+		if email == "" {
+			continue
+		}
+		if _, err := mail.ParseAddress(email); err != nil {
+			return nil, validationError("invalid failure_notification_emails")
+		}
+		if _, ok := seen[email]; ok {
+			continue
+		}
+		seen[email] = struct{}{}
+		result = append(result, email)
+	}
+
+	return result, nil
+}
+
+func (s *Service) UpdateFailureNotificationEmails(deploymentID uint64, appSlug string, emails []string) (*model.WebhookApp, error) {
+	normalized, err := normalizeNotificationEmails(emails)
+	if err != nil {
+		return nil, err
+	}
+
+	update := map[string]any{
+		"failure_notification_emails": normalized,
+		"updated_at":                  time.Now(),
+	}
+
+	res := database.Connection.
+		Model(&model.WebhookApp{}).
+		Where("deployment_id = ? AND app_slug = ?", deploymentID, appSlug).
+		Updates(update)
+	if res.Error != nil {
+		return nil, fmt.Errorf("failed to update webhook notification emails: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return nil, fmt.Errorf("webhook app not found")
+	}
+
+	return s.GetWebhookApp(deploymentID, appSlug)
 }
 
 func (s *Service) GetEndpoints(deploymentID uint64, appSlug string) ([]EndpointWithSubscriptions, error) {
@@ -1152,7 +1203,11 @@ func (s *Service) GetAnalytics(deploymentID uint64, appSlug string, startDate, e
 		scanTargets = append(scanTargets, &stats.AvgPayloadSize)
 	}
 
-	// Always need total_deliveries for success_rate
+	if fieldSet[string(FieldTotalEvents)] {
+		selectParts = append(selectParts, "countDistinct(delivery_id) as total_events")
+		scanTargets = append(scanTargets, &stats.TotalEvents)
+	}
+
 	if fieldSet[string(FieldSuccessRate)] || len(selectParts) == 0 {
 		selectParts = append([]string{"count() as total_deliveries"}, selectParts...)
 		scanTargets = append([]interface{}{&stats.TotalDeliveries}, scanTargets...)
@@ -1694,8 +1749,8 @@ func (s *Service) ReplayDelivery(deploymentID uint64, appSlug string, req *Repla
 	if idempotencyKey == "" {
 		idempotencyKey = generateReplayIdempotencyKey()
 	}
-	idempotencyRedisKey = replayIdempotencyKey(appSlug, idempotencyKey)
-	activeCountRedisKey := replayActiveCountKey(appSlug)
+	idempotencyRedisKey = replayIdempotencyKey(deploymentID, appSlug, idempotencyKey)
+	activeCountRedisKey := replayActiveCountKey(deploymentID, appSlug)
 	idempotencyPendingValue = replayIdempotencyPendingValue()
 
 	reserveStatus, existingValue, err := reserveReplayIdempotency(
@@ -1759,8 +1814,8 @@ func (s *Service) ReplayDelivery(deploymentID uint64, appSlug string, req *Repla
 	}
 
 	now := time.Now().UTC()
-	snapshotKey := replayTaskSnapshotKey(appSlug, taskID)
-	indexKey := replayTaskIndexKey(appSlug)
+	snapshotKey := replayTaskSnapshotKey(deploymentID, appSlug, taskID)
+	indexKey := replayTaskIndexKey(deploymentID, appSlug)
 	pipe := database.Redis.TxPipeline()
 	pipe.HSet(context.Background(), snapshotKey, map[string]interface{}{
 		"task_id":              taskID,
@@ -1793,7 +1848,7 @@ func (s *Service) ReplayDelivery(deploymentID uint64, appSlug string, req *Repla
 			idempotencyPendingValue,
 			finalValue,
 		); err != nil {
-			return nil, fmt.Errorf("failed to finalize replay idempotency key: %w", err)
+			fmt.Printf("warning: failed to finalize replay idempotency key for task %s: %v\n", taskID, err)
 		}
 	}
 	return &ReplayDeliveryResponse{
@@ -1803,20 +1858,20 @@ func (s *Service) ReplayDelivery(deploymentID uint64, appSlug string, req *Repla
 	}, nil
 }
 
-func replayTaskSnapshotKey(appSlug, taskID string) string {
-	return fmt.Sprintf("worker:webhook:replay:%s:%s", appSlug, taskID)
+func replayTaskSnapshotKey(deploymentID uint64, appSlug, taskID string) string {
+	return fmt.Sprintf("worker:webhook:replay:%d:%s:%s", deploymentID, appSlug, taskID)
 }
 
-func replayTaskIndexKey(appSlug string) string {
-	return fmt.Sprintf("worker:webhook:replay:index:%s", appSlug)
+func replayTaskIndexKey(deploymentID uint64, appSlug string) string {
+	return fmt.Sprintf("worker:webhook:replay:index:%d:%s", deploymentID, appSlug)
 }
 
-func replayActiveCountKey(appSlug string) string {
-	return fmt.Sprintf("worker:webhook:replay:active_count:%s", appSlug)
+func replayActiveCountKey(deploymentID uint64, appSlug string) string {
+	return fmt.Sprintf("worker:webhook:replay:active_count:%d:%s", deploymentID, appSlug)
 }
 
-func replayIdempotencyKey(appSlug, idempotencyKey string) string {
-	return fmt.Sprintf("worker:webhook:replay:idem:%s:%s", appSlug, idempotencyKey)
+func replayIdempotencyKey(deploymentID uint64, appSlug, idempotencyKey string) string {
+	return fmt.Sprintf("worker:webhook:replay:idem:%d:%s:%s", deploymentID, appSlug, idempotencyKey)
 }
 
 func replayIdempotencyPendingValue() string {
@@ -1914,7 +1969,7 @@ func parseInt64SnapshotField(value string) int64 {
 	return parsed
 }
 
-func (s *Service) GetReplayTaskStatus(_ uint64, appSlug string, taskID string) (*ReplayTaskStatusResponse, error) {
+func (s *Service) GetReplayTaskStatus(deploymentID uint64, appSlug string, taskID string) (*ReplayTaskStatusResponse, error) {
 	if err := validateToken("app_slug", appSlug); err != nil {
 		return nil, err
 	}
@@ -1922,7 +1977,7 @@ func (s *Service) GetReplayTaskStatus(_ uint64, appSlug string, taskID string) (
 		return nil, err
 	}
 
-	data, err := database.Redis.HGetAll(context.Background(), replayTaskSnapshotKey(appSlug, taskID)).Result()
+	data, err := database.Redis.HGetAll(context.Background(), replayTaskSnapshotKey(deploymentID, appSlug, taskID)).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch replay task: %w", err)
 	}
@@ -1953,7 +2008,7 @@ func (s *Service) GetReplayTaskStatus(_ uint64, appSlug string, taskID string) (
 	return result, nil
 }
 
-func (s *Service) CancelReplayTask(_ uint64, appSlug string, taskID string) (*ReplayTaskCancelResponse, error) {
+func (s *Service) CancelReplayTask(deploymentID uint64, appSlug string, taskID string) (*ReplayTaskCancelResponse, error) {
 	if err := validateToken("app_slug", appSlug); err != nil {
 		return nil, err
 	}
@@ -1961,7 +2016,7 @@ func (s *Service) CancelReplayTask(_ uint64, appSlug string, taskID string) (*Re
 		return nil, err
 	}
 
-	snapshotKey := replayTaskSnapshotKey(appSlug, taskID)
+	snapshotKey := replayTaskSnapshotKey(deploymentID, appSlug, taskID)
 	ctx := context.Background()
 	exists, err := database.Redis.Exists(ctx, snapshotKey).Result()
 	if err != nil {
@@ -1975,7 +2030,7 @@ func (s *Service) CancelReplayTask(_ uint64, appSlug string, taskID string) (*Re
 	if _, err := replayCancelScript.Run(
 		ctx,
 		database.Redis,
-		[]string{snapshotKey, replayActiveCountKey(appSlug)},
+		[]string{snapshotKey, replayActiveCountKey(deploymentID, appSlug)},
 		now,
 		int((2 * time.Hour).Seconds()),
 	).Result(); err != nil {
@@ -1988,7 +2043,7 @@ func (s *Service) CancelReplayTask(_ uint64, appSlug string, taskID string) (*Re
 	}, nil
 }
 
-func (s *Service) ListReplayTasks(_ uint64, appSlug string, limit int, offset int) (*ReplayTaskListResponse, error) {
+func (s *Service) ListReplayTasks(deploymentID uint64, appSlug string, limit int, offset int) (*ReplayTaskListResponse, error) {
 	if err := validateToken("app_slug", appSlug); err != nil {
 		return nil, err
 	}
@@ -2002,7 +2057,7 @@ func (s *Service) ListReplayTasks(_ uint64, appSlug string, limit int, offset in
 		offset = 0
 	}
 
-	taskIDs, err := database.Redis.ZRevRange(context.Background(), replayTaskIndexKey(appSlug), int64(offset), int64(offset+limit)).Result()
+	taskIDs, err := database.Redis.ZRevRange(context.Background(), replayTaskIndexKey(deploymentID, appSlug), int64(offset), int64(offset+limit)).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list replay tasks: %w", err)
 	}
@@ -2014,7 +2069,7 @@ func (s *Service) ListReplayTasks(_ uint64, appSlug string, limit int, offset in
 
 	items := make([]ReplayTaskStatusResponse, 0, len(taskIDs))
 	for _, taskID := range taskIDs {
-		task, err := s.GetReplayTaskStatus(0, appSlug, taskID)
+		task, err := s.GetReplayTaskStatus(deploymentID, appSlug, taskID)
 		if err != nil {
 			continue
 		}

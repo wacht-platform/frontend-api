@@ -83,7 +83,6 @@ func (s *Service) CreateKey(deployment model.Deployment, appSlug string, name st
 	}
 
 	key := model.ApiKey{
-		AppID:        app.ID,
 		DeploymentID: deployment.ID,
 		AppSlug:      app.AppSlug,
 		Name:         name,
@@ -122,7 +121,7 @@ func (s *Service) GetKeys(deploymentID uint64, appSlug string, status string, in
 	baseQuery := database.Connection.
 		Table("api_keys k").
 		Select("k.*").
-		Joins("INNER JOIN api_auth_apps a ON k.app_id = a.id").
+		Joins("INNER JOIN api_auth_apps a ON k.deployment_id = a.deployment_id AND k.app_slug = a.app_slug").
 		Where("a.deployment_id = ? AND a.app_slug = ? AND a.deleted_at IS NULL", deploymentID, appSlug)
 
 	normalizedStatus := strings.ToLower(strings.TrimSpace(status))
@@ -188,7 +187,7 @@ func (s *Service) RotateKey(deployment model.Deployment, appSlug string, keyID u
 	var existing model.ApiKey
 	err := database.Connection.
 		Table("api_keys k").
-		Joins("INNER JOIN api_auth_apps a ON k.app_id = a.id").
+		Joins("INNER JOIN api_auth_apps a ON k.deployment_id = a.deployment_id AND k.app_slug = a.app_slug").
 		Where("k.id = ? AND a.deployment_id = ? AND a.app_slug = ? AND a.deleted_at IS NULL AND k.is_active = true AND k.revoked_at IS NULL",
 			keyID, deployment.ID, appSlug).
 		First(&existing).Error
@@ -229,7 +228,6 @@ func (s *Service) RotateKey(deployment model.Deployment, appSlug string, keyID u
 	}
 
 	newKey := model.ApiKey{
-		AppID:        existing.AppID,
 		DeploymentID: deployment.ID,
 		AppSlug:      existing.AppSlug,
 		Name:         existing.Name,
@@ -277,7 +275,7 @@ func (s *Service) RevokeKey(deploymentID uint64, appSlug string, keyID uint64, r
 	var key model.ApiKey
 	err := database.Connection.
 		Table("api_keys k").
-		Joins("INNER JOIN api_auth_apps a ON k.app_id = a.id").
+		Joins("INNER JOIN api_auth_apps a ON k.deployment_id = a.deployment_id AND k.app_slug = a.app_slug").
 		Where("k.id = ? AND a.deployment_id = ? AND a.app_slug = ? AND a.deleted_at IS NULL",
 			keyID, deploymentID, appSlug).
 		First(&key).Error

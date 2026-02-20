@@ -2,6 +2,7 @@ package agent
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilabs/wacht-fe/handler"
@@ -32,6 +33,39 @@ func (h *Handler) verifyAgentSession(c *fiber.Ctx) (*string, error) {
 	}
 
 	return &agentSession.ContextGroup, nil
+}
+
+func (h *Handler) resolveAuthorizedAgentName(
+	c *fiber.Ctx,
+	deploymentID uint64,
+	agentSession *model.AgentSession,
+	rawAgentName string,
+) (string, error) {
+	agentName := strings.TrimSpace(rawAgentName)
+	if agentName == "" {
+		return "", handler.SendBadRequest(c, nil, "agent_name query parameter required")
+	}
+
+	allowlistedAgents, err := h.service.GetAllowlistedAgents(deploymentID, agentSession.AgentIDs)
+	if err != nil {
+		return "", handler.SendInternalServerError(c, nil, err.Error())
+	}
+
+	matches := make([]string, 0, 1)
+	for _, agent := range allowlistedAgents {
+		if strings.EqualFold(agent.Name, agentName) {
+			matches = append(matches, agent.Name)
+		}
+	}
+
+	if len(matches) == 0 {
+		return "", handler.SendBadRequest(c, nil, "agent_name is not allowlisted for this session")
+	}
+	if len(matches) > 1 {
+		return "", handler.SendBadRequest(c, nil, "agent_name is ambiguous; use a unique agent name")
+	}
+
+	return matches[0], nil
 }
 
 func (h *Handler) ListContexts(c *fiber.Ctx) error {
@@ -190,23 +224,23 @@ func (h *Handler) GetContextMessages(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetActiveIntegrations(c *fiber.Ctx) error {
-	contextGroup, err := h.verifyAgentSession(c)
+	agentSession, err := h.getAgentSession(c)
 	if err != nil {
 		return err
 	}
 
-	if contextGroup == nil || *contextGroup == "" {
+	contextGroup := strings.TrimSpace(agentSession.ContextGroup)
+	if contextGroup == "" {
 		return handler.SendBadRequest(c, nil, "Context group required in token")
 	}
 
-	agentName := c.Query("agent_name")
-	if agentName == "" {
-		return handler.SendBadRequest(c, nil, "agent_name query parameter required")
+	deployment := handler.GetDeployment(c)
+	agentName, err := h.resolveAuthorizedAgentName(c, deployment.ID, agentSession, c.Query("agent_name"))
+	if err != nil {
+		return err
 	}
 
-	deployment := handler.GetDeployment(c)
-
-	integrations, err := h.service.GetActiveIntegrations(deployment.ID, agentName, *contextGroup)
+	integrations, err := h.service.GetActiveIntegrations(deployment.ID, agentName, contextGroup)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, err.Error())
 	}
@@ -269,6 +303,108 @@ func (h *Handler) GenerateConsentURL(c *fiber.Ctx) error {
 		"state":       state,
 		"expires_in":  900,
 	})
+}
+
+func (h *Handler) ListMcpServers(c *fiber.Ctx) error {
+	agentSession, err := h.getAgentSession(c)
+	if err != nil {
+		return err
+	}
+
+	contextGroup := strings.TrimSpace(agentSession.ContextGroup)
+	if contextGroup == "" {
+		return handler.SendBadRequest(c, nil, "Context group required in token")
+	}
+
+	deployment := handler.GetDeployment(c)
+	agentName, err := h.resolveAuthorizedAgentName(c, deployment.ID, agentSession, c.Query("agent_name"))
+	if err != nil {
+		return err
+	}
+
+	servers, err := h.service.GetActiveMcpServers(deployment.ID, agentName, contextGroup)
+	if err != nil {
+		return handler.SendInternalServerError(c, nil, err.Error())
+	}
+
+	return handler.SendSuccess(c, servers)
+}
+
+func (h *Handler) ConnectMcpServer(c *fiber.Ctx) error {
+	agentSession, err := h.getAgentSession(c)
+	if err != nil {
+		return err
+	}
+
+	contextGroup := strings.TrimSpace(agentSession.ContextGroup)
+	if contextGroup == "" {
+		return handler.SendBadRequest(c, nil, "Context group required in token")
+	}
+
+	mcpServerIDStr := c.Params("mcp_server_id")
+	mcpServerID, err := strconv.ParseUint(mcpServerIDStr, 10, 64)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid MCP server ID")
+	}
+
+	deployment := handler.GetDeployment(c)
+	agentName, err := h.resolveAuthorizedAgentName(c, deployment.ID, agentSession, c.Query("agent_name"))
+	if err != nil {
+		return err
+	}
+	session := handler.GetSession(c)
+	if session == nil {
+		return fiber.NewError(fiber.StatusUnauthorized, "Session required")
+	}
+	callbackURL := "https://agentlink.wacht.services/service/mcp/consent/callback"
+
+	connectResult, err := h.service.ConnectMcpServer(
+		deployment.ID,
+		session.ID,
+		agentName,
+		contextGroup,
+		mcpServerID,
+		callbackURL,
+		"",
+	)
+	if err != nil {
+		return handler.SendInternalServerError(c, nil, err.Error())
+	}
+
+	return handler.SendSuccess(c, map[string]any{
+		"requires_oauth": connectResult.RequiresOAuth,
+		"oauth_url":      connectResult.OAuthURL,
+	})
+}
+
+func (h *Handler) DisconnectMcpServer(c *fiber.Ctx) error {
+	agentSession, err := h.getAgentSession(c)
+	if err != nil {
+		return err
+	}
+
+	contextGroup := strings.TrimSpace(agentSession.ContextGroup)
+	if contextGroup == "" {
+		return handler.SendBadRequest(c, nil, "Context group required in token")
+	}
+
+	mcpServerIDStr := c.Params("mcp_server_id")
+	mcpServerID, err := strconv.ParseUint(mcpServerIDStr, 10, 64)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid MCP server ID")
+	}
+
+	deployment := handler.GetDeployment(c)
+	agentName, err := h.resolveAuthorizedAgentName(c, deployment.ID, agentSession, c.Query("agent_name"))
+	if err != nil {
+		return err
+	}
+
+	if err := h.service.DisconnectMcpServer(deployment.ID, agentName, contextGroup, mcpServerID); err != nil {
+		return handler.SendInternalServerError(c, nil, err.Error())
+	}
+
+	return handler.SendSuccess(c, map[string]string{})
 }
 
 func (h *Handler) getAgentSession(c *fiber.Ctx) (*model.AgentSession, error) {

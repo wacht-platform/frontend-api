@@ -21,5 +21,8 @@ func setupAgentRoutes(app *fiber.App) {
 	agentGroup.Get("/integrations", h.GetActiveIntegrations)
 	agentGroup.Post("/integrations/:integration_id/remove", h.RemoveIntegration)
 	agentGroup.Post("/integrations/:integration_id/consent-url", h.GenerateConsentURL)
+	agentGroup.Get("/mcp-servers", h.ListMcpServers)
+	agentGroup.Post("/mcp-servers/:mcp_server_id/connect", h.ConnectMcpServer)
+	agentGroup.Post("/mcp-servers/:mcp_server_id/disconnect", h.DisconnectMcpServer)
 	agentGroup.Post("/contexts/:id/execute", h.ExecuteAgent)
 }

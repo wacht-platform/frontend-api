@@ -11,6 +11,8 @@ func setupWebhookAppRoutes(app *fiber.App) {
 	webhookGroup := app.Group("/webhook")
 
 	webhookGroup.Get("/session", h.GetSession)
+	webhookGroup.Get("/settings", h.GetSettings)
+	webhookGroup.Put("/settings", h.UpdateSettings)
 	webhookGroup.Get("/endpoints", h.GetEndpoints)
 	webhookGroup.Post("/endpoints", h.CreateEndpoint)
 	webhookGroup.Put("/endpoints/:id", h.UpdateEndpoint)

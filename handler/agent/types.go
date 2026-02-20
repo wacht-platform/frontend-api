@@ -7,6 +7,13 @@ type AgentWithIntegrations struct {
 	Name         string                   `json:"name"`
 	Description  string                   `json:"description"`
 	Integrations []model.AgentIntegration `json:"integrations"`
+	McpServers   []AgentMcpServer         `json:"mcp_servers"`
+}
+
+type AgentMcpServer struct {
+	ID                 string `json:"id"`
+	Name               string `json:"name"`
+	RequiresConnection bool   `json:"requires_connection"`
 }
 
 type ListAgentsResponse struct {

@@ -103,3 +103,11 @@ type TestEndpointResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
+
+type WebhookSettingsResponse struct {
+	FailureNotificationEmails []string `json:"failure_notification_emails"`
+}
+
+type UpdateWebhookSettingsRequest struct {
+	FailureNotificationEmails []string `form:"failure_notification_emails" validate:"omitempty,dive,email"`
+}

@@ -47,7 +47,6 @@ func (h *Handler) GetSession(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, map[string]any{
 		"session_id": strconv.FormatUint(apiAuthAppSession.ID, 10),
 		"api_auth_app": ApiAuthAppInfo{
-			ID:          strconv.FormatUint(apiAuthApp.ID, 10),
 			AppSlug:     apiAuthApp.AppSlug,
 			Name:        apiAuthApp.Name,
 			KeyPrefix:   apiAuthApp.KeyPrefix,

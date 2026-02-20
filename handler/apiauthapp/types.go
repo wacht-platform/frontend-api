@@ -8,7 +8,6 @@ import (
 
 // ApiAuthAppInfo represents API auth app info for responses
 type ApiAuthAppInfo struct {
-	ID          string      `json:"id"`
 	AppSlug     string      `json:"app_slug"`
 	Name        string      `json:"name"`
 	KeyPrefix   string      `json:"key_prefix"`

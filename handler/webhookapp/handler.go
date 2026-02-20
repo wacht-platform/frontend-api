@@ -50,6 +50,53 @@ func (h *Handler) GetSession(c *fiber.Ctx) error {
 	})
 }
 
+func (h *Handler) GetSettings(c *fiber.Ctx) error {
+	webhookAppSession, err := h.getWebhookAppSession(c)
+	if err != nil {
+		return handler.SendUnauthorized(c, nil, "No active webhook app session")
+	}
+
+	deployment := handler.GetDeployment(c)
+	webhookApp, err := h.service.GetWebhookApp(deployment.ID, webhookAppSession.AppSlug)
+	if err != nil {
+		return handler.SendInternalServerError(c, nil, err.Error())
+	}
+
+	return handler.SendSuccess(c, WebhookSettingsResponse{
+		FailureNotificationEmails: webhookApp.FailureNotificationEmails,
+	})
+}
+
+func (h *Handler) UpdateSettings(c *fiber.Ctx) error {
+	webhookAppSession, err := h.getWebhookAppSession(c)
+	if err != nil {
+		return handler.SendUnauthorized(c, nil, "No active webhook app session")
+	}
+
+	deployment := handler.GetDeployment(c)
+	req, validation := handler.Validate[UpdateWebhookSettingsRequest](c)
+	if validation != nil {
+		return handler.SendBadRequest(c, validation, "Bad request body")
+	}
+
+	app, err := h.service.UpdateFailureNotificationEmails(
+		deployment.ID,
+		webhookAppSession.AppSlug,
+		req.FailureNotificationEmails,
+	)
+	if err != nil {
+		var vErr *ValidationError
+		if errors.As(err, &vErr) {
+			return handler.SendBadRequest(c, nil, vErr.Error())
+		}
+		return handler.SendInternalServerError(c, nil, err.Error())
+	}
+
+	return handler.SendSuccess(c, WebhookSettingsResponse{
+		FailureNotificationEmails: app.FailureNotificationEmails,
+	})
+}
+
 func (h *Handler) GetEndpoints(c *fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
