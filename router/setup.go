@@ -21,6 +21,7 @@ func Setup(app *fiber.App) {
 
 func setupRoutes(app *fiber.App) {
 	setupPublicRoutes(app)
+	setupOAuthConsentRoutes(app)
 	setupAuthRoutes(app)
 	setupDeploymentRoutes(app)
 	setupSessionRoutes(app)

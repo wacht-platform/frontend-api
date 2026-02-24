@@ -259,7 +259,6 @@ func (h *Handler) EnterpriseSSOCallback(c *fiber.Ctx) error {
 	}
 
 	if redirectURI != "" {
-		// For staging deployments, add session token to URL so frontend can store it
 		if !deployment.IsProduction() {
 			var keypair model.DeploymentKeyPair
 			if err := database.Connection.Where("deployment_id = ?", deployment.ID).First(&keypair).Error; err == nil {

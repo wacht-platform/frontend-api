@@ -89,6 +89,7 @@ type ApiKey struct {
 	OrgRolePerms  []string       `json:"org_role_permissions"       gorm:"column:org_role_permissions;type:jsonb;serializer:json;default:'[]'::jsonb"`
 	WsRolePerms   []string       `json:"workspace_role_permissions" gorm:"column:workspace_role_permissions;type:jsonb;serializer:json;default:'[]'::jsonb"`
 	Metadata      map[string]any `json:"metadata"                  gorm:"type:jsonb;serializer:json;default:'{}'::jsonb"`
+	RateLimitSchemeSlug *string  `json:"-"                         gorm:"column:rate_limit_scheme_slug;type:varchar(255)"`
 	OrgID         *uint64        `json:"organization_id,string,omitempty"         gorm:"column:organization_id;index"`
 	WorkspaceID   *uint64        `json:"workspace_id,string,omitempty"            gorm:"column:workspace_id;index"`
 	OrgMemberID   *uint64        `json:"organization_membership_id,string,omitempty" gorm:"column:organization_membership_id;index"`
