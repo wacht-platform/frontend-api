@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ilabs/wacht-fe/config"
 )
 
 type OAuthStateData struct {
@@ -64,10 +66,14 @@ func GenerateOAuthState(data OAuthStateData, secret []byte) (string, error) {
 	mac := hmac.New(sha256.New, secret)
 	mac.Write([]byte(dataStr))
 	signature := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	relaySignature, err := generateOAuthRelaySignature([]byte(dataStr))
+	if err != nil {
+		return "", err
+	}
 
 	encodedData := base64.RawURLEncoding.EncodeToString([]byte(dataStr))
 
-	return fmt.Sprintf("%s.%s", encodedData, signature), nil
+	return fmt.Sprintf("%s.%s.%s", encodedData, signature, relaySignature), nil
 }
 
 func ValidateOAuthState(state string, secret []byte, maxAge time.Duration) (*OAuthStateData, error) {
@@ -76,7 +82,7 @@ func ValidateOAuthState(state string, secret []byte, maxAge time.Duration) (*OAu
 	}
 
 	parts := strings.Split(state, ".")
-	if len(parts) != 2 {
+	if len(parts) != 2 && len(parts) != 3 {
 		return nil, errors.New("invalid state format")
 	}
 
@@ -159,4 +165,24 @@ func GetOAuthStateSecret(deploymentID uint64, privateKey string) []byte {
 	data := fmt.Sprintf("oauth_state_%d_%s", deploymentID, privateKey)
 	hash := sha256.Sum256([]byte(data))
 	return hash[:]
+}
+
+func getOAuthRelayStateSecret() []byte {
+	key := strings.TrimSpace(config.GetEnv("ENCRYPTION_KEY", ""))
+	if key == "" {
+		return nil
+	}
+	data := "ors1:" + key
+	hash := sha256.Sum256([]byte(data))
+	return hash[:]
+}
+
+func generateOAuthRelaySignature(data []byte) (string, error) {
+	secret := getOAuthRelayStateSecret()
+	if len(secret) == 0 {
+		return "", errors.New("ENCRYPTION_KEY is required for oauth relay state signing")
+	}
+	mac := hmac.New(sha256.New, secret)
+	mac.Write(data)
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil)), nil
 }
