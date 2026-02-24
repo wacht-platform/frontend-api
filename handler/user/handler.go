@@ -1808,6 +1808,13 @@ func (h *Handler) InitConnectSocial(c *fiber.Ctx) error {
 
 	deployment := handler.GetDeployment(c)
 	customRedirectURI := c.Query("redirect_uri")
+	if err := utils.ValidateCustomOAuthRedirectURIForDeployment(&deployment, customRedirectURI); err != nil {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			err.Error(),
+		)
+	}
 
 	var keypair model.DeploymentKeyPair
 	if err := database.Connection.Where("deployment_id = ?", deployment.ID).
@@ -1948,6 +1955,14 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 	}
 
 	customRedirectURI := stateData.RedirectURI
+	if err := utils.ValidateCustomOAuthRedirectURIForDeployment(&deployment, customRedirectURI); err != nil {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			err.Error(),
+			handler.ErrInvalidState,
+		)
+	}
 
 	var ssoProvider model.SocialConnectionProvider
 	switch provider {

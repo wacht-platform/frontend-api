@@ -1013,6 +1013,14 @@ func (h *Handler) OAuth2Callback(c *fiber.Ctx) error {
 	}
 
 	customRedirectURI := stateData.RedirectURI
+	if err := utils.ValidateCustomOAuthRedirectURIForDeployment(&deployment, customRedirectURI); err != nil {
+		return handler.SendBadRequest(
+			c,
+			nil,
+			err.Error(),
+			handler.ErrInvalidState,
+		)
+	}
 
 	if time.Since(attempt.CreatedAt) > 10*time.Minute {
 		return handler.SendBadRequest(

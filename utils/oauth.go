@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ilabs/wacht-fe/config"
 	"github.com/ilabs/wacht-fe/model"
-	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/facebook"
 	"golang.org/x/oauth2/github"
@@ -46,6 +47,9 @@ func GenerateVerificationUrlForDeployment(
 		} else {
 			finalRedirectURI = fmt.Sprintf("https://%s", deployment.FrontendHost)
 		}
+	}
+	if err := ValidateCustomOAuthRedirectURIForDeployment(deployment, customRedirectURI); err != nil {
+		return "", err
 	}
 
 	secret := GetOAuthStateSecret(deployment.ID, keypair.PrivateKey)
@@ -701,4 +705,57 @@ func GetVerificationStrategyForProvider(provider string) model.VerificationStrat
 	default:
 		return model.Otp
 	}
+}
+
+func ValidateCustomOAuthRedirectURIForDeployment(
+	deployment *model.Deployment,
+	customRedirectURI string,
+) error {
+	value := strings.TrimSpace(customRedirectURI)
+	if value == "" || deployment == nil || deployment.Mode != model.DeploymentModeProduction {
+		return nil
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || !parsed.IsAbs() || parsed.Host == "" {
+		return fmt.Errorf("redirect_uri must be an absolute URL")
+	}
+	if !strings.EqualFold(parsed.Scheme, "https") {
+		return fmt.Errorf("redirect_uri must use https in production")
+	}
+	redirectHost := strings.ToLower(strings.TrimSpace(parsed.Hostname()))
+	if redirectHost == "" {
+		return fmt.Errorf("redirect_uri host is required")
+	}
+
+	roots := map[string]struct{}{}
+	if root := rootDomainFromHost(deployment.FrontendHost); root != "" {
+		roots[root] = struct{}{}
+	}
+
+	for root := range roots {
+		if redirectHost == root || strings.HasSuffix(redirectHost, "."+root) {
+			return nil
+		}
+	}
+	return fmt.Errorf("redirect_uri host must be under deployment domain")
+}
+
+func rootDomainFromHost(host string) string {
+	value := strings.TrimSpace(host)
+	if value == "" {
+		return ""
+	}
+	parsed, err := url.Parse("https://" + value)
+	if err != nil {
+		return ""
+	}
+	name := strings.TrimSpace(strings.ToLower(parsed.Hostname()))
+	if name == "" {
+		return ""
+	}
+	parts := strings.Split(name, ".")
+	if len(parts) < 2 {
+		return name
+	}
+	return parts[len(parts)-2] + "." + parts[len(parts)-1]
 }
