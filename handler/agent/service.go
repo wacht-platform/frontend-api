@@ -660,15 +660,12 @@ func (s *Service) discoverMcpOAuth(endpoint string) (*mcpOAuthDiscovery, error) 
 
 	authMetadataURL := authServer + "/.well-known/oauth-authorization-server"
 	authResponse, err := httpClient.Get(authMetadataURL)
-	if err != nil || authResponse.StatusCode >= 400 {
-		if authResponse != nil {
-			authResponse.Body.Close()
-		}
-		authMetadataURL = authServer + "/.well-known/openid-configuration"
-		authResponse, err = httpClient.Get(authMetadataURL)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch authorization metadata: %w", err)
-		}
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch authorization metadata: %w", err)
+	}
+	if authResponse.StatusCode >= 400 {
+		authResponse.Body.Close()
+		return nil, fmt.Errorf("authorization metadata request failed: %d", authResponse.StatusCode)
 	}
 	defer authResponse.Body.Close()
 

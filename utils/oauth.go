@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"encoding/base64"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/ilabs/wacht-fe/config"
 	"github.com/ilabs/wacht-fe/model"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/facebook"
 	"golang.org/x/oauth2/github"
@@ -155,6 +156,7 @@ func GetOAuthConfigForDeployment(
 func ExchangeTokenForUser(
 	token *oauth2.Token,
 	ssoProvider model.SocialConnectionProvider,
+	expectedClientID string,
 ) (*OAuthUser, error) {
 	switch ssoProvider {
 	case model.SocialConnectionProviderGitHub:
@@ -532,24 +534,19 @@ func ExchangeTokenForUser(
 		if !ok {
 			return nil, fmt.Errorf("invalid id_token format from Apple")
 		}
-
-		parts := strings.Split(idTokenStr, ".")
-		if len(parts) != 3 {
-			return nil, fmt.Errorf("invalid JWT format from Apple")
-		}
-
-		payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+		claims, err := verifyAppleIDToken(idTokenStr, expectedClientID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode Apple JWT payload: %v", err)
-		}
-
-		var claims map[string]any
-		if err := json.Unmarshal(payload, &claims); err != nil {
-			return nil, fmt.Errorf("failed to parse Apple JWT claims: %v", err)
+			return nil, fmt.Errorf("failed to verify Apple id_token: %w", err)
 		}
 
 		email, _ := claims["email"].(string)
-		emailVerified, _ := claims["email_verified"].(bool)
+		emailVerified := false
+		switch v := claims["email_verified"].(type) {
+		case bool:
+			emailVerified = v
+		case string:
+			emailVerified = strings.EqualFold(v, "true")
+		}
 
 		firstName := ""
 		lastName := ""
@@ -581,6 +578,30 @@ func ExchangeTokenForUser(
 		}, nil
 	}
 	return nil, nil
+}
+
+func verifyAppleIDToken(idToken string, expectedClientID string) (map[string]any, error) {
+	expectedClientID = strings.TrimSpace(expectedClientID)
+	if expectedClientID == "" {
+		return nil, fmt.Errorf("apple client id is required for id_token verification")
+	}
+	ctx := context.Background()
+	provider, err := oidc.NewProvider(ctx, "https://appleid.apple.com")
+	if err != nil {
+		return nil, err
+	}
+	verifier := provider.Verifier(&oidc.Config{
+		ClientID: expectedClientID,
+	})
+	verified, err := verifier.Verify(ctx, idToken)
+	if err != nil {
+		return nil, err
+	}
+	claims := map[string]any{}
+	if err := verified.Claims(&claims); err != nil {
+		return nil, err
+	}
+	return claims, nil
 }
 
 func GenerateOAuthConnectURL(

@@ -1993,7 +1993,7 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 		)
 	}
 
-	oauthUser, err := utils.ExchangeTokenForUser(token, ssoProvider)
+	oauthUser, err := utils.ExchangeTokenForUser(token, ssoProvider, conf.ClientID)
 	if err != nil {
 		return handler.SendInternalServerError(
 			c,

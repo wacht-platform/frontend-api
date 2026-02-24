@@ -2,7 +2,9 @@ package oauth_consent
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -102,6 +104,13 @@ func (h *Handler) Details(c *fiber.Ctx) error {
 	if uint64(handoff.DeploymentID) != deployment.ID {
 		return handler.SendUnauthorized(c, nil, "Consent handoff is not valid for this deployment")
 	}
+	csrfToken, err := generateConsentCSRFToken()
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to initialize consent CSRF token")
+	}
+	if err := setSessionConsentCSRFToken(c.Context(), session.ID, handoffID, csrfToken); err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to persist consent CSRF token")
+	}
 
 	resourceOptions, err := buildConsentResourceOptions(c.Context(), uint64(handoff.DeploymentID), *session.ActiveSignin.UserID, nil)
 	if err != nil {
@@ -118,6 +127,7 @@ func (h *Handler) Details(c *fiber.Ctx) error {
 		"resource_options":  resourceOptions,
 		"state":             handoff.State,
 		"expires_at":        handoff.ExpiresAt,
+		"csrf_token":        csrfToken,
 	})
 }
 
@@ -147,6 +157,13 @@ func (h *Handler) Submit(c *fiber.Ctx) error {
 	}
 	if uint64(handoff.DeploymentID) != deployment.ID {
 		return handler.SendUnauthorized(c, nil, "Consent handoff is not valid for this deployment")
+	}
+	expectedCSRFToken, err := loadSessionConsentCSRFToken(c.Context(), session.ID, handoffID)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Consent CSRF token is missing or expired")
+	}
+	if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(request.CSRFToken)), []byte(strings.TrimSpace(expectedCSRFToken))) != 1 {
+		return handler.SendUnauthorized(c, nil, "Invalid consent CSRF token")
 	}
 
 	action := strings.ToLower(strings.TrimSpace(request.Action))
@@ -218,6 +235,7 @@ func (h *Handler) Submit(c *fiber.Ctx) error {
 	if (resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusSeeOther || resp.StatusCode == http.StatusTemporaryRedirect || resp.StatusCode == http.StatusPermanentRedirect) && location != "" {
 		_ = deleteOAuthConsentHandoff(c.Context(), handoffID)
 		_ = deleteSessionConsentHandoff(c.Context(), session.ID)
+		_ = deleteSessionConsentCSRFToken(c.Context(), session.ID, handoffID)
 		return c.Redirect(location, fiber.StatusFound)
 	}
 
@@ -225,6 +243,7 @@ func (h *Handler) Submit(c *fiber.Ctx) error {
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		_ = deleteOAuthConsentHandoff(c.Context(), handoffID)
 		_ = deleteSessionConsentHandoff(c.Context(), session.ID)
+		_ = deleteSessionConsentCSRFToken(c.Context(), session.ID, handoffID)
 		return handler.SendSuccess(c, fiber.Map{"ok": true})
 	}
 
@@ -311,6 +330,30 @@ func loadSessionConsentHandoff(ctx context.Context, sessionID uint64) (string, e
 
 func deleteSessionConsentHandoff(ctx context.Context, sessionID uint64) error {
 	return database.Redis.Del(ctx, sessionConsentHandoffRedisKey(sessionID)).Err()
+}
+
+func sessionConsentCSRFRedisKey(sessionID uint64, handoffID string) string {
+	return fmt.Sprintf("oauth:consent:csrf:%d:%s", sessionID, handoffID)
+}
+
+func setSessionConsentCSRFToken(ctx context.Context, sessionID uint64, handoffID string, token string) error {
+	return database.Redis.Set(ctx, sessionConsentCSRFRedisKey(sessionID, handoffID), token, 15*time.Minute).Err()
+}
+
+func loadSessionConsentCSRFToken(ctx context.Context, sessionID uint64, handoffID string) (string, error) {
+	return database.Redis.Get(ctx, sessionConsentCSRFRedisKey(sessionID, handoffID)).Result()
+}
+
+func deleteSessionConsentCSRFToken(ctx context.Context, sessionID uint64, handoffID string) error {
+	return database.Redis.Del(ctx, sessionConsentCSRFRedisKey(sessionID, handoffID)).Err()
+}
+
+func generateConsentCSRFToken() (string, error) {
+	var bytes [32]byte
+	if _, err := rand.Read(bytes[:]); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(bytes[:]), nil
 }
 
 func isCanonicalTenantResource(resource string) bool {

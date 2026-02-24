@@ -1046,6 +1046,7 @@ func (h *Handler) OAuth2Callback(c *fiber.Ctx) error {
 	user, err := utils.ExchangeTokenForUser(
 		token,
 		attempt.SSOProvider,
+		conf.ClientID,
 	)
 	if err != nil {
 		return handler.SendInternalServerError(
