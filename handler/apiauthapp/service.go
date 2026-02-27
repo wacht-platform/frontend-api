@@ -84,6 +84,7 @@ func (s *Service) CreateKey(deployment model.Deployment, appSlug string, name st
 
 	key := model.ApiKey{
 		DeploymentID: deployment.ID,
+		OwnerUserID:  app.UserID,
 		AppSlug:      app.AppSlug,
 		Name:         name,
 		KeyPrefix:    app.KeyPrefix,
@@ -230,6 +231,7 @@ func (s *Service) RotateKey(deployment model.Deployment, appSlug string, keyID u
 
 	newKey := model.ApiKey{
 		DeploymentID: deployment.ID,
+		OwnerUserID:  existing.OwnerUserID,
 		AppSlug:      existing.AppSlug,
 		Name:         existing.Name,
 		KeyPrefix:    app.KeyPrefix,
