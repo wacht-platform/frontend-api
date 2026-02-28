@@ -21,6 +21,7 @@ import (
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/pkg/idgen"
+	"github.com/ilabs/wacht-fe/service"
 	"github.com/ilabs/wacht-fe/utils"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
@@ -1285,6 +1286,11 @@ func (h *Handler) AddMemberRole(
 
 	database.SyncUserWrapper(database.Connection, assignedMember.UserID, "organization.role.added")
 
+	natsService := service.GetNATS()
+	if err := natsService.PublishApiKeyOrgMembershipSync(assignedMember.ID); err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to enqueue API key permission sync")
+	}
+
 	return handler.SendSuccess(c, fiber.Map{
 		"success": true,
 	})
@@ -1370,6 +1376,11 @@ func (h *Handler) RemoveMemberRole(
 	}
 
 	database.SyncUserWrapper(database.Connection, targetMemberShip.UserID, "organization.role.removed")
+
+	natsService := service.GetNATS()
+	if err := natsService.PublishApiKeyOrgMembershipSync(targetMemberShip.ID); err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to enqueue API key permission sync")
+	}
 
 	return handler.SendSuccess(c, fiber.Map{
 		"success": true,
@@ -1579,7 +1590,7 @@ func (h *Handler) CreateOrganizationRole(
 	}
 
 	for _, permission := range body.Permissions {
-		if slices.Contains(deployment.B2BSettings.OrganizationPermissions, permission) {
+		if !slices.Contains(deployment.B2BSettings.OrganizationPermissions, permission) {
 			return handler.SendForbidden(c, nil, "Insufficient permissions to manage roles.")
 		}
 	}
@@ -1650,8 +1661,24 @@ func (h *Handler) RemoveOrganizationRoles(
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
+	var membershipIDs []uint64
+	if err := database.Connection.
+		Table("organization_membership_roles").
+		Where("organization_role_id = ?", role.ID).
+		Distinct("organization_membership_id").
+		Pluck("organization_membership_id", &membershipIDs).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to load role memberships")
+	}
+
 	if err := database.Connection.Delete(&role).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to delete organization role")
+	}
+
+	natsService := service.GetNATS()
+	for _, membershipID := range membershipIDs {
+		if err := natsService.PublishApiKeyOrgMembershipSync(membershipID); err != nil {
+			return handler.SendInternalServerError(c, err, "Failed to enqueue API key permission sync")
+		}
 	}
 
 	return handler.SendSuccess(c, fiber.Map{})

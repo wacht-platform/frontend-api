@@ -13,6 +13,7 @@ import (
 	"github.com/ilabs/wacht-fe/handler"
 	"github.com/ilabs/wacht-fe/model"
 	"github.com/ilabs/wacht-fe/pkg/idgen"
+	"github.com/ilabs/wacht-fe/service"
 	"github.com/ilabs/wacht-fe/utils"
 	"github.com/lib/pq"
 	"gorm.io/datatypes"
@@ -494,7 +495,7 @@ func (h *Handler) CreateWorkspaceRole(c *fiber.Ctx) error {
 	}
 
 	for _, permission := range body.Permissions {
-		if slices.Contains(d.B2BSettings.WorkspacePermissions, permission) {
+		if !slices.Contains(d.B2BSettings.WorkspacePermissions, permission) {
 			return handler.SendForbidden(c, nil, "Insufficient permissions to assign the specified permission.")
 		}
 	}
@@ -564,9 +565,25 @@ func (h *Handler) DeleteWorkspaceRole(c *fiber.Ctx) error {
 		)
 	}
 
+	var membershipIDs []uint64
+	if err := database.Connection.
+		Table("workspace_membership_roles").
+		Where("workspace_role_id = ?", roleID).
+		Distinct("workspace_membership_id").
+		Pluck("workspace_membership_id", &membershipIDs).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to load role memberships")
+	}
+
 	if err := database.Connection.Delete(&roleToDelete).Error; err != nil {
 		log.Printf("Failed to delete workspace role %d: %v", roleID, err)
 		return handler.SendInternalServerError(c, err, "Failed to delete role")
+	}
+
+	natsService := service.GetNATS()
+	for _, membershipID := range membershipIDs {
+		if err := natsService.PublishApiKeyWorkspaceMembershipSync(membershipID); err != nil {
+			return handler.SendInternalServerError(c, err, "Failed to enqueue API key permission sync")
+		}
 	}
 
 	return handler.SendSuccess(c, fiber.Map{
@@ -639,6 +656,11 @@ func (h *Handler) AddWorkspaceMemberRole(c *fiber.Ctx) error {
 	}
 
 	database.SyncUserWrapper(database.Connection, targetMembership.UserID, "workspace.role.added")
+
+	natsService := service.GetNATS()
+	if err := natsService.PublishApiKeyWorkspaceMembershipSync(targetMembership.ID); err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to enqueue API key permission sync")
+	}
 
 	return handler.SendSuccess(c, fiber.Map{"success": true})
 }
@@ -726,6 +748,11 @@ func (h *Handler) RemoveWorkspaceMemberRole(c *fiber.Ctx) error {
 	}
 
 	database.SyncUserWrapper(database.Connection, targetMembership.UserID, "workspace.role.removed")
+
+	natsService := service.GetNATS()
+	if err := natsService.PublishApiKeyWorkspaceMembershipSync(targetMembership.ID); err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to enqueue API key permission sync")
+	}
 
 	return handler.SendSuccess(c, fiber.Map{"success": true})
 }

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -20,19 +21,17 @@ func NewHandler() *Handler {
 }
 
 func (h *Handler) verifyAgentSession(c *fiber.Ctx) (*string, error) {
-	session := handler.GetSession(c)
-	if session == nil {
-		return nil, fiber.NewError(fiber.StatusUnauthorized, "Session required")
-	}
-
-	deployment := handler.GetDeployment(c)
-
-	agentSession, err := h.service.GetActiveAgentSession(session.ID, deployment.ID)
+	agentSession, err := h.getAgentSession(c)
 	if err != nil {
 		return nil, fiber.NewError(fiber.StatusUnauthorized, "No active agent session")
 	}
 
-	return &agentSession.ContextGroup, nil
+	contextGroup, err := h.resolveAgentSessionContextGroup(c, agentSession)
+	if err != nil {
+		return nil, err
+	}
+
+	return &contextGroup, nil
 }
 
 func (h *Handler) resolveAuthorizedAgentName(
@@ -229,7 +228,10 @@ func (h *Handler) GetActiveIntegrations(c *fiber.Ctx) error {
 		return err
 	}
 
-	contextGroup := strings.TrimSpace(agentSession.ContextGroup)
+	contextGroup, err := h.resolveAgentSessionContextGroup(c, agentSession)
+	if err != nil {
+		return err
+	}
 	if contextGroup == "" {
 		return handler.SendBadRequest(c, nil, "Context group required in token")
 	}
@@ -311,7 +313,10 @@ func (h *Handler) ListMcpServers(c *fiber.Ctx) error {
 		return err
 	}
 
-	contextGroup := strings.TrimSpace(agentSession.ContextGroup)
+	contextGroup, err := h.resolveAgentSessionContextGroup(c, agentSession)
+	if err != nil {
+		return err
+	}
 	if contextGroup == "" {
 		return handler.SendBadRequest(c, nil, "Context group required in token")
 	}
@@ -336,7 +341,10 @@ func (h *Handler) ConnectMcpServer(c *fiber.Ctx) error {
 		return err
 	}
 
-	contextGroup := strings.TrimSpace(agentSession.ContextGroup)
+	contextGroup, err := h.resolveAgentSessionContextGroup(c, agentSession)
+	if err != nil {
+		return err
+	}
 	if contextGroup == "" {
 		return handler.SendBadRequest(c, nil, "Context group required in token")
 	}
@@ -383,7 +391,10 @@ func (h *Handler) DisconnectMcpServer(c *fiber.Ctx) error {
 		return err
 	}
 
-	contextGroup := strings.TrimSpace(agentSession.ContextGroup)
+	contextGroup, err := h.resolveAgentSessionContextGroup(c, agentSession)
+	if err != nil {
+		return err
+	}
 	if contextGroup == "" {
 		return handler.SendBadRequest(c, nil, "Context group required in token")
 	}
@@ -416,10 +427,43 @@ func (h *Handler) getAgentSession(c *fiber.Ctx) (*model.AgentSession, error) {
 	return h.service.GetActiveAgentSession(session.ID, deployment.ID)
 }
 
+func (h *Handler) resolveAgentSessionContextGroup(
+	c *fiber.Ctx,
+	agentSession *model.AgentSession,
+) (string, error) {
+	session := handler.GetSession(c)
+	if session == nil {
+		return "", fiber.NewError(fiber.StatusUnauthorized, "Session required")
+	}
+
+	switch agentSession.Identifier {
+	case model.AgentSessionIdentifierSignin:
+		if session.ActiveSignin == nil || session.ActiveSignin.UserID == nil {
+			return "", fiber.NewError(
+				fiber.StatusUnauthorized,
+				"No active sign in for signin-scoped agent session",
+			)
+		}
+		return strconv.FormatUint(*session.ActiveSignin.UserID, 10), nil
+	case model.AgentSessionIdentifierStatic:
+		return strings.TrimSpace(agentSession.ContextGroup), nil
+	default:
+		return "", fiber.NewError(
+			fiber.StatusUnauthorized,
+			fmt.Sprintf("Unsupported agent session identifier: %s", agentSession.Identifier),
+		)
+	}
+}
+
 func (h *Handler) GetSession(c *fiber.Ctx) error {
 	agentSession, err := h.getAgentSession(c)
 	if err != nil {
 		return fiber.NewError(fiber.StatusUnauthorized, "No active agent session")
+	}
+
+	contextGroup, err := h.resolveAgentSessionContextGroup(c, agentSession)
+	if err != nil {
+		return err
 	}
 
 	deployment := handler.GetDeployment(c)
@@ -431,7 +475,7 @@ func (h *Handler) GetSession(c *fiber.Ctx) error {
 
 	return handler.SendSuccess(c, AgentSessionResponse{
 		SessionID:    strconv.FormatUint(agentSession.ID, 10),
-		ContextGroup: agentSession.ContextGroup,
+		ContextGroup: contextGroup,
 		Agents:       agents,
 	})
 }

@@ -41,7 +41,7 @@ func (h *Handler) GetSession(c *fiber.Ctx) error {
 
 	webhookApp, err := h.service.GetWebhookApp(deployment.ID, webhookAppSession.AppSlug)
 	if err != nil {
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, WebhookAppSessionResponse{
@@ -59,7 +59,7 @@ func (h *Handler) GetSettings(c *fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 	webhookApp, err := h.service.GetWebhookApp(deployment.ID, webhookAppSession.AppSlug)
 	if err != nil {
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, WebhookSettingsResponse{
@@ -89,7 +89,7 @@ func (h *Handler) UpdateSettings(c *fiber.Ctx) error {
 		if errors.As(err, &vErr) {
 			return handler.SendBadRequest(c, nil, vErr.Error())
 		}
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, WebhookSettingsResponse{
@@ -107,7 +107,7 @@ func (h *Handler) GetEndpoints(c *fiber.Ctx) error {
 
 	endpoints, err := h.service.GetEndpoints(deployment.ID, webhookAppSession.AppSlug)
 	if err != nil {
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, endpoints)
@@ -123,7 +123,7 @@ func (h *Handler) GetEvents(c *fiber.Ctx) error {
 
 	events, err := h.service.GetEvents(deployment.ID, webhookAppSession.AppSlug)
 	if err != nil {
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, events)
@@ -187,7 +187,7 @@ func (h *Handler) GetDeliveries(c *fiber.Ctx) error {
 		if errors.As(err, &vErr) {
 			return handler.SendBadRequest(c, nil, vErr.Error())
 		}
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, deliveries)
@@ -222,7 +222,7 @@ func (h *Handler) GetAnalytics(c *fiber.Ctx) error {
 		if errors.As(err, &vErr) {
 			return handler.SendBadRequest(c, nil, vErr.Error())
 		}
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, analytics)
@@ -248,7 +248,7 @@ func (h *Handler) GetTimeseries(c *fiber.Ctx) error {
 		if errors.As(err, &vErr) {
 			return handler.SendBadRequest(c, nil, vErr.Error())
 		}
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, timeseries)
@@ -264,7 +264,7 @@ func (h *Handler) GetStats(c *fiber.Ctx) error {
 
 	stats, err := h.service.GetStats(deployment.ID, webhookAppSession.AppSlug)
 	if err != nil {
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, stats)
@@ -280,7 +280,7 @@ func (h *Handler) GetCatalog(c *fiber.Ctx) error {
 
 	catalog, err := h.service.GetCatalog(deployment.ID, webhookAppSession.AppSlug)
 	if err != nil {
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, catalog)
@@ -303,7 +303,7 @@ func (h *Handler) CreateEndpoint(c *fiber.Ctx) error {
 
 	result, err := h.service.CreateEndpoint(deployment.ID, webhookAppSession.AppSlug, req)
 	if err != nil {
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, result.Endpoint)
@@ -332,7 +332,7 @@ func (h *Handler) UpdateEndpoint(c *fiber.Ctx) error {
 
 	result, err := h.service.UpdateEndpoint(deployment.ID, webhookAppSession.AppSlug, endpointID, req)
 	if err != nil {
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, result.Endpoint)
@@ -354,7 +354,7 @@ func (h *Handler) DeleteEndpoint(c *fiber.Ctx) error {
 
 	result, err := h.service.DeleteEndpoint(deployment.ID, webhookAppSession.AppSlug, endpointID)
 	if err != nil {
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, result)
@@ -370,7 +370,7 @@ func (h *Handler) RotateSecret(c *fiber.Ctx) error {
 
 	app, err := h.service.RotateSecret(deployment.ID, webhookAppSession.AppSlug)
 	if err != nil {
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, app)
@@ -406,7 +406,7 @@ func (h *Handler) ReplayDelivery(c *fiber.Ctx) error {
 			}
 			return handler.SendBadRequest(c, nil, vErr.Error())
 		}
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, result)
@@ -430,7 +430,7 @@ func (h *Handler) GetReplayTaskStatus(c *fiber.Ctx) error {
 		if errors.As(err, &vErr) {
 			return handler.SendBadRequest(c, nil, vErr.Error())
 		}
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, result)
@@ -452,7 +452,7 @@ func (h *Handler) ListReplayTasks(c *fiber.Ctx) error {
 		if errors.As(err, &vErr) {
 			return handler.SendBadRequest(c, nil, vErr.Error())
 		}
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, result)
@@ -476,7 +476,7 @@ func (h *Handler) CancelReplayTask(c *fiber.Ctx) error {
 		if errors.As(err, &vErr) {
 			return handler.SendBadRequest(c, nil, vErr.Error())
 		}
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, result)
@@ -508,7 +508,7 @@ func (h *Handler) TestEndpoint(c *fiber.Ctx) error {
 
 	result, err := h.service.TestEndpoint(deployment.ID, webhookAppSession.AppSlug, endpointID, req.EventName, payload)
 	if err != nil {
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, result)
@@ -534,7 +534,7 @@ func (h *Handler) GetDelivery(c *fiber.Ctx) error {
 		if errors.As(err, &vErr) {
 			return handler.SendBadRequest(c, nil, vErr.Error())
 		}
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
 
 	return handler.SendSuccess(c, delivery)

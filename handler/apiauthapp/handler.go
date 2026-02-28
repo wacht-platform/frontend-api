@@ -41,7 +41,7 @@ func (h *Handler) GetSession(c *fiber.Ctx) error {
 
 	apiAuthApp, err := h.service.GetApiAuthApp(deployment.ID, apiAuthAppSession.AppSlug)
 	if err != nil {
-		return handler.SendInternalServerError(c, nil, err.Error())
+		return handler.SendBadRequest(c, nil, "Invalid API auth app session")
 	}
 
 	return handler.SendSuccess(c, map[string]any{

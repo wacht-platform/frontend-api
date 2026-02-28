@@ -65,6 +65,8 @@ func (rl RateLimits) Value() (driver.Value, error) {
 type ApiAuthApp struct {
 	DeploymentID        uint64     `json:"deployment_id,string"      gorm:"primarykey;index;not null"`
 	UserID              *uint64    `json:"user_id,string,omitempty"  gorm:"column:user_id;index"`
+	OrganizationID      *uint64    `json:"organization_id,string,omitempty" gorm:"column:organization_id;index"`
+	WorkspaceID         *uint64    `json:"workspace_id,string,omitempty" gorm:"column:workspace_id;index"`
 	AppSlug             string     `json:"app_slug"                  gorm:"primarykey;type:varchar(255);not null"`
 	Name                string     `json:"name"                      gorm:"type:varchar(255);not null"`
 	Description         *string    `json:"description,omitempty"     gorm:"type:text"`

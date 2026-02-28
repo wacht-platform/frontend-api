@@ -26,14 +26,15 @@ const (
 )
 
 type SessionTicketPayload struct {
-	TicketType     TicketType `json:"ticket_type"`
-	DeploymentID   string     `json:"deployment_id"`
-	UserID         *string    `json:"user_id,omitempty"`
-	AgentIDs       []string   `json:"agent_ids,omitempty"`
-	WebhookAppSlug *string    `json:"webhook_app_slug,omitempty"`
-	ApiAuthAppSlug *string    `json:"api_auth_app_slug,omitempty"`
-	ContextGroup   *string    `json:"context_group,omitempty"`
-	ExpiresAt      int64      `json:"expires_at"`
+	TicketType              TicketType                    `json:"ticket_type"`
+	DeploymentID            string                        `json:"deployment_id"`
+	UserID                  *string                       `json:"user_id,omitempty"`
+	AgentIDs                []string                      `json:"agent_ids,omitempty"`
+	AgentSessionIdentifier  *model.AgentSessionIdentifier `json:"agent_session_identifier,omitempty"`
+	WebhookAppSlug          *string                       `json:"webhook_app_slug,omitempty"`
+	ApiAuthAppSlug          *string                       `json:"api_auth_app_slug,omitempty"`
+	ContextGroup            *string                       `json:"context_group,omitempty"`
+	ExpiresAt               int64                         `json:"expires_at"`
 }
 
 type ExchangeTicketRequest struct {
@@ -236,12 +237,26 @@ func (h *Handler) handleAgentAccessExchange(
 		agentIDs[i] = id
 	}
 
-	// Determine context group
+	// Determine identifier mode and effective context group.
+	identifier := model.AgentSessionIdentifierStatic
+	if payload.AgentSessionIdentifier != nil {
+		identifier = *payload.AgentSessionIdentifier
+	}
+
 	var contextGroup string
-	if payload.ContextGroup != nil && *payload.ContextGroup != "" {
+	switch identifier {
+	case model.AgentSessionIdentifierStatic:
+		if payload.ContextGroup == nil || *payload.ContextGroup == "" {
+			return handler.SendBadRequest(c, nil, "context_group is required for static agent_access tickets")
+		}
 		contextGroup = *payload.ContextGroup
-	} else {
-		return handler.SendBadRequest(c, nil, "context_group is required for agent_access tickets")
+	case model.AgentSessionIdentifierSignin:
+		if session.ActiveSignin == nil || session.ActiveSignin.UserID == nil {
+			return handler.SendUnauthorized(c, nil, "No active sign in for signin agent_access ticket")
+		}
+		contextGroup = strconv.FormatUint(*session.ActiveSignin.UserID, 10)
+	default:
+		return handler.SendBadRequest(c, nil, "Invalid agent_session_identifier")
 	}
 
 	// Calculate expiration
@@ -263,7 +278,7 @@ func (h *Handler) handleAgentAccessExchange(
 	agentSession := model.NewAgentSession(
 		session.ID,
 		deployment.ID,
-		model.AgentSessionIdentifierStatic,
+		identifier,
 		contextGroup,
 		agentIDs,
 		expiresAt,

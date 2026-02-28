@@ -22,6 +22,101 @@ func NewService() *Service {
 	return &Service{}
 }
 
+func collectUniquePermissions[T interface{ ~[]string }](roles []T) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0)
+	for _, perms := range roles {
+		for _, p := range perms {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			if _, ok := seen[p]; ok {
+				continue
+			}
+			seen[p] = struct{}{}
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+type appMembershipContext struct {
+	orgID             *uint64
+	workspaceID       *uint64
+	orgMemberID       *uint64
+	workspaceMemberID *uint64
+	orgRolePerms      []string
+	wsRolePerms       []string
+}
+
+func (s *Service) resolveAppMembershipContext(app *model.ApiAuthApp) (*appMembershipContext, error) {
+	ctx := &appMembershipContext{
+		orgID:       app.OrganizationID,
+		workspaceID: app.WorkspaceID,
+		orgRolePerms: []string{},
+		wsRolePerms:  []string{},
+	}
+
+	if app.UserID == nil && (app.OrganizationID != nil || app.WorkspaceID != nil) {
+		return nil, fmt.Errorf("user is not a member of the org")
+	}
+
+	if app.UserID != nil && app.OrganizationID != nil {
+		var orgMembership model.OrganizationMembership
+		if err := database.Connection.
+			Preload("Roles").
+			Where("user_id = ? AND organization_id = ? AND deleted_at IS NULL", *app.UserID, *app.OrganizationID).
+			First(&orgMembership).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return nil, fmt.Errorf("user is not a member of the org")
+			}
+			return nil, fmt.Errorf("failed to resolve organization membership: %w", err)
+		}
+		ctx.orgMemberID = &orgMembership.ID
+
+		rolePermArrays := make([][]string, 0, len(orgMembership.Roles))
+		for _, role := range orgMembership.Roles {
+			rolePermArrays = append(rolePermArrays, []string(role.Permissions))
+		}
+		ctx.orgRolePerms = collectUniquePermissions(rolePermArrays)
+	}
+
+	if app.UserID != nil && app.WorkspaceID != nil {
+		var workspaceMembership model.WorkspaceMembership
+		if err := database.Connection.
+			Preload("Roles").
+			Where("user_id = ? AND workspace_id = ? AND deleted_at IS NULL", *app.UserID, *app.WorkspaceID).
+			First(&workspaceMembership).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return nil, fmt.Errorf("user is not a member of the org")
+			}
+			return nil, fmt.Errorf("failed to resolve workspace membership: %w", err)
+		}
+		ctx.workspaceMemberID = &workspaceMembership.ID
+
+		wsOrgID := workspaceMembership.OrganizationID
+		if ctx.orgID != nil && *ctx.orgID != wsOrgID {
+			return nil, fmt.Errorf("user is not a member of the org")
+		}
+		if ctx.orgID == nil {
+			ctx.orgID = &wsOrgID
+		}
+		if ctx.orgMemberID == nil {
+			derivedOrgMemberID := workspaceMembership.OrganizationMembershipID
+			ctx.orgMemberID = &derivedOrgMemberID
+		}
+
+		rolePermArrays := make([][]string, 0, len(workspaceMembership.Roles))
+		for _, role := range workspaceMembership.Roles {
+			rolePermArrays = append(rolePermArrays, []string(role.Permissions))
+		}
+		ctx.wsRolePerms = collectUniquePermissions(rolePermArrays)
+	}
+
+	return ctx, nil
+}
+
 func (s *Service) GetActiveApiAuthAppSession(sessionID uint64, deploymentID uint64) (*model.ApiAuthAppSession, error) {
 	var session model.ApiAuthAppSession
 	now := time.Now()
@@ -77,6 +172,11 @@ func (s *Service) CreateKey(deployment model.Deployment, appSlug string, name st
 		return nil, fmt.Errorf("failed to fetch API auth app: %w", err)
 	}
 
+	membershipCtx, err := s.resolveAppMembershipContext(&app)
+	if err != nil {
+		return nil, err
+	}
+
 	fullKey, keyHash, keySuffix, err := generateApiKey(app.KeyPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate API key: %w", err)
@@ -93,8 +193,12 @@ func (s *Service) CreateKey(deployment model.Deployment, appSlug string, name st
 		Permissions:  []string{},
 		Metadata:     map[string]any{},
 		RateLimitSchemeSlug: app.RateLimitSchemeSlug,
-		OrgRolePerms: []string{},
-		WsRolePerms:  []string{},
+		OrgRolePerms: membershipCtx.orgRolePerms,
+		WsRolePerms:  membershipCtx.wsRolePerms,
+		OrgID:        membershipCtx.orgID,
+		WorkspaceID:  membershipCtx.workspaceID,
+		OrgMemberID:  membershipCtx.orgMemberID,
+		WsMemberID:   membershipCtx.workspaceMemberID,
 		IsActive:     true,
 		ExpiresAt:    expiresAt,
 	}
@@ -204,6 +308,10 @@ func (s *Service) RotateKey(deployment model.Deployment, appSlug string, keyID u
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch API auth app: %w", err)
 	}
+	membershipCtx, err := s.resolveAppMembershipContext(app)
+	if err != nil {
+		return nil, err
+	}
 
 	tx := database.Connection.Begin()
 	if tx.Error != nil {
@@ -231,7 +339,7 @@ func (s *Service) RotateKey(deployment model.Deployment, appSlug string, keyID u
 
 	newKey := model.ApiKey{
 		DeploymentID: deployment.ID,
-		OwnerUserID:  existing.OwnerUserID,
+		OwnerUserID:  app.UserID,
 		AppSlug:      existing.AppSlug,
 		Name:         existing.Name,
 		KeyPrefix:    app.KeyPrefix,
@@ -240,12 +348,12 @@ func (s *Service) RotateKey(deployment model.Deployment, appSlug string, keyID u
 		Permissions:  existing.Permissions,
 		Metadata:     existing.Metadata,
 		RateLimitSchemeSlug: app.RateLimitSchemeSlug,
-		OrgRolePerms: existing.OrgRolePerms,
-		WsRolePerms:  existing.WsRolePerms,
-		OrgID:        existing.OrgID,
-		WorkspaceID:  existing.WorkspaceID,
-		OrgMemberID:  existing.OrgMemberID,
-		WsMemberID:   existing.WsMemberID,
+		OrgRolePerms: membershipCtx.orgRolePerms,
+		WsRolePerms:  membershipCtx.wsRolePerms,
+		OrgID:        membershipCtx.orgID,
+		WorkspaceID:  membershipCtx.workspaceID,
+		OrgMemberID:  membershipCtx.orgMemberID,
+		WsMemberID:   membershipCtx.workspaceMemberID,
 		ExpiresAt:    existing.ExpiresAt,
 		IsActive:     true,
 	}

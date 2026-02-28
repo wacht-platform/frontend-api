@@ -121,6 +121,18 @@ func (h *Handler) ExecuteAgent(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "Agent session expired")
 	}
 
+	contextGroup, err := h.resolveAgentSessionContextGroup(c, &agentSession)
+	if err != nil {
+		return err
+	}
+	if contextGroup == "" {
+		return handler.SendBadRequest(c, nil, "Context group required in token")
+	}
+
+	if _, err := h.service.GetContext(deployment.ID, &contextGroup, contextID); err != nil {
+		return handler.SendNotFound(c, nil, "Context not found or access denied")
+	}
+
 	natsService := service.GetNATS()
 
 	var agentID *int64

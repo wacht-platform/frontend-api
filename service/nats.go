@@ -57,6 +57,22 @@ type NatsTaskMessage struct {
 	Payload  json.RawMessage `json:"payload"`
 }
 
+type ApiKeyOrgMembershipSyncPayload struct {
+	MembershipID uint64 `json:"membership_id"`
+}
+
+type ApiKeyWorkspaceMembershipSyncPayload struct {
+	MembershipID uint64 `json:"membership_id"`
+}
+
+type ApiKeyOrgRoleSyncPayload struct {
+	RoleID uint64 `json:"role_id"`
+}
+
+type ApiKeyWorkspaceRoleSyncPayload struct {
+	RoleID uint64 `json:"role_id"`
+}
+
 type VerificationEmailTask struct {
 	DeploymentID     uint64 `json:"deployment_id"`
 	Recipient        string `json:"recipient"`
@@ -448,6 +464,38 @@ func (s *NatsService) PublishWebhookEvent(deploymentID uint64, eventType string,
 		TriggeredAt:  time.Now(),
 	}
 	return s.publishTask(context.Background(), "webhook.event", task)
+}
+
+func (s *NatsService) PublishApiKeyOrgMembershipSync(membershipID uint64) error {
+	return s.publishTask(
+		context.Background(),
+		"api_key.sync_org_membership_permissions",
+		ApiKeyOrgMembershipSyncPayload{MembershipID: membershipID},
+	)
+}
+
+func (s *NatsService) PublishApiKeyWorkspaceMembershipSync(membershipID uint64) error {
+	return s.publishTask(
+		context.Background(),
+		"api_key.sync_workspace_membership_permissions",
+		ApiKeyWorkspaceMembershipSyncPayload{MembershipID: membershipID},
+	)
+}
+
+func (s *NatsService) PublishApiKeyOrgRoleSync(roleID uint64) error {
+	return s.publishTask(
+		context.Background(),
+		"api_key.sync_org_role_permissions",
+		ApiKeyOrgRoleSyncPayload{RoleID: roleID},
+	)
+}
+
+func (s *NatsService) PublishApiKeyWorkspaceRoleSync(roleID uint64) error {
+	return s.publishTask(
+		context.Background(),
+		"api_key.sync_workspace_role_permissions",
+		ApiKeyWorkspaceRoleSyncPayload{RoleID: roleID},
+	)
 }
 
 func (s *NatsService) PublishAnalyticsEvent(
