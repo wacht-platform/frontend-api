@@ -489,7 +489,7 @@ func (s *Service) GetAllowlistedAgents(deploymentID uint64, agentIDs []int64) ([
 						'agent_id', ai.agent_id::text,
 						'integration_type', ai.integration_type,
 						'name', ai.name,
-						'config', ai.config
+						'config', ai.config::text
 					)
 					ORDER BY ai.created_at DESC
 				)
