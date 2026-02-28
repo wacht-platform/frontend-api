@@ -620,6 +620,34 @@ func (s *NatsService) GetRateLimitKV(ctx context.Context) (jetstream.KeyValue, e
 	return kv, nil
 }
 
+func (s *NatsService) getAgentExecutionKV(ctx context.Context) (jetstream.KeyValue, error) {
+	kv, err := s.js.KeyValue(ctx, "agent_execution_kv")
+	if err != nil {
+		kv, err = s.js.CreateKeyValue(ctx, jetstream.KeyValueConfig{
+			Bucket: "agent_execution_kv",
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create agent execution key value bucket: %w", err)
+		}
+	}
+	return kv, nil
+}
+
+func (s *NatsService) SignalAgentExecutionCancellation(ctx context.Context, contextID uint64) error {
+	kv, err := s.getAgentExecutionKV(ctx)
+	if err != nil {
+		return err
+	}
+
+	key := fmt.Sprintf("%d", contextID)
+	marker := fmt.Sprintf("cancel:%d", time.Now().UnixNano())
+	if _, err := kv.Put(ctx, key, []byte(marker)); err != nil {
+		return fmt.Errorf("failed to signal agent execution cancellation: %w", err)
+	}
+
+	return nil
+}
+
 func (s *NatsService) PublishWebhookDelivery(ctx context.Context, deliveryID, deploymentID uint64) error {
 	taskPayload := map[string]interface{}{
 		"delivery_id":   deliveryID,

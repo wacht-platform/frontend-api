@@ -482,11 +482,11 @@ func (s *Service) GetAllowlistedAgents(deploymentID uint64, agentIDs []int64) ([
 			COALESCE((
 				SELECT json_agg(
 					json_build_object(
-						'id', ai.id,
+						'id', ai.id::text,
 						'created_at', ai.created_at,
 						'updated_at', ai.updated_at,
-						'deployment_id', ai.deployment_id,
-						'agent_id', ai.agent_id,
+						'deployment_id', ai.deployment_id::text,
+						'agent_id', ai.agent_id::text,
 						'integration_type', ai.integration_type,
 						'name', ai.name,
 						'config', ai.config

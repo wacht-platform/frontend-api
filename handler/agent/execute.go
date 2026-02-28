@@ -129,9 +129,11 @@ func (h *Handler) ExecuteAgent(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Context group required in token")
 	}
 
-	if _, err := h.service.GetContext(deployment.ID, &contextGroup, contextID); err != nil {
+	executionContext, err := h.service.GetContext(deployment.ID, &contextGroup, contextID)
+	if err != nil {
 		return handler.SendNotFound(c, nil, "Context not found or access denied")
 	}
+	hasRunningExecution := executionContext.Status == model.ExecutionStatusRunning
 
 	natsService := service.GetNATS()
 
@@ -156,16 +158,16 @@ func (h *Handler) ExecuteAgent(c *fiber.Ctx) error {
 
 	switch {
 	case req.ExecutionType.NewMessage != nil:
-		return h.handleNewMessage(c, deployment.ID, contextID, agentID, req.ExecutionType.NewMessage, multipartFiles, natsService)
+		return h.handleNewMessage(c, deployment.ID, contextID, agentID, req.ExecutionType.NewMessage, multipartFiles, natsService, hasRunningExecution)
 
 	case req.ExecutionType.UserInputResponse != nil:
-		return h.handleUserInputResponse(c, deployment.ID, contextID, agentID, req.ExecutionType.UserInputResponse, natsService)
+		return h.handleUserInputResponse(c, deployment.ID, contextID, agentID, req.ExecutionType.UserInputResponse, natsService, hasRunningExecution)
 
 	case req.ExecutionType.PlatformFunctionResult != nil:
 		return h.handlePlatformFunctionResult(c, deployment.ID, contextID, agentID, req.ExecutionType.PlatformFunctionResult, natsService)
 
 	case req.ExecutionType.Cancel != nil:
-		return h.handleCancel(c, deployment.ID, contextID)
+		return h.handleCancel(c, deployment.ID, contextID, natsService, hasRunningExecution)
 
 	default:
 		return handler.SendBadRequest(c, nil, "Invalid execution type")
@@ -179,6 +181,7 @@ func (h *Handler) handleNewMessage(
 	req *NewMessageRequest,
 	multipartFiles []*multipart.FileHeader,
 	natsService *service.NatsService,
+	hasRunningExecution bool,
 ) error {
 	if req.Message == "" && len(multipartFiles) == 0 {
 		return handler.SendBadRequest(c, nil, "Message or files required")
@@ -274,6 +277,15 @@ func (h *Handler) handleNewMessage(
 		return handler.SendInternalServerError(c, err, "Failed to create conversation")
 	}
 
+	if hasRunningExecution {
+		if err := natsService.SignalAgentExecutionCancellation(
+			context.Background(),
+			contextID,
+		); err != nil {
+			return handler.SendInternalServerError(c, err, "Failed to cancel previous execution")
+		}
+	}
+
 	if err := natsService.PublishAgentExecution(
 		context.Background(),
 		deploymentID,
@@ -297,6 +309,7 @@ func (h *Handler) handleUserInputResponse(
 	agentID *int64,
 	req *UserInputResponseRequest,
 	natsService *service.NatsService,
+	hasRunningExecution bool,
 ) error {
 	if req.Message == "" {
 		return handler.SendBadRequest(c, nil, "Message is required")
@@ -323,6 +336,15 @@ func (h *Handler) handleUserInputResponse(
 
 	if err := database.Connection.Create(&conversation).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to create conversation")
+	}
+
+	if hasRunningExecution {
+		if err := natsService.SignalAgentExecutionCancellation(
+			context.Background(),
+			contextID,
+		); err != nil {
+			return handler.SendInternalServerError(c, err, "Failed to cancel previous execution")
+		}
 	}
 
 	if err := natsService.PublishAgentExecution(
@@ -372,6 +394,8 @@ func (h *Handler) handlePlatformFunctionResult(
 func (h *Handler) handleCancel(
 	c *fiber.Ctx,
 	deploymentID, contextID uint64,
+	natsService *service.NatsService,
+	hasRunningExecution bool,
 ) error {
 	result := database.Connection.Model(&model.AgentExecutionContext{}).
 		Where("id = ? AND deployment_id = ?", contextID, deploymentID).
@@ -383,6 +407,15 @@ func (h *Handler) handleCancel(
 
 	if result.RowsAffected == 0 {
 		return handler.SendNotFound(c, nil, "Context not found")
+	}
+
+	if hasRunningExecution {
+		if err := natsService.SignalAgentExecutionCancellation(
+			context.Background(),
+			contextID,
+		); err != nil {
+			return handler.SendInternalServerError(c, err, "Failed to cancel execution")
+		}
 	}
 
 	return handler.SendSuccess(c, ExecuteAgentResponse{
