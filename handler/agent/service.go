@@ -46,14 +46,6 @@ type mcpOAuthState struct {
 	RedirectBack string `json:"redirect_back,omitempty"`
 }
 
-type mcpOAuthDiscovery struct {
-	authorizationEndpoint string
-	tokenEndpoint         string
-	registrationEndpoint  string
-	resource              string
-	scopes                []string
-}
-
 func NewService() *Service {
 	return &Service{
 		db: database.Connection,
@@ -572,21 +564,6 @@ func pkceChallenge(verifier string) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
-func parseBearerResourceMetadata(authHeader string) string {
-	for _, part := range strings.Split(authHeader, ",") {
-		part = strings.TrimSpace(part)
-		if !strings.HasPrefix(strings.ToLower(part), "resource_metadata=") {
-			continue
-		}
-		kv := strings.SplitN(part, "=", 2)
-		if len(kv) != 2 {
-			continue
-		}
-		return strings.Trim(kv[1], "\"")
-	}
-	return ""
-}
-
 func parseTokenExpiry(expiresIn any) *time.Time {
 	var seconds int64
 	switch value := expiresIn.(type) {
@@ -602,158 +579,6 @@ func parseTokenExpiry(expiresIn any) *time.Time {
 	}
 	expiresAt := time.Now().UTC().Add(time.Duration(seconds) * time.Second)
 	return &expiresAt
-}
-
-func (s *Service) discoverMcpOAuth(endpoint string) (*mcpOAuthDiscovery, error) {
-	httpClient := &http.Client{Timeout: 12 * time.Second}
-	request, err := http.NewRequest(http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build discovery request: %w", err)
-	}
-
-	response, err := httpClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to probe MCP endpoint: %w", err)
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusUnauthorized && response.StatusCode != http.StatusForbidden {
-		return nil, nil
-	}
-
-	wwwAuth := response.Header.Get("Www-Authenticate")
-	resourceMetadataURL := parseBearerResourceMetadata(wwwAuth)
-	if resourceMetadataURL == "" {
-		return nil, fmt.Errorf("missing resource_metadata in WWW-Authenticate")
-	}
-
-	resourceResponse, err := httpClient.Get(resourceMetadataURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch protected resource metadata: %w", err)
-	}
-	defer resourceResponse.Body.Close()
-
-	resourceBody, err := io.ReadAll(resourceResponse.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read protected resource metadata: %w", err)
-	}
-
-	var resourceMetadata map[string]any
-	if err := json.Unmarshal(resourceBody, &resourceMetadata); err != nil {
-		return nil, fmt.Errorf("failed to parse protected resource metadata: %w", err)
-	}
-
-	var authServer string
-	if authorizationServers, ok := resourceMetadata["authorization_servers"].([]any); ok && len(authorizationServers) > 0 {
-		if server, ok := authorizationServers[0].(string); ok {
-			authServer = strings.TrimRight(server, "/")
-		}
-	}
-	if authServer == "" {
-		if parsedResource, err := url.Parse(resourceMetadataURL); err == nil {
-			authServer = parsedResource.Scheme + "://" + parsedResource.Host
-		}
-	}
-	if authServer == "" {
-		return nil, fmt.Errorf("failed to resolve authorization server")
-	}
-
-	authMetadataURL := authServer + "/.well-known/oauth-authorization-server"
-	authResponse, err := httpClient.Get(authMetadataURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch authorization metadata: %w", err)
-	}
-	if authResponse.StatusCode >= 400 {
-		authResponse.Body.Close()
-		return nil, fmt.Errorf("authorization metadata request failed: %d", authResponse.StatusCode)
-	}
-	defer authResponse.Body.Close()
-
-	authBody, err := io.ReadAll(authResponse.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read authorization metadata: %w", err)
-	}
-
-	var authMetadata map[string]any
-	if err := json.Unmarshal(authBody, &authMetadata); err != nil {
-		return nil, fmt.Errorf("failed to parse authorization metadata: %w", err)
-	}
-
-	authorizationEndpoint, _ := authMetadata["authorization_endpoint"].(string)
-	tokenEndpoint, _ := authMetadata["token_endpoint"].(string)
-	registrationEndpoint, _ := authMetadata["registration_endpoint"].(string)
-	if authorizationEndpoint == "" || tokenEndpoint == "" {
-		return nil, fmt.Errorf("authorization metadata missing required endpoints")
-	}
-
-	scopes := make([]string, 0)
-	if supportedScopes, ok := resourceMetadata["scopes_supported"].([]any); ok {
-		for _, value := range supportedScopes {
-			scope, ok := value.(string)
-			if ok && strings.TrimSpace(scope) != "" {
-				scopes = append(scopes, scope)
-			}
-		}
-	}
-
-	resource, _ := resourceMetadata["resource"].(string)
-
-	return &mcpOAuthDiscovery{
-		authorizationEndpoint: authorizationEndpoint,
-		tokenEndpoint:         tokenEndpoint,
-		registrationEndpoint:  registrationEndpoint,
-		resource:              resource,
-		scopes:                scopes,
-	}, nil
-}
-
-func (s *Service) registerOAuthClient(discovery *mcpOAuthDiscovery, redirectURI string) (string, error) {
-	if discovery.registrationEndpoint == "" {
-		return "", fmt.Errorf("authorization server does not expose a registration endpoint")
-	}
-
-	body := map[string]any{
-		"client_name":               "Wacht MCP Client",
-		"redirect_uris":             []string{redirectURI},
-		"grant_types":               []string{"authorization_code"},
-		"response_types":            []string{"code"},
-		"token_endpoint_auth_method": "none",
-	}
-	bodyBytes, err := json.Marshal(body)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal registration request: %w", err)
-	}
-
-	request, err := http.NewRequest(http.MethodPost, discovery.registrationEndpoint, strings.NewReader(string(bodyBytes)))
-	if err != nil {
-		return "", fmt.Errorf("failed to build registration request: %w", err)
-	}
-	request.Header.Set("Content-Type", "application/json")
-
-	httpClient := &http.Client{Timeout: 12 * time.Second}
-	response, err := httpClient.Do(request)
-	if err != nil {
-		return "", fmt.Errorf("failed to register OAuth client: %w", err)
-	}
-	defer response.Body.Close()
-
-	raw, err := io.ReadAll(response.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read registration response: %w", err)
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return "", fmt.Errorf("client registration failed (%d): %s", response.StatusCode, string(raw))
-	}
-
-	var payload map[string]any
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		return "", fmt.Errorf("failed to parse registration response: %w", err)
-	}
-	clientID, _ := payload["client_id"].(string)
-	if clientID == "" {
-		return "", fmt.Errorf("registration response missing client_id")
-	}
-	return clientID, nil
 }
 
 func (s *Service) exchangeMcpAuthorizationCode(
@@ -1077,14 +902,14 @@ func (s *Service) CompleteMcpOAuthConnection(
 	expiresAt := parseTokenExpiry(tokenPayload["expires_in"])
 
 	connectionMetadata := map[string]any{
-		"auth_type":      authType,
-		"access_token":   accessToken,
-		"refresh_token":  refreshToken,
-		"token_type":     tokenType,
-		"scope":          scope,
-		"token_url":      state.TokenURL,
-		"resource":       state.Resource,
-		"connected_at":   time.Now().UTC(),
+		"auth_type":       authType,
+		"access_token":    accessToken,
+		"refresh_token":   refreshToken,
+		"token_type":      tokenType,
+		"scope":           scope,
+		"token_url":       state.TokenURL,
+		"resource":        state.Resource,
+		"connected_at":    time.Now().UTC(),
 		"oauth_client_id": state.ClientID,
 	}
 	if expiresAt != nil {
