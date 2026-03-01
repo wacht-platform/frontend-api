@@ -8,7 +8,7 @@ import (
 func setupAgentRoutes(app *fiber.App) {
 	h := agent.NewHandler()
 
-	agentGroup := app.Group("/api/agent")
+	agentGroup := app.Group("/agent")
 
 	agentGroup.Get("/contexts", h.ListContexts)
 	agentGroup.Get("/session", h.GetSession)
