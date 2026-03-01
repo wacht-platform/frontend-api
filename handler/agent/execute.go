@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"net/http"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -72,6 +73,17 @@ type ConversationContent struct {
 	Message    string           `json:"message"`
 	SenderName *string          `json:"sender_name,omitempty"`
 	Files      []StoredFileData `json:"files,omitempty"`
+}
+
+var nonURLFriendlyFilenameChars = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
+
+func sanitizeUploadFilename(name string) (string, error) {
+	sanitized := nonURLFriendlyFilenameChars.ReplaceAllString(name, "_")
+	sanitized = strings.Trim(sanitized, "_")
+	if sanitized == "" {
+		return "", fmt.Errorf("invalid filename")
+	}
+	return sanitized, nil
 }
 
 func (h *Handler) ExecuteAgent(c *fiber.Ctx) error {
@@ -203,9 +215,10 @@ func (h *Handler) handleNewMessage(
 			}
 			defer file.Close()
 
-			safeFilename := strings.ReplaceAll(fileHeader.Filename, "/", "_")
-			safeFilename = strings.ReplaceAll(safeFilename, "\\", "_")
-			safeFilename = strings.ReplaceAll(safeFilename, "..", "_")
+			safeFilename, err := sanitizeUploadFilename(fileHeader.Filename)
+			if err != nil {
+				return handler.SendBadRequest(c, nil, "Invalid filename")
+			}
 
 			uniqueFilename := fmt.Sprintf("%d_%s", idgen.NextID(), safeFilename)
 

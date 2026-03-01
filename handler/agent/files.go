@@ -31,7 +31,6 @@ func (h *Handler) ServeFile(c *fiber.Ctx) error {
 
 	deployment := handler.GetDeployment(c)
 
-	// Verify context access (context_group check happens in GetContext)
 	_, err = h.service.GetContext(deployment.ID, contextGroup, contextID)
 	if err != nil {
 		return handler.SendNotFound(c, nil, "Context not found or access denied")
