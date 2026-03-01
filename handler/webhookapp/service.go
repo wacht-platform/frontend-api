@@ -604,8 +604,13 @@ func (s *Service) UpdateFailureNotificationEmails(deploymentID uint64, appSlug s
 		return nil, err
 	}
 
+	normalizedJSON, err := json.Marshal(normalized)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal failure_notification_emails: %w", err)
+	}
+
 	update := map[string]any{
-		"failure_notification_emails": normalized,
+		"failure_notification_emails": gorm.Expr("?::jsonb", string(normalizedJSON)),
 		"updated_at":                  time.Now(),
 	}
 
