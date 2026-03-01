@@ -83,7 +83,7 @@ func GetPrelude() *PreludeService {
 }
 
 func (p *PreludeService) SendVerification(phoneNumber string, deploymentID, userID uint64, clientIP, userAgent string) (*CreateVerificationResponse, error) {
-	callbackURL := fmt.Sprintf("%s/webhooks/dodo/%d",
+	callbackURL := fmt.Sprintf("%s/public/webhooks/prelude/%d",
 		config.GetEnv("PLATFORM_API_URL", "https://platform.wacht.dev"),
 		deploymentID)
 
