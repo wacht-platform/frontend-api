@@ -217,7 +217,8 @@ func refreshSession(c *fiber.Ctx, expJwt jwt.Token, deployment model.Deployment)
 	})
 
 	if err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to refresh session")
+		log.Println("Failed to refresh session, issuing new session:", err)
+		return handleNewSession(c, deployment)
 	}
 
 	if finalRotatingTokenID == 0 {

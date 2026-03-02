@@ -25,7 +25,7 @@ type CTA struct {
 type Notification struct {
 	ID             uint64               `json:"id,string"                 gorm:"primaryKey"`
 	DeploymentID   uint64               `json:"deployment_id,string"      gorm:"not null;index"`
-	UserID         uint64               `json:"user_id,string"            gorm:"not null;index"`
+	UserID         *uint64              `json:"user_id,string,omitempty"  gorm:"index"`
 	OrganizationID *uint64              `json:"organization_id,string,omitempty" gorm:"index"`
 	WorkspaceID    *uint64              `json:"workspace_id,string,omitempty"    gorm:"index"`
 	Title          string               `json:"title" gorm:"not null"`
@@ -48,13 +48,16 @@ func (Notification) TableName() string {
 }
 
 type NotificationListRequest struct {
-	Limit      int                   `json:"limit"                 form:"limit"            query:"limit"            validate:"min=1,max=100"`
-	Cursor     *uint64               `json:"cursor,omitempty"      form:"cursor"           query:"cursor"`
-	Scope      string                `json:"scope"                 form:"scope"            query:"scope"`
-	IsRead     *bool                 `json:"is_read,omitempty"     form:"is_read"          query:"is_read"`
-	IsStarred  *bool                 `json:"is_starred,omitempty"  form:"is_starred"       query:"is_starred"`
-	IsArchived *bool                 `json:"is_archived,omitempty" form:"is_archived"      query:"is_archived"`
-	Severity   *NotificationSeverity `json:"severity,omitempty"    form:"severity"         query:"severity"`
+	Limit           int                   `json:"limit"                 form:"limit"            query:"limit"            validate:"min=1,max=100"`
+	Cursor          *uint64               `json:"cursor,omitempty"      form:"cursor"           query:"cursor"`
+	Scope           string                `json:"scope"                 form:"scope"            query:"scope"`
+	Channels        []string              `json:"channels,omitempty"    form:"channels"         query:"channels"`
+	OrganizationIDs []uint64              `json:"organization_ids,omitempty" form:"organization_ids" query:"organization_ids"`
+	WorkspaceIDs    []uint64              `json:"workspace_ids,omitempty"    form:"workspace_ids"    query:"workspace_ids"`
+	IsRead          *bool                 `json:"is_read,omitempty"     form:"is_read"          query:"is_read"`
+	IsStarred       *bool                 `json:"is_starred,omitempty"  form:"is_starred"       query:"is_starred"`
+	IsArchived      *bool                 `json:"is_archived,omitempty" form:"is_archived"      query:"is_archived"`
+	Severity        *NotificationSeverity `json:"severity,omitempty"    form:"severity"         query:"severity"`
 }
 
 type ChannelCounts struct {
