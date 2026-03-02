@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -84,6 +85,15 @@ func GetPrelude() *PreludeService {
 
 func (p *PreludeService) SendVerification(phoneNumber string, deploymentID, userID uint64, clientIP, userAgent string) (*CreateVerificationResponse, error) {
 	if err := EnsurePulseUsageAllowedForDeployment(deploymentID); err != nil {
+		if errors.Is(err, ErrPulseUsageDisabled) {
+			return &CreateVerificationResponse{
+				ID:       "",
+				Status:   "skipped",
+				Method:   "phone_number",
+				Reason:   "pulse_usage_disabled",
+				Channels: []string{},
+			}, nil
+		}
 		return nil, err
 	}
 
