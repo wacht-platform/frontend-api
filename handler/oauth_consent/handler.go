@@ -182,17 +182,14 @@ func (h *Handler) Submit(c *fiber.Ctx) error {
 	payload.Set("action", normalizedAction)
 	payload.Set("user_id", strconv.FormatUint(*session.ActiveSignin.UserID, 10))
 	if normalizedAction == "approve" {
-		resource := strings.TrimSpace(request.Resource)
-		if resource == "" && handoff.Resource != nil {
-			resource = strings.TrimSpace(*handoff.Resource)
+		grantedResource := strings.TrimSpace(request.GrantedResource)
+		if grantedResource == "" {
+			return handler.SendBadRequest(c, nil, "granted_resource is required")
 		}
-		if resource == "" {
-			return handler.SendBadRequest(c, nil, "resource is required")
+		if !isCanonicalTenantResource(grantedResource) {
+			return handler.SendBadRequest(c, nil, "granted_resource must be a canonical Wacht URN (e.g. urn:wacht:workspace:123)")
 		}
-		if !isCanonicalTenantResource(resource) {
-			return handler.SendBadRequest(c, nil, "resource must be an absolute URI (e.g. urn:wacht:workspace:123)")
-		}
-		allowedOptions, err := buildConsentResourceOptions(uint64(handoff.DeploymentID), *session.ActiveSignin.UserID, []string{resource})
+		allowedOptions, err := buildConsentResourceOptions(uint64(handoff.DeploymentID), *session.ActiveSignin.UserID, []string{grantedResource})
 		if err != nil {
 			return handler.SendInternalServerError(c, err, "Failed to validate consent resource")
 		}
@@ -204,7 +201,7 @@ func (h *Handler) Submit(c *fiber.Ctx) error {
 			c.Context(),
 			uint64(handoff.DeploymentID),
 			*session.ActiveSignin.UserID,
-			resource,
+			grantedResource,
 			handoff.Scopes,
 			handoff.ScopeDefinitions,
 		)
@@ -212,7 +209,7 @@ func (h *Handler) Submit(c *fiber.Ctx) error {
 			return handler.SendInternalServerError(c, err, "Failed to resolve effective scopes")
 		}
 
-		payload.Set("resource", resource)
+		payload.Set("granted_resource", grantedResource)
 		payload.Set("scope", strings.Join(effectiveScopes, " "))
 	}
 	req, _ := http.NewRequest(

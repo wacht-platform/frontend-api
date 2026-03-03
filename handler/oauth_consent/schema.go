@@ -1,9 +1,10 @@
 package oauth_consent
 
 type submitConsentRequest struct {
-	Action    string `json:"action" form:"action" validate:"required"`
-	Resource  string `json:"resource" form:"resource"`
-	CSRFToken string `json:"csrf_token" form:"csrf_token" validate:"required"`
+	Action          string `json:"action" form:"action" validate:"required"`
+	Resource        string `json:"resource" form:"resource"`
+	GrantedResource string `json:"granted_resource" form:"granted_resource"`
+	CSRFToken       string `json:"csrf_token" form:"csrf_token" validate:"required"`
 }
 
 type oauthConsentHandoffPayload struct {
