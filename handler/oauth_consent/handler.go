@@ -193,7 +193,7 @@ func (h *Handler) Submit(c *fiber.Ctx) error {
 		if !isCanonicalTenantResource(resource) {
 			return handler.SendBadRequest(c, nil, "resource must be an absolute URI (e.g. urn:wacht:workspace:123)")
 		}
-		allowedOptions, err := buildConsentResourceOptions(c.Context(), uint64(handoff.DeploymentID), *session.ActiveSignin.UserID, []string{resource})
+		allowedOptions, err := buildConsentResourceOptions(uint64(handoff.DeploymentID), *session.ActiveSignin.UserID, []string{resource})
 		if err != nil {
 			return handler.SendInternalServerError(c, err, "Failed to validate consent resource")
 		}
