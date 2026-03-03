@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -221,15 +220,6 @@ func (h *Handler) Submit(c *fiber.Ctx) error {
 		handoff.Issuer+"/oauth/consent/submit",
 		strings.NewReader(payload.Encode()),
 	)
-	log.Printf(
-		"[oauth_consent.submit] forwarding to oauth api session_id=%d deployment_id=%d handoff_id=%s issuer=%s upstream_url=%s action=%s",
-		session.ID,
-		deployment.ID,
-		handoffID,
-		handoff.Issuer,
-		handoff.Issuer+"/oauth/consent/submit",
-		normalizedAction,
-	)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	if secret := oauthConsentSubmitSecret(); secret != "" {
 		req.Header.Set("X-OAuth-Consent-Secret", secret)
@@ -237,38 +227,15 @@ func (h *Handler) Submit(c *fiber.Ctx) error {
 
 	resp, err := h.httpClientNoRedirect.Do(req)
 	if err != nil {
-		log.Printf(
-			"[oauth_consent.submit] oauth api call failed session_id=%d deployment_id=%d handoff_id=%s upstream_url=%s err=%v",
-			session.ID,
-			deployment.ID,
-			handoffID,
-			handoff.Issuer+"/oauth/consent/submit",
-			err,
-		)
 		return handler.SendBadRequest(c, nil, "Failed to submit OAuth consent action")
 	}
 	defer resp.Body.Close()
 
 	location := strings.TrimSpace(resp.Header.Get("Location"))
-	log.Printf(
-		"[oauth_consent.submit] oauth api response session_id=%d deployment_id=%d handoff_id=%s upstream_status=%d upstream_location=%q",
-		session.ID,
-		deployment.ID,
-		handoffID,
-		resp.StatusCode,
-		location,
-	)
 	if (resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusSeeOther || resp.StatusCode == http.StatusTemporaryRedirect || resp.StatusCode == http.StatusPermanentRedirect) && location != "" {
 		_ = deleteOAuthConsentHandoff(c.Context(), handoffID)
 		_ = deleteSessionConsentHandoff(c.Context(), session.ID)
 		_ = deleteSessionConsentCSRFToken(c.Context(), session.ID, handoffID)
-		log.Printf(
-			"[oauth_consent.submit] redirecting browser session_id=%d deployment_id=%d handoff_id=%s redirect_location=%q",
-			session.ID,
-			deployment.ID,
-			handoffID,
-			location,
-		)
 		return c.Redirect(location, fiber.StatusFound)
 	}
 
