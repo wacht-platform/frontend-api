@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
@@ -80,7 +81,29 @@ func GetDeploymentOAuthCredentials(
 		Error
 	if err == nil && socialConnection.Credentials != nil {
 		creds := *socialConnection.Credentials
-		return &creds, nil
+		hasClientID := strings.TrimSpace(creds.ClientID) != ""
+		hasClientSecret := strings.TrimSpace(creds.ClientSecret) != ""
+
+		if hasClientID && hasClientSecret {
+			if len(creds.Scopes) == 0 {
+				// Keep sensible defaults when custom credentials omit scopes.
+				creds.Scopes = GetDefaultOAuthCredentials(string(provider)).Scopes
+			}
+			return &creds, nil
+		}
+
+		if deployment.Mode == model.DeploymentModeProduction {
+			if !hasClientID {
+				return nil, fmt.Errorf(
+					"oauth credentials for provider %s are missing client_id",
+					provider,
+				)
+			}
+			return nil, fmt.Errorf(
+				"oauth credentials for provider %s are missing client_secret",
+				provider,
+			)
+		}
 	}
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, fmt.Errorf(
