@@ -108,6 +108,18 @@ func GetOAuthConfigForDeployment(
 	if err != nil {
 		return nil, err
 	}
+	if strings.TrimSpace(cred.ClientID) == "" {
+		return nil, fmt.Errorf(
+			"oauth credentials for provider %s are missing client_id",
+			provider,
+		)
+	}
+	if strings.TrimSpace(cred.ClientSecret) == "" {
+		return nil, fmt.Errorf(
+			"oauth credentials for provider %s are missing client_secret",
+			provider,
+		)
+	}
 
 	conf := &oauth2.Config{
 		ClientID:     cred.ClientID,

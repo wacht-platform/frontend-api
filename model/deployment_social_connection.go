@@ -53,9 +53,10 @@ func (p SocialConnectionProvider) VerificationStrategy() VerificationStrategy {
 }
 
 type OauthCredentials struct {
-	ClientID     string
-	ClientSecret string
-	Scopes       []string
+	ClientID     string   `json:"client_id"`
+	ClientSecret string   `json:"client_secret"`
+	Scopes       []string `json:"scopes"`
+	RedirectURI  string   `json:"redirect_uri,omitempty"`
 }
 
 func (o *OauthCredentials) Scan(value any) error {
@@ -67,9 +68,12 @@ func (o *OauthCredentials) Scan(value any) error {
 	}
 
 	result := OauthCredentials{}
-	err := json.Unmarshal(bytes, &result)
-	*o = OauthCredentials(result)
-	return err
+	if err := json.Unmarshal(bytes, &result); err != nil {
+		return err
+	}
+
+	*o = result
+	return nil
 }
 
 func (o *OauthCredentials) Value() (driver.Value, error) {
