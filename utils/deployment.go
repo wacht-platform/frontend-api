@@ -33,19 +33,19 @@ func GetDeploymentByHost(host string) (*model.Deployment, error) {
 			dds.*, 
 			dr.*, 
 			kp.*,
-			COALESCE(
-				(SELECT json_agg(json_build_object(
-					'id', sc.id::text,
-					'created_at', to_char(sc.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
-					'updated_at', to_char(sc.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
-					'deployment_id', sc.deployment_id,
-					'provider', sc.provider,
-					'enabled', sc.enabled
-				))
-				 FROM deployment_social_connections sc
-				 WHERE sc.deployment_id = d.id AND sc.deleted_at IS NULL
-				), '[]'::json
-			) as social_connections
+				COALESCE(
+					(SELECT json_agg(json_build_object(
+						'id', sc.id::text,
+						'created_at', to_char(sc.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+						'updated_at', to_char(sc.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+						'deployment_id', sc.deployment_id,
+						'provider', sc.provider,
+						'enabled', sc.enabled
+					))
+					 FROM deployment_social_connections sc
+					 WHERE sc.deployment_id = d.id AND sc.deleted_at IS NULL
+					), '[]'::json
+				) as social_connections
 		FROM deployments d
 		LEFT JOIN deployment_auth_settings das ON d.id = das.deployment_id
 		LEFT JOIN deployment_b2b_settings dbs ON d.id = dbs.deployment_id
@@ -67,7 +67,9 @@ func GetDeploymentByHost(host string) (*model.Deployment, error) {
 	deployment.Restrictions = queryResult.Restrictions
 
 	if queryResult.SocialConnections != nil && string(queryResult.SocialConnections) != "null" {
-		json.Unmarshal(queryResult.SocialConnections, &deployment.SocialConnections)
+		if err := json.Unmarshal(queryResult.SocialConnections, &deployment.SocialConnections); err != nil {
+			return nil, fmt.Errorf("failed to parse social connections: %w", err)
+		}
 	} else {
 		deployment.SocialConnections = []model.DeploymentSocialConnection{}
 	}

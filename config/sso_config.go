@@ -3,7 +3,10 @@ package config
 import (
 	"fmt"
 
+	"github.com/ilabs/wacht-fe/database"
 	"github.com/ilabs/wacht-fe/model"
+	"gorm.io/gorm"
+	"gorm.io/plugin/dbresolver"
 )
 
 func getSSOConfig() map[string]model.OauthCredentials {
@@ -60,11 +63,31 @@ func GetDeploymentOAuthCredentials(
 	deployment *model.Deployment,
 	provider model.SocialConnectionProvider,
 ) (*model.OauthCredentials, error) {
-	for _, conn := range deployment.SocialConnections {
-		if conn.Provider == provider && conn.Enabled && conn.Credentials != nil {
-			creds := *conn.Credentials
-			return &creds, nil
-		}
+	if deployment == nil {
+		return nil, fmt.Errorf("deployment is required")
+	}
+
+	var socialConnection model.DeploymentSocialConnection
+	err := database.Connection.
+		Clauses(dbresolver.Read).
+		Where(
+			"deployment_id = ? AND provider = ? AND enabled = ? AND deleted_at IS NULL",
+			deployment.ID,
+			provider,
+			true,
+		).
+		First(&socialConnection).
+		Error
+	if err == nil && socialConnection.Credentials != nil {
+		creds := *socialConnection.Credentials
+		return &creds, nil
+	}
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, fmt.Errorf(
+			"failed to load OAuth credentials for provider %s: %w",
+			provider,
+			err,
+		)
 	}
 
 	if deployment.Mode != model.DeploymentModeProduction {

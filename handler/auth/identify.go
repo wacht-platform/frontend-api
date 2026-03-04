@@ -76,11 +76,6 @@ func (h *Handler) Identify(c *fiber.Ctx) error {
 func isSocialProviderConfigured(deployment model.Deployment, provider model.SocialConnectionProvider) bool {
 	for _, conn := range deployment.SocialConnections {
 		if conn.Provider == provider && conn.Enabled {
-			if deployment.IsProduction() {
-				return conn.Credentials != nil &&
-					conn.Credentials.ClientID != "" &&
-					conn.Credentials.ClientSecret != ""
-			}
 			return true
 		}
 	}
