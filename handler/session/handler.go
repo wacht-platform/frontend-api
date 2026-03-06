@@ -213,7 +213,7 @@ func (h *Handler) SwitchOrganization(
 
 	rawSQL := `
 		WITH member_info AS (
-			SELECT 
+			SELECT
 				om.id as membership_id,
 				o.whitelisted_ips as org_ips,
 				o.enforce_mfa_setup as org_mfa_setup,
@@ -231,11 +231,11 @@ func (h *Handler) SwitchOrganization(
 			LIMIT 1
 		),
 		eligibility AS (
-			SELECT 
+			SELECT
 				m.*,
-				CASE 
+				CASE
 					WHEN m.is_admin THEN 'none'
-					WHEN ? AND m.org_ip_restriction AND cardinality(m.org_ips) > 0 AND NOT (?::inet <<= ANY(m.org_ips::inet[])) 
+					WHEN ? AND m.org_ip_restriction AND cardinality(m.org_ips) > 0 AND NOT (?::inet <<= ANY(m.org_ips::inet[]))
 						 AND ? AND m.org_mfa_setup AND NOT m.user_has_mfa THEN 'ip_and_mfa_required'
 					WHEN ? AND m.org_ip_restriction AND cardinality(m.org_ips) > 0 AND NOT (?::inet <<= ANY(m.org_ips::inet[])) THEN 'ip_not_allowed'
 					WHEN ? AND m.org_mfa_setup AND NOT m.user_has_mfa THEN 'mfa_required'
@@ -244,7 +244,7 @@ func (h *Handler) SwitchOrganization(
 			FROM member_info m
 		),
 		do_update_user AS (
-			UPDATE users 
+			UPDATE users
 			SET active_organization_membership_id = e.membership_id,
 				active_workspace_membership_id = NULL
 			FROM eligibility e
@@ -341,7 +341,7 @@ func (h *Handler) SwitchWorkspace(
 
 	rawSQL := `
 		WITH member_info AS (
-			SELECT 
+			SELECT
 				wm.id as membership_id,
 				wm.organization_membership_id as org_membership_id,
 				w.whitelisted_ips as ws_ips,
@@ -365,11 +365,11 @@ func (h *Handler) SwitchWorkspace(
 			LIMIT 1
 		),
 		eligibility AS (
-			SELECT 
+			SELECT
 				m.*,
-				CASE 
+				CASE
 					WHEN m.is_admin THEN 'none'
-					WHEN ? AND m.ws_ip_restriction AND cardinality(m.ws_ips) > 0 AND NOT (?::inet <<= ANY(m.ws_ips::inet[])) 
+					WHEN ? AND m.ws_ip_restriction AND cardinality(m.ws_ips) > 0 AND NOT (?::inet <<= ANY(m.ws_ips::inet[]))
 						 AND ? AND m.ws_mfa_setup AND NOT m.user_has_mfa THEN 'ip_and_mfa_required'
 					WHEN ? AND m.ws_ip_restriction AND cardinality(m.ws_ips) > 0 AND NOT (?::inet <<= ANY(m.ws_ips::inet[])) THEN 'ip_not_allowed'
 					WHEN ? AND m.ws_mfa_setup AND NOT m.user_has_mfa THEN 'mfa_required'
@@ -378,7 +378,7 @@ func (h *Handler) SwitchWorkspace(
 			FROM member_info m
 		),
 		do_update_user AS (
-			UPDATE users 
+			UPDATE users
 			SET active_workspace_membership_id = e.membership_id,
 				active_organization_membership_id = e.org_membership_id
 			FROM eligibility e
@@ -477,7 +477,6 @@ func (h *Handler) GetToken(
 		return handler.SendInternalServerError(c, nil, "Failed to generate token")
 	}
 
-	tok.Set("session_id", strconv.FormatUint(session.ID, 10))
 	tok.Set("sid", strconv.FormatUint(session.ID, 10))
 
 	tokenPermissions := map[string][]string{}
@@ -491,10 +490,15 @@ func (h *Handler) GetToken(
 		}
 		permissions := slices.Collect(maps.Keys(permissionsMap))
 		tokenPermissions["organization"] = permissions
-		tok.Set(
-			"organization",
-			strconv.FormatUint(session.ActiveSignin.ActiveOrganizationMembership.OrganizationID, 10),
-		)
+
+		var organizationID uint64
+		if session.ActiveSignin.ActiveOrganizationMembership.Organization != nil {
+			organizationID = session.ActiveSignin.ActiveOrganizationMembership.OrganizationID
+		}
+
+		if organizationID != 0 {
+			tok.Set("organization", strconv.FormatUint(organizationID, 10))
+		}
 	}
 	if session.ActiveSignin.ActiveWorkspaceMembership != nil {
 		permissionsMap := map[string]bool{}
@@ -505,7 +509,15 @@ func (h *Handler) GetToken(
 		}
 		permissions := slices.Collect(maps.Keys(permissionsMap))
 		tokenPermissions["workspace"] = permissions
-		tok.Set("workspace", strconv.FormatUint(session.ActiveSignin.ActiveWorkspaceMembership.WorkspaceID, 10))
+
+		var workspaceID uint64
+		if session.ActiveSignin.ActiveWorkspaceMembership.Workspace != nil {
+			workspaceID = session.ActiveSignin.ActiveWorkspaceMembership.WorkspaceID
+		}
+
+		if workspaceID != 0 {
+			tok.Set("workspace", strconv.FormatUint(workspaceID, 10))
+		}
 	}
 
 	tok.Set("permissions", tokenPermissions)
