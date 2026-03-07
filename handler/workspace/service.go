@@ -5,8 +5,8 @@ import (
 	"mime/multipart"
 	"path/filepath"
 
-	"github.com/ilabs/wacht-fe/model"
-	"github.com/ilabs/wacht-fe/service"
+	"github.com/wacht-platform/frontend-api/model"
+	"github.com/wacht-platform/frontend-api/service"
 	"gorm.io/gorm"
 )
 

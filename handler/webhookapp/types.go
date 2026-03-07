@@ -1,7 +1,7 @@
 package webhookapp
 
 import (
-	"github.com/ilabs/wacht-fe/model"
+	"github.com/wacht-platform/frontend-api/model"
 )
 
 type EndpointWithSubscriptions struct {

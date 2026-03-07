@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ilabs/wacht-fe/config"
+	"github.com/wacht-platform/frontend-api/config"
 )
 
 type PreludeService struct {

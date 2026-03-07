@@ -2,7 +2,7 @@ package router
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/handler/notification"
+	"github.com/wacht-platform/frontend-api/handler/notification"
 )
 
 func setupNotificationRoutes(app *fiber.App) {

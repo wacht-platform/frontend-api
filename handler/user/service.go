@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ilabs/wacht-fe/database"
-	"github.com/ilabs/wacht-fe/handler"
-	"github.com/ilabs/wacht-fe/model"
-	"github.com/ilabs/wacht-fe/service"
+	"github.com/wacht-platform/frontend-api/database"
+	"github.com/wacht-platform/frontend-api/handler"
+	"github.com/wacht-platform/frontend-api/model"
+	"github.com/wacht-platform/frontend-api/service"
 	"gorm.io/gorm"
 )
 

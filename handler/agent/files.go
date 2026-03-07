@@ -8,8 +8,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/config"
-	"github.com/ilabs/wacht-fe/handler"
+	"github.com/wacht-platform/frontend-api/config"
+	"github.com/wacht-platform/frontend-api/handler"
 )
 
 func (h *Handler) ServeFile(c *fiber.Ctx) error {

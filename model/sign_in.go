@@ -3,7 +3,7 @@ package model
 import (
 	"time"
 
-	"github.com/ilabs/wacht-fe/pkg/idgen"
+	"github.com/wacht-platform/frontend-api/pkg/idgen"
 )
 
 type Signin struct {

@@ -3,7 +3,7 @@ package user
 import (
 	"time"
 
-	"github.com/ilabs/wacht-fe/model"
+	"github.com/wacht-platform/frontend-api/model"
 )
 
 type UpdateUserSchema struct {

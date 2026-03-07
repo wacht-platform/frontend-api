@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ilabs/wacht-fe/database"
+	"github.com/wacht-platform/frontend-api/database"
 )
 
 const (

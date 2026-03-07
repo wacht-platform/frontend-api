@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/ilabs/wacht-fe/model"
+	"github.com/wacht-platform/frontend-api/model"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -30,7 +30,7 @@ func SyncUser(db *gorm.DB, userID uint64) error {
 	}
 
 	err := db.Raw(`
-		SELECT 
+		SELECT
 			u.id, u.deployment_id, u.first_name, u.last_name, u.username, u.profile_picture_url,
 			COALESCE(pe.email_address, '') as primary_email
 		FROM users u
@@ -62,16 +62,16 @@ func SyncUser(db *gorm.DB, userID uint64) error {
 
 	err = db.Raw(`
 		WITH user_orgs AS (
-			SELECT id, organization_id 
-			FROM organization_memberships 
+			SELECT id, organization_id
+			FROM organization_memberships
 			WHERE user_id = ? AND deleted_at IS NULL
 		)
-		SELECT 
+		SELECT
 			COALESCE((SELECT json_agg(organization_id) FROM user_orgs), '[]'::json) as ids,
 			COALESCE(
-				(SELECT json_agg(DISTINCT omr.organization_role_id) 
-				 FROM organization_membership_roles omr 
-				 JOIN user_orgs uo ON omr.organization_membership_id = uo.id), 
+				(SELECT json_agg(DISTINCT omr.organization_role_id)
+				 FROM organization_membership_roles omr
+				 JOIN user_orgs uo ON omr.organization_membership_id = uo.id),
 				'[]'::json
 			) as roles
 	`, userID).Scan(&orgData).Error
@@ -85,16 +85,16 @@ func SyncUser(db *gorm.DB, userID uint64) error {
 	}
 	err = db.Raw(`
 		WITH user_workspaces AS (
-			SELECT id, workspace_id 
-			FROM workspace_memberships 
+			SELECT id, workspace_id
+			FROM workspace_memberships
 			WHERE user_id = ? AND deleted_at IS NULL
 		)
-		SELECT 
+		SELECT
 			COALESCE((SELECT json_agg(workspace_id) FROM user_workspaces), '[]'::json) as ids,
 			COALESCE(
-				(SELECT json_agg(DISTINCT wmr.workspace_role_id) 
-				 FROM workspace_membership_roles wmr 
-				 JOIN user_workspaces uw ON wmr.workspace_membership_id = uw.id), 
+				(SELECT json_agg(DISTINCT wmr.workspace_role_id)
+				 FROM workspace_membership_roles wmr
+				 JOIN user_workspaces uw ON wmr.workspace_membership_id = uw.id),
 				'[]'::json
 			) as roles
 	`, userID).Scan(&wsData).Error

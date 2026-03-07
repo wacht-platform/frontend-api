@@ -4,7 +4,7 @@ import (
 	"net"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/handler"
+	"github.com/wacht-platform/frontend-api/handler"
 )
 
 func checkIPAllowlist(c *fiber.Ctx, clientIP string, whitelistedIPs []string) error {

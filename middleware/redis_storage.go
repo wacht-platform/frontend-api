@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/ilabs/wacht-fe/database"
 	"github.com/redis/go-redis/v9"
+	"github.com/wacht-platform/frontend-api/database"
 )
 
 type RedisStorage struct {

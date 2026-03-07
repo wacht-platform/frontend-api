@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/database"
-	"github.com/ilabs/wacht-fe/handler"
-	"github.com/ilabs/wacht-fe/model"
+	"github.com/wacht-platform/frontend-api/database"
+	"github.com/wacht-platform/frontend-api/handler"
+	"github.com/wacht-platform/frontend-api/model"
 	"gorm.io/gorm"
 )
 

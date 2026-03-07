@@ -3,7 +3,7 @@ package service
 import (
 	"errors"
 
-	"github.com/ilabs/wacht-fe/database"
+	"github.com/wacht-platform/frontend-api/database"
 )
 
 type pulseUsageGuardRow struct {

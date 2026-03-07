@@ -10,7 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/ilabs/wacht-fe/config"
+	"github.com/wacht-platform/frontend-api/config"
 )
 
 type S3Service struct {

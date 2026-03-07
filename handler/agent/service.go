@@ -14,10 +14,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/ilabs/wacht-fe/database"
-	"github.com/ilabs/wacht-fe/model"
-	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"github.com/lib/pq"
+	"github.com/wacht-platform/frontend-api/database"
+	"github.com/wacht-platform/frontend-api/model"
+	"github.com/wacht-platform/frontend-api/pkg/idgen"
 
 	"gorm.io/gorm"
 )

@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/wacht-platform/frontend-api/pkg/idgen"
 )
 
 type NatsService struct {

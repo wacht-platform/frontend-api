@@ -2,7 +2,7 @@ package router
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/handler/agent"
+	"github.com/wacht-platform/frontend-api/handler/agent"
 )
 
 func setupAgentRoutes(app *fiber.App) {

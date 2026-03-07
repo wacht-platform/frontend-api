@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ilabs/wacht-fe/model"
 	"github.com/lib/pq"
+	"github.com/wacht-platform/frontend-api/model"
 )
 
 // CheckIPAllowed verifies if the client IP is in the allowlist

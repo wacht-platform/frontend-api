@@ -1,6 +1,6 @@
 package agent
 
-import "github.com/ilabs/wacht-fe/model"
+import "github.com/wacht-platform/frontend-api/model"
 
 type AgentWithIntegrations struct {
 	ID           string                   `json:"id"`

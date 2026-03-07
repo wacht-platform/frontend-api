@@ -3,7 +3,7 @@ package utils
 import (
 	"log"
 
-	"github.com/ilabs/wacht-fe/service"
+	"github.com/wacht-platform/frontend-api/service"
 )
 
 func PublishWebhookEvent(deploymentID uint64, eventType string, entityID uint64, entityType string) {

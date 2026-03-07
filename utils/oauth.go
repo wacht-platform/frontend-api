@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/ilabs/wacht-fe/config"
-	"github.com/ilabs/wacht-fe/model"
+	"github.com/wacht-platform/frontend-api/config"
+	"github.com/wacht-platform/frontend-api/model"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/facebook"
 	"golang.org/x/oauth2/github"

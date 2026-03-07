@@ -2,8 +2,8 @@ package router
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/handler/workspace"
-	"github.com/ilabs/wacht-fe/middleware"
+	"github.com/wacht-platform/frontend-api/handler/workspace"
+	"github.com/wacht-platform/frontend-api/middleware"
 )
 
 func setupWorkspaceRoutes(app *fiber.App) {

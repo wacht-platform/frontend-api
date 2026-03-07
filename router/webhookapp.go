@@ -2,7 +2,7 @@ package router
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/handler/webhookapp"
+	"github.com/wacht-platform/frontend-api/handler/webhookapp"
 )
 
 func setupWebhookAppRoutes(app *fiber.App) {

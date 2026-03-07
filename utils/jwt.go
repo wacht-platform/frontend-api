@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ilabs/wacht-fe/model"
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwt"
+	"github.com/wacht-platform/frontend-api/model"
 	"gorm.io/gorm"
 )
 

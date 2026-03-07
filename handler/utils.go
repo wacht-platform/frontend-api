@@ -2,8 +2,8 @@ package handler
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/model"
-	"github.com/ilabs/wacht-fe/utils"
+	"github.com/wacht-platform/frontend-api/model"
+	"github.com/wacht-platform/frontend-api/utils"
 )
 
 func GetDeployment(c *fiber.Ctx) model.Deployment {

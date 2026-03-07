@@ -3,7 +3,7 @@ package database
 import (
 	"os"
 
-	"github.com/ilabs/wacht-fe/model"
+	"github.com/wacht-platform/frontend-api/model"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"

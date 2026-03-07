@@ -2,7 +2,7 @@ package router
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/handler/deployment"
+	"github.com/wacht-platform/frontend-api/handler/deployment"
 )
 
 func setupPublicRoutes(app *fiber.App) {

@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/database"
-	"github.com/ilabs/wacht-fe/handler"
-	"github.com/ilabs/wacht-fe/model"
-	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/wacht-platform/frontend-api/database"
+	"github.com/wacht-platform/frontend-api/handler"
+	"github.com/wacht-platform/frontend-api/model"
+	"github.com/wacht-platform/frontend-api/pkg/idgen"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
@@ -26,15 +26,15 @@ const (
 )
 
 type SessionTicketPayload struct {
-	TicketType              TicketType                    `json:"ticket_type"`
-	DeploymentID            string                        `json:"deployment_id"`
-	UserID                  *string                       `json:"user_id,omitempty"`
-	AgentIDs                []string                      `json:"agent_ids,omitempty"`
-	AgentSessionIdentifier  *model.AgentSessionIdentifier `json:"agent_session_identifier,omitempty"`
-	WebhookAppSlug          *string                       `json:"webhook_app_slug,omitempty"`
-	ApiAuthAppSlug          *string                       `json:"api_auth_app_slug,omitempty"`
-	ContextGroup            *string                       `json:"context_group,omitempty"`
-	ExpiresAt               int64                         `json:"expires_at"`
+	TicketType             TicketType                    `json:"ticket_type"`
+	DeploymentID           string                        `json:"deployment_id"`
+	UserID                 *string                       `json:"user_id,omitempty"`
+	AgentIDs               []string                      `json:"agent_ids,omitempty"`
+	AgentSessionIdentifier *model.AgentSessionIdentifier `json:"agent_session_identifier,omitempty"`
+	WebhookAppSlug         *string                       `json:"webhook_app_slug,omitempty"`
+	ApiAuthAppSlug         *string                       `json:"api_auth_app_slug,omitempty"`
+	ContextGroup           *string                       `json:"context_group,omitempty"`
+	ExpiresAt              int64                         `json:"expires_at"`
 }
 
 type ExchangeTicketRequest struct {

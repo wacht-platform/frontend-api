@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/database"
-	"github.com/ilabs/wacht-fe/handler"
-	"github.com/ilabs/wacht-fe/model"
-	"github.com/ilabs/wacht-fe/pkg/idgen"
-	"github.com/ilabs/wacht-fe/utils"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pquerna/otp/totp"
+	"github.com/wacht-platform/frontend-api/database"
+	"github.com/wacht-platform/frontend-api/handler"
+	"github.com/wacht-platform/frontend-api/model"
+	"github.com/wacht-platform/frontend-api/pkg/idgen"
+	"github.com/wacht-platform/frontend-api/utils"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )

@@ -3,7 +3,7 @@ package apiauthapp
 import (
 	"time"
 
-	"github.com/ilabs/wacht-fe/model"
+	"github.com/wacht-platform/frontend-api/model"
 )
 
 // ApiAuthAppInfo represents API auth app info for responses

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ilabs/wacht-fe/database"
-	"github.com/ilabs/wacht-fe/model"
+	"github.com/wacht-platform/frontend-api/database"
+	"github.com/wacht-platform/frontend-api/model"
 	"gorm.io/gorm"
 )
 
@@ -52,8 +52,8 @@ type appMembershipContext struct {
 
 func (s *Service) resolveAppMembershipContext(app *model.ApiAuthApp) (*appMembershipContext, error) {
 	ctx := &appMembershipContext{
-		orgID:       app.OrganizationID,
-		workspaceID: app.WorkspaceID,
+		orgID:        app.OrganizationID,
+		workspaceID:  app.WorkspaceID,
 		orgRolePerms: []string{},
 		wsRolePerms:  []string{},
 	}
@@ -183,24 +183,24 @@ func (s *Service) CreateKey(deployment model.Deployment, appSlug string, name st
 	}
 
 	key := model.ApiKey{
-		DeploymentID: deployment.ID,
-		OwnerUserID:  app.UserID,
-		AppSlug:      app.AppSlug,
-		Name:         name,
-		KeyPrefix:    app.KeyPrefix,
-		KeySuffix:    keySuffix,
-		KeyHash:      keyHash,
-		Permissions:  []string{},
-		Metadata:     map[string]any{},
+		DeploymentID:        deployment.ID,
+		OwnerUserID:         app.UserID,
+		AppSlug:             app.AppSlug,
+		Name:                name,
+		KeyPrefix:           app.KeyPrefix,
+		KeySuffix:           keySuffix,
+		KeyHash:             keyHash,
+		Permissions:         []string{},
+		Metadata:            map[string]any{},
 		RateLimitSchemeSlug: app.RateLimitSchemeSlug,
-		OrgRolePerms: membershipCtx.orgRolePerms,
-		WsRolePerms:  membershipCtx.wsRolePerms,
-		OrgID:        membershipCtx.orgID,
-		WorkspaceID:  membershipCtx.workspaceID,
-		OrgMemberID:  membershipCtx.orgMemberID,
-		WsMemberID:   membershipCtx.workspaceMemberID,
-		IsActive:     true,
-		ExpiresAt:    expiresAt,
+		OrgRolePerms:        membershipCtx.orgRolePerms,
+		WsRolePerms:         membershipCtx.wsRolePerms,
+		OrgID:               membershipCtx.orgID,
+		WorkspaceID:         membershipCtx.workspaceID,
+		OrgMemberID:         membershipCtx.orgMemberID,
+		WsMemberID:          membershipCtx.workspaceMemberID,
+		IsActive:            true,
+		ExpiresAt:           expiresAt,
 	}
 
 	if err := database.Connection.Create(&key).Error; err != nil {
@@ -338,24 +338,24 @@ func (s *Service) RotateKey(deployment model.Deployment, appSlug string, keyID u
 	}
 
 	newKey := model.ApiKey{
-		DeploymentID: deployment.ID,
-		OwnerUserID:  app.UserID,
-		AppSlug:      existing.AppSlug,
-		Name:         existing.Name,
-		KeyPrefix:    app.KeyPrefix,
-		KeySuffix:    keySuffix,
-		KeyHash:      keyHash,
-		Permissions:  existing.Permissions,
-		Metadata:     existing.Metadata,
+		DeploymentID:        deployment.ID,
+		OwnerUserID:         app.UserID,
+		AppSlug:             existing.AppSlug,
+		Name:                existing.Name,
+		KeyPrefix:           app.KeyPrefix,
+		KeySuffix:           keySuffix,
+		KeyHash:             keyHash,
+		Permissions:         existing.Permissions,
+		Metadata:            existing.Metadata,
 		RateLimitSchemeSlug: app.RateLimitSchemeSlug,
-		OrgRolePerms: membershipCtx.orgRolePerms,
-		WsRolePerms:  membershipCtx.wsRolePerms,
-		OrgID:        membershipCtx.orgID,
-		WorkspaceID:  membershipCtx.workspaceID,
-		OrgMemberID:  membershipCtx.orgMemberID,
-		WsMemberID:   membershipCtx.workspaceMemberID,
-		ExpiresAt:    existing.ExpiresAt,
-		IsActive:     true,
+		OrgRolePerms:        membershipCtx.orgRolePerms,
+		WsRolePerms:         membershipCtx.wsRolePerms,
+		OrgID:               membershipCtx.orgID,
+		WorkspaceID:         membershipCtx.workspaceID,
+		OrgMemberID:         membershipCtx.orgMemberID,
+		WsMemberID:          membershipCtx.workspaceMemberID,
+		ExpiresAt:           existing.ExpiresAt,
+		IsActive:            true,
 	}
 
 	if err := tx.Create(&newKey).Error; err != nil {

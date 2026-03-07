@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/ilabs/wacht-fe/service"
-	"github.com/ilabs/wacht-fe/utils"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/wacht-platform/frontend-api/service"
+	"github.com/wacht-platform/frontend-api/utils"
 )
 
 type RateLimitMessage struct {

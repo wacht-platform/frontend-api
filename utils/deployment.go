@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/ilabs/wacht-fe/database"
-	"github.com/ilabs/wacht-fe/model"
+	"github.com/wacht-platform/frontend-api/database"
+	"github.com/wacht-platform/frontend-api/model"
 	"gorm.io/plugin/dbresolver"
 )
 
@@ -26,12 +26,12 @@ func GetDeploymentByHost(host string) (*model.Deployment, error) {
 
 	queryResult := new(DeploymentQueryResult)
 	rawSQL := `
-		SELECT 
-			d.*, 
-			das.*, 
-			dbs.*, 
-			dds.*, 
-			dr.*, 
+		SELECT
+			d.*,
+			das.*,
+			dbs.*,
+			dds.*,
+			dr.*,
 			kp.*,
 				COALESCE(
 					(SELECT json_agg(json_build_object(

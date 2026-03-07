@@ -3,8 +3,8 @@ package model
 import (
 	"time"
 
-	"github.com/ilabs/wacht-fe/pkg/idgen"
 	"github.com/lib/pq"
+	"github.com/wacht-platform/frontend-api/pkg/idgen"
 )
 
 type AgentSessionIdentifier string

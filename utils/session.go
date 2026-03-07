@@ -7,8 +7,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/ilabs/wacht-fe/database"
-	"github.com/ilabs/wacht-fe/model"
+	"github.com/wacht-platform/frontend-api/database"
+	"github.com/wacht-platform/frontend-api/model"
 )
 
 func GetSessionByID(sessionID uint64) (*model.Session, error) {
@@ -130,51 +130,51 @@ const (
 		'has_password', CASE WHEN u.password != '' AND u.password IS NOT NULL THEN true ELSE false END,
 		'user_email_addresses', COALESCE((
 			SELECT json_agg(json_build_object(
-				'id', ue.id::text, 'email', ue.email_address, 'is_primary', ue.is_primary, 
-				'verified', ue.verified, 
-				'verified_at', to_char(ue.verified_at, ` + fmtTime + `), 
+				'id', ue.id::text, 'email', ue.email_address, 'is_primary', ue.is_primary,
+				'verified', ue.verified,
+				'verified_at', to_char(ue.verified_at, ` + fmtTime + `),
 				'verification_strategy', ue.verification_strategy,
-				'created_at', to_char(ue.created_at, ` + fmtTime + `), 
+				'created_at', to_char(ue.created_at, ` + fmtTime + `),
 				'updated_at', to_char(ue.updated_at, ` + fmtTime + `)
-			) ORDER BY ue.is_primary DESC, ue.created_at) 
+			) ORDER BY ue.is_primary DESC, ue.created_at)
 			FROM user_email_addresses ue WHERE ue.user_id = u.id
 		), '[]'),
 		'user_phone_numbers', COALESCE((
 			SELECT json_agg(json_build_object(
-				'id', up.id::text, 'phone_number', up.phone_number, 'country_code', up.country_code, 
-				'verified', up.verified, 
+				'id', up.id::text, 'phone_number', up.phone_number, 'country_code', up.country_code,
+				'verified', up.verified,
 				'verified_at', to_char(up.verified_at, ` + fmtTime + `),
-				'created_at', to_char(up.created_at, ` + fmtTime + `), 
+				'created_at', to_char(up.created_at, ` + fmtTime + `),
 				'updated_at', to_char(up.updated_at, ` + fmtTime + `)
-			) ORDER BY up.created_at) 
+			) ORDER BY up.created_at)
 			FROM user_phone_numbers up WHERE up.user_id = u.id
 		), '[]'),
 		'social_connections', COALESCE((
 			SELECT json_agg(json_build_object(
-				'id', sc.id::text, 'provider', sc.provider, 'user_email_address_id', sc.user_email_address_id::text, 
+				'id', sc.id::text, 'provider', sc.provider, 'user_email_address_id', sc.user_email_address_id::text,
 				'email_address', sc.email_address, 'first_name', sc.first_name, 'last_name', sc.last_name,
-				'created_at', to_char(sc.created_at, ` + fmtTime + `), 
+				'created_at', to_char(sc.created_at, ` + fmtTime + `),
 				'updated_at', to_char(sc.updated_at, ` + fmtTime + `)
-			) ORDER BY sc.created_at) 
+			) ORDER BY sc.created_at)
 			FROM social_connections sc WHERE sc.user_id = u.id
 		), '[]'),
 		'segments', COALESCE((
 			SELECT json_agg(json_build_object(
-				'id', us_seg.id::text, 
-				'created_at', to_char(us_seg.created_at, ` + fmtTime + `), 
-				'updated_at', to_char(us_seg.updated_at, ` + fmtTime + `), 
+				'id', us_seg.id::text,
+				'created_at', to_char(us_seg.created_at, ` + fmtTime + `),
+				'updated_at', to_char(us_seg.updated_at, ` + fmtTime + `),
 				'deployment_id', us_seg.deployment_id::text, 'name', us_seg.name, 'type', us_seg.type
-			)) 
-			FROM user_segments us JOIN segments us_seg ON us.segment_id = us_seg.id 
+			))
+			FROM user_segments us JOIN segments us_seg ON us.segment_id = us_seg.id
 			WHERE us.user_id = u.id AND us_seg.deleted_at IS NULL
 		), '[]'),
 		'user_authenticator', (
 			SELECT json_build_object(
-				'id', ua.id::text, 
-				'created_at', to_char(ua.created_at, ` + fmtTime + `), 
-				'updated_at', to_char(ua.updated_at, ` + fmtTime + `), 
+				'id', ua.id::text,
+				'created_at', to_char(ua.created_at, ` + fmtTime + `),
+				'updated_at', to_char(ua.updated_at, ` + fmtTime + `),
 				'user_id', ua.user_id::text, 'otp_url', ua.otp_url
-			) 
+			)
 			FROM user_authenticators ua WHERE ua.user_id = u.id AND ua.deleted_at IS NULL LIMIT 1
 		)
 	)`
@@ -182,72 +182,72 @@ const (
 	signinAttemptsSelect = `
 	COALESCE((
 		SELECT json_agg(json_build_object(
-			'id', sia.id::text, 
-			'created_at', to_char(sia.created_at, ` + fmtTime + `), 
-			'updated_at', to_char(sia.updated_at, ` + fmtTime + `), 
+			'id', sia.id::text,
+			'created_at', to_char(sia.created_at, ` + fmtTime + `),
+			'updated_at', to_char(sia.updated_at, ` + fmtTime + `),
 			'expires_at', to_char(sia.expires_at, ` + fmtTime + `),
-			'user_id', sia.user_id::text, 
-			'identifier_id', sia.identifier_id::text, 
-			'session_id', sia.session_id::text, 
-			'method', sia.method, 
-			'sso_provider', sia.sso_provider, 
-			'current_step', sia.current_step, 
-			'remaining_steps', sia.remaining_steps, 
-			'completed', sia.completed, 
-			'errored', sia.errored, 
-			'errors', sia.errors, 
-			'requires_completion', sia.requires_completion, 
-			'missing_fields', sia.missing_fields, 
+			'user_id', sia.user_id::text,
+			'identifier_id', sia.identifier_id::text,
+			'session_id', sia.session_id::text,
+			'method', sia.method,
+			'sso_provider', sia.sso_provider,
+			'current_step', sia.current_step,
+			'remaining_steps', sia.remaining_steps,
+			'completed', sia.completed,
+			'errored', sia.errored,
+			'errors', sia.errors,
+			'requires_completion', sia.requires_completion,
+			'missing_fields', sia.missing_fields,
 			'required_fields', sia.required_fields,
-			'first_method_authenticated', sia.first_method_authenticated, 
-			'second_method_authenticated', sia.second_method_authenticated, 
-			'second_method_authentication_required', sia.second_method_authentication_required, 
+			'first_method_authenticated', sia.first_method_authenticated,
+			'second_method_authenticated', sia.second_method_authenticated,
+			'second_method_authentication_required', sia.second_method_authentication_required,
 			'available_2fa_methods', sia.available_2fa_methods
-		) ORDER BY sia.created_at ASC) 
+		) ORDER BY sia.created_at ASC)
 		FROM sign_in_attempts sia WHERE sia.session_id = s.id
 	), '[]')`
 
 	signupAttemptsSelect = `
 	COALESCE((
 		SELECT json_agg(json_build_object(
-			'id', sua.id::text, 
-			'created_at', to_char(sua.created_at, ` + fmtTime + `), 
-			'updated_at', to_char(sua.updated_at, ` + fmtTime + `), 
-			'session_id', sua.session_id::text, 
-			'first_name', sua.first_name, 
-			'last_name', sua.last_name, 
-			'email', sua.email, 
-			'username', sua.username, 
-			'phone_number', sua.phone_number, 
-			'phone_country_code', sua.phone_country_code, 
-			'required_fields', sua.required_fields, 
-			'missing_fields', sua.missing_fields, 
-			'current_step', sua.current_step, 
-			'remaining_steps', sua.remaining_steps, 
-			'sso_provider', sua.sso_provider, 
-			'is_oauth_signup', sua.is_oauth_signup, 
+			'id', sua.id::text,
+			'created_at', to_char(sua.created_at, ` + fmtTime + `),
+			'updated_at', to_char(sua.updated_at, ` + fmtTime + `),
+			'session_id', sua.session_id::text,
+			'first_name', sua.first_name,
+			'last_name', sua.last_name,
+			'email', sua.email,
+			'username', sua.username,
+			'phone_number', sua.phone_number,
+			'phone_country_code', sua.phone_country_code,
+			'required_fields', sua.required_fields,
+			'missing_fields', sua.missing_fields,
+			'current_step', sua.current_step,
+			'remaining_steps', sua.remaining_steps,
+			'sso_provider', sua.sso_provider,
+			'is_oauth_signup', sua.is_oauth_signup,
 			'completed', sua.completed
-		) ORDER BY sua.created_at ASC) 
+		) ORDER BY sua.created_at ASC)
 		FROM signup_attempts sua WHERE sua.session_id = s.id
 	), '[]')`
 
 	signinsSelect = `
 	COALESCE((
 		SELECT json_agg(json_build_object(
-			'id', si.id::text, 
-			'created_at', to_char(si.created_at, ` + fmtTime + `), 
-			'updated_at', to_char(si.updated_at, ` + fmtTime + `), 
-			'expires_at', to_char(si.expires_at, ` + fmtTime + `), 
-			'last_active_at', to_char(si.last_active_at, ` + fmtTime + `), 
-			'session_id', si.session_id::text, 
-			'user_id', si.user_id::text, 
-			'active_organization_membership_id', si.active_organization_membership_id::text, 
-			'active_workspace_membership_id', si.active_workspace_membership_id::text, 
-			'ip_address', si.ip_address, 
-			'browser', si.browser, 
-			'device', si.device, 
-			'city', si.city, 
-			'region', si.region, 
+			'id', si.id::text,
+			'created_at', to_char(si.created_at, ` + fmtTime + `),
+			'updated_at', to_char(si.updated_at, ` + fmtTime + `),
+			'expires_at', to_char(si.expires_at, ` + fmtTime + `),
+			'last_active_at', to_char(si.last_active_at, ` + fmtTime + `),
+			'session_id', si.session_id::text,
+			'user_id', si.user_id::text,
+			'active_organization_membership_id', si.active_organization_membership_id::text,
+			'active_workspace_membership_id', si.active_workspace_membership_id::text,
+			'ip_address', si.ip_address,
+			'browser', si.browser,
+			'device', si.device,
+			'city', si.city,
+			'region', si.region,
 			'country', si.country,
 			'user', ` + userJSONSelect + `,
 			'active_organization_membership', (
@@ -260,7 +260,7 @@ const (
 						'id', ao.id::text,
 						'name', ao.name,
 						'image_url', ao.image_url,
-						'description', ao.description, 
+						'description', ao.description,
 						'member_count', ao.member_count,
 						'enforce_mfa', ao.enforce_mfa_setup,
 						'enable_ip_restriction', ao.enable_ip_restriction,
@@ -275,12 +275,12 @@ const (
 							'updated_at', to_char(r.updated_at, ` + fmtTime + `),
 							'permissions', r.permissions
 						))
-						FROM organization_membership_roles omr 
-						JOIN organization_roles r ON omr.organization_role_id = r.id 
+						FROM organization_membership_roles omr
+						JOIN organization_roles r ON omr.organization_role_id = r.id
 						WHERE omr.organization_membership_id = aom.id
 					)
 				)
-				FROM organization_memberships aom 
+				FROM organization_memberships aom
 				JOIN organizations ao ON aom.organization_id = ao.id
 				WHERE aom.id = si.active_organization_membership_id
 			),
@@ -317,9 +317,9 @@ const (
 				JOIN workspaces aw ON awm.workspace_id = aw.id
 				WHERE awm.id = si.active_workspace_membership_id
 			)
-		) ORDER BY si.created_at DESC) 
-		FROM signins si 
-		LEFT JOIN users u ON si.user_id = u.id 
+		) ORDER BY si.created_at DESC)
+		FROM signins si
+		LEFT JOIN users u ON si.user_id = u.id
 		WHERE si.session_id = s.id AND (si.expires_at > NOW() OR si.expires_at IS NULL)
 	), '[]')`
 

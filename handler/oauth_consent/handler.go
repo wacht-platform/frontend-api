@@ -17,9 +17,9 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/config"
-	"github.com/ilabs/wacht-fe/database"
-	"github.com/ilabs/wacht-fe/handler"
+	"github.com/wacht-platform/frontend-api/config"
+	"github.com/wacht-platform/frontend-api/database"
+	"github.com/wacht-platform/frontend-api/handler"
 )
 
 type Handler struct {

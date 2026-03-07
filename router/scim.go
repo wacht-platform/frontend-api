@@ -2,7 +2,7 @@ package router
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/handler/scim"
+	"github.com/wacht-platform/frontend-api/handler/scim"
 )
 
 func setupSCIMRoutes(app *fiber.App) {

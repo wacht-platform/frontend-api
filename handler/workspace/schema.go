@@ -1,6 +1,6 @@
 package workspace
 
-import "github.com/ilabs/wacht-fe/model"
+import "github.com/wacht-platform/frontend-api/model"
 
 type CreateWorkspaceRequest struct {
 	Name           string `form:"name"            validate:"required"`

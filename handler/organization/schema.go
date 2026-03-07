@@ -1,6 +1,6 @@
 package organization
 
-import "github.com/ilabs/wacht-fe/model"
+import "github.com/wacht-platform/frontend-api/model"
 
 type CreateOrgRequest struct {
 	Name        string `form:"name"        validate:"required"`

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ilabs/wacht-fe/pkg/idgen"
+	"github.com/wacht-platform/frontend-api/pkg/idgen"
 	"gorm.io/datatypes"
 )
 

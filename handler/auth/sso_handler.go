@@ -17,12 +17,12 @@ import (
 
 	"github.com/crewjam/saml"
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/database"
-	"github.com/ilabs/wacht-fe/handler"
-	"github.com/ilabs/wacht-fe/model"
-	"github.com/ilabs/wacht-fe/pkg/idgen"
-	"github.com/ilabs/wacht-fe/service"
-	"github.com/ilabs/wacht-fe/utils"
+	"github.com/wacht-platform/frontend-api/database"
+	"github.com/wacht-platform/frontend-api/handler"
+	"github.com/wacht-platform/frontend-api/model"
+	"github.com/wacht-platform/frontend-api/pkg/idgen"
+	"github.com/wacht-platform/frontend-api/service"
+	"github.com/wacht-platform/frontend-api/utils"
 	"gorm.io/gorm"
 )
 

@@ -1,8 +1,8 @@
 package service
 
 import (
-	"github.com/ilabs/wacht-fe/database"
-	"github.com/ilabs/wacht-fe/model"
+	"github.com/wacht-platform/frontend-api/database"
+	"github.com/wacht-platform/frontend-api/model"
 )
 
 type SSOService struct{}

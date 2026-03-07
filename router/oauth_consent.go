@@ -2,7 +2,7 @@ package router
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/handler/oauth_consent"
+	"github.com/wacht-platform/frontend-api/handler/oauth_consent"
 )
 
 func setupOAuthConsentRoutes(app *fiber.App) {

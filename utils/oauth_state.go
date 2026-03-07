@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ilabs/wacht-fe/config"
+	"github.com/wacht-platform/frontend-api/config"
 )
 
 type OAuthStateData struct {

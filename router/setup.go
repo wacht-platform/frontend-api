@@ -9,9 +9,9 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/ilabs/wacht-fe/handler"
-	"github.com/ilabs/wacht-fe/middleware"
-	"github.com/ilabs/wacht-fe/service"
+	"github.com/wacht-platform/frontend-api/handler"
+	"github.com/wacht-platform/frontend-api/middleware"
+	"github.com/wacht-platform/frontend-api/service"
 )
 
 func Setup(app *fiber.App) {

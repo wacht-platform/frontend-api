@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ilabs/wacht-fe/model"
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/wacht-platform/frontend-api/model"
 )
 
 var (

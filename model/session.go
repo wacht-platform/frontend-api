@@ -1,6 +1,6 @@
 package model
 
-import "github.com/ilabs/wacht-fe/pkg/idgen"
+import "github.com/wacht-platform/frontend-api/pkg/idgen"
 
 type SignInAttemptStep string
 

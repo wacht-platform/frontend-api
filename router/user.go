@@ -2,7 +2,7 @@ package router
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/ilabs/wacht-fe/handler/user"
+	"github.com/wacht-platform/frontend-api/handler/user"
 )
 
 func setupUserRoutes(

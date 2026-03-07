@@ -5,10 +5,10 @@ import (
 	"mime/multipart"
 	"path/filepath"
 
-	"github.com/ilabs/wacht-fe/database"
-	"github.com/ilabs/wacht-fe/handler/scim"
-	"github.com/ilabs/wacht-fe/model"
-	"github.com/ilabs/wacht-fe/service"
+	"github.com/wacht-platform/frontend-api/database"
+	"github.com/wacht-platform/frontend-api/handler/scim"
+	"github.com/wacht-platform/frontend-api/model"
+	"github.com/wacht-platform/frontend-api/service"
 	"gorm.io/gorm"
 )
 
