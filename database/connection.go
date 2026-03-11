@@ -9,7 +9,7 @@ func InitConnection() error {
 		return err
 	}
 
-	err := InitClickHouseConnection()
+	_ = InitClickHouseConnection()
 
-	return err
+	return nil
 }
