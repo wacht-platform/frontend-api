@@ -1,18 +1,12 @@
 package service
 
-import (
-	"errors"
-
-	"github.com/wacht-platform/frontend-api/database"
-)
+import "github.com/wacht-platform/frontend-api/database"
 
 type pulseUsageGuardRow struct {
 	PulseUsageDisabled bool `gorm:"column:pulse_usage_disabled"`
 }
 
-var ErrPulseUsageDisabled = errors.New("pulse usage is paused")
-
-func EnsurePulseUsageAllowedForDeployment(deploymentID uint64) error {
+func IsPulseUsageDisabledForDeployment(deploymentID uint64) (bool, error) {
 	var row pulseUsageGuardRow
 	err := database.Connection.Raw(`
 		SELECT COALESCE(ba.pulse_usage_disabled, false) AS pulse_usage_disabled
@@ -23,12 +17,8 @@ func EnsurePulseUsageAllowedForDeployment(deploymentID uint64) error {
 		LIMIT 1
 	`, deploymentID).Scan(&row).Error
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	if row.PulseUsageDisabled {
-		return ErrPulseUsageDisabled
-	}
-
-	return nil
+	return row.PulseUsageDisabled, nil
 }
