@@ -1,11 +1,10 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,9 +15,9 @@ import (
 )
 
 type RateLimitMessage struct {
-	Key       string `json:"key"`
-	Increment int    `json:"increment"`
-	NodeID    string `json:"node_id"`
+	Key    string `json:"key"`
+	Value  []byte `json:"value"`
+	NodeID string `json:"node_id"`
 }
 
 type NatsStorage struct {
@@ -61,27 +60,29 @@ func (s *NatsStorage) subscribe() {
 			continue
 		}
 
-		if item := utils.Cache.Get(update.Key); item != nil {
-			newValue := item.Value().(int) + update.Increment
-			utils.Cache.Set(update.Key, newValue, ttlcache.DefaultTTL)
-		}
+		utils.Cache.Set(update.Key, append([]byte(nil), update.Value...), ttlcache.DefaultTTL)
 	}
 }
 
 func (s *NatsStorage) Get(key string) ([]byte, error) {
 	if item := utils.Cache.Get(key); item != nil {
-		return fmt.Appendf(nil, "%d", item.Value()), nil
+		if raw, ok := item.Value().([]byte); ok {
+			return append([]byte(nil), raw...), nil
+		}
+		utils.Cache.Delete(key)
 	}
 
 	if s.kv != nil {
 		kvEntry, err := s.kv.Get(context.Background(), key)
 		if err == nil {
 			val := kvEntry.Value()
-			intVal, _ := strconv.Atoi(string(val))
+			if !isLimiterPayload(val) {
+				_ = s.kv.Delete(context.Background(), key)
+				return nil, nil
+			}
 
-			utils.Cache.Set(key, intVal, time.Minute)
-
-			return val, nil
+			utils.Cache.Set(key, append([]byte(nil), val...), time.Minute)
+			return append([]byte(nil), val...), nil
 		}
 	}
 
@@ -101,42 +102,31 @@ func (s *NatsStorage) SetWithContext(_ context.Context, key string, val []byte, 
 }
 
 func (s *NatsStorage) SetWithExp(key string, val []byte, exp time.Duration) error {
-	var newVal int
-	fmt.Sscanf(string(val), "%d", &newVal)
+	raw := append([]byte(nil), val...)
+	utils.Cache.Set(key, raw, exp)
 
-	var oldVal int
-	if item := utils.Cache.Get(key); item != nil {
-		oldVal = item.Value().(int)
+	msg := RateLimitMessage{
+		Key:    key,
+		Value:  raw,
+		NodeID: s.nodeID,
+	}
+	if payload, err := json.Marshal(msg); err == nil {
+		s.natsService.PublishRateLimit(payload)
 	}
 
-	delta := newVal - oldVal
-
-	if delta > 0 {
-		msg := RateLimitMessage{
-			Key:       key,
-			Increment: delta,
-			NodeID:    s.nodeID,
-		}
-		if bytes, err := json.Marshal(msg); err == nil {
-			s.natsService.PublishRateLimit(bytes)
-		}
-
-		if s.kv != nil {
-			go s.persistAsync(key, delta)
-		}
+	if s.kv != nil {
+		go s.persistAsync(key, raw)
 	}
-
-	utils.Cache.Set(key, newVal, exp)
 
 	return nil
 }
 
-func (s *NatsStorage) persistAsync(key string, delta int) {
+func (s *NatsStorage) persistAsync(key string, raw []byte) {
 	ctx := context.Background()
 	for range 5 {
 		entry, err := s.kv.Get(ctx, key)
 		if err == jetstream.ErrKeyNotFound {
-			_, err = s.kv.Create(ctx, key, []byte(strconv.Itoa(delta)))
+			_, err = s.kv.Create(ctx, key, raw)
 			if err == nil {
 				return
 			}
@@ -145,10 +135,11 @@ func (s *NatsStorage) persistAsync(key string, delta int) {
 			return
 		}
 
-		currentVal, _ := strconv.Atoi(string(entry.Value()))
-		newVal := currentVal + delta
+		if bytes.Equal(entry.Value(), raw) {
+			return
+		}
 
-		_, err = s.kv.Update(ctx, key, []byte(strconv.Itoa(newVal)), entry.Revision())
+		_, err = s.kv.Update(ctx, key, raw, entry.Revision())
 		if err == nil {
 			return
 		}
@@ -159,7 +150,9 @@ func (s *NatsStorage) persistAsync(key string, delta int) {
 func (s *NatsStorage) Delete(key string) error {
 	utils.Cache.Delete(key)
 	if s.kv != nil {
-		go s.kv.Delete(context.Background(), key)
+		go func() {
+			_ = s.kv.Delete(context.Background(), key)
+		}()
 	}
 	return nil
 }
@@ -178,4 +171,18 @@ func (s *NatsStorage) ResetWithContext(_ context.Context) error {
 
 func (s *NatsStorage) Close() error {
 	return nil
+}
+
+func isLimiterPayload(raw []byte) bool {
+	if len(raw) == 0 {
+		return false
+	}
+
+	// Fiber v3 limiter stores a msgpack map with currHits/prevHits/exp.
+	// Legacy v2 cache entries were plain ASCII integers; treat those as stale.
+	if raw[0] >= '0' && raw[0] <= '9' {
+		return false
+	}
+
+	return raw[0]&0xf0 == 0x80 || bytes.HasPrefix(raw, []byte{0xde}) || bytes.HasPrefix(raw, []byte{0xdf})
 }
