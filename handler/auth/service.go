@@ -19,7 +19,7 @@ import (
 
 	"slices"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/ua-parser/uap-go/uaparser"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
@@ -342,7 +342,7 @@ func (s *AuthService) HandleExistingUser(
 	attempt *model.SignInAttempt,
 	deployment *model.Deployment,
 	session *model.Session,
-	ctx *fiber.Ctx,
+	ctx fiber.Ctx,
 ) (*model.Signin, error) {
 	deploymentSettings := deployment.AuthSettings
 	var connection model.SocialConnection
@@ -1181,7 +1181,7 @@ func (s *AuthService) CreateVerifiedUser(
 func (s *AuthService) CreateSignin(
 	userID uint64,
 	sessionID uint64,
-	ctx *fiber.Ctx,
+	ctx fiber.Ctx,
 	validityPeriodSeconds uint64,
 ) *model.Signin {
 	signIn := model.NewSignIn(sessionID, userID, validityPeriodSeconds)
@@ -1368,7 +1368,7 @@ func (s *AuthService) ValidateBannedKeywords(b *SignUpRequest, restrictions mode
 	return nil
 }
 
-func (s *AuthService) ValidateIPCountryRestrictions(ctx *fiber.Ctx, restrictions model.DeploymentRestrictions) error {
+func (s *AuthService) ValidateIPCountryRestrictions(ctx fiber.Ctx, restrictions model.DeploymentRestrictions) error {
 	if !restrictions.CountryRestrictions.Enabled || len(restrictions.CountryRestrictions.CountryCodes) == 0 {
 		return nil
 	}

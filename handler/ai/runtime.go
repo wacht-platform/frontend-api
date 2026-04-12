@@ -10,7 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/nats-io/nats.go"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
@@ -33,7 +33,7 @@ func sessionHasAgent(agentSession *model.AgentSession, agentID uint64) bool {
 	return containsInt64(agentSession.AgentIDs, int64(agentID))
 }
 
-func (h *Handler) GetSession(c *fiber.Ctx) error {
+func (h *Handler) GetSession(c fiber.Ctx) error {
 	_, _, err := h.getActorScope(c)
 	if err != nil {
 		return fiber.NewError(fiber.StatusUnauthorized, "No active agent session")
@@ -52,7 +52,7 @@ func (h *Handler) GetSession(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, response)
 }
 
-func (h *Handler) GetThreadMessages(c *fiber.Ctx) error {
+func (h *Handler) GetThreadMessages(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -64,7 +64,7 @@ func (h *Handler) GetThreadMessages(c *fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Invalid thread ID")
 	}
 
-	limit := c.QueryInt("limit", 50)
+	limit := fiber.Query[int](c, "limit", 50)
 	if limit > 100 {
 		limit = 100
 	}
@@ -91,7 +91,7 @@ func (h *Handler) GetThreadMessages(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) ServeFile(c *fiber.Ctx) error {
+func (h *Handler) ServeFile(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -144,7 +144,7 @@ func (h *Handler) ServeFile(c *fiber.Ctx) error {
 	return c.Send(body)
 }
 
-func (h *Handler) Stream(c *fiber.Ctx) error {
+func (h *Handler) Stream(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -174,7 +174,7 @@ func (h *Handler) Stream(c *fiber.Ctx) error {
 	c.Set("Connection", "keep-alive")
 	c.Set("X-Accel-Buffering", "no")
 
-	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
+	c.RequestCtx().SetBodyStreamWriter(func(w *bufio.Writer) {
 		defer func() {
 			_ = sub.Unsubscribe()
 			close(msgCh)

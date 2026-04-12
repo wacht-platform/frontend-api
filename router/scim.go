@@ -1,7 +1,7 @@
 package router
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/handler/scim"
 )
 

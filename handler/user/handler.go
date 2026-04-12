@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/lib/pq"
 	"github.com/pquerna/otp"
@@ -34,7 +34,7 @@ func NewHandler() *Handler {
 	}
 }
 
-func (h *Handler) GetUser(c *fiber.Ctx) error {
+func (h *Handler) GetUser(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 
 	if session == nil || session.ActiveSignin == nil || session.ActiveSignin.User == nil {
@@ -92,7 +92,7 @@ func parseSegmentsJSON(jsonStr string) []*model.Segment {
 	return segments
 }
 
-func (h *Handler) UpdateUser(c *fiber.Ctx) error {
+func (h *Handler) UpdateUser(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 
 	b, validation := handler.Validate[UpdateUserSchema](c)
@@ -155,7 +155,7 @@ func (h *Handler) UpdateUser(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, "Profile updated successfully")
 }
 
-func (h *Handler) GetUserEmailAddresses(c *fiber.Ctx) error {
+func (h *Handler) GetUserEmailAddresses(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 
 	if session.ActiveSignin == nil {
@@ -180,7 +180,7 @@ func (h *Handler) GetUserEmailAddresses(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, emailAddresses)
 }
 
-func (h *Handler) GetUserEmailAddress(c *fiber.Ctx) error {
+func (h *Handler) GetUserEmailAddress(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -210,7 +210,7 @@ func (h *Handler) GetUserEmailAddress(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, email)
 }
 
-func (h *Handler) DeleteUserEmailAddress(c *fiber.Ctx) error {
+func (h *Handler) DeleteUserEmailAddress(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -256,7 +256,7 @@ func (h *Handler) DeleteUserEmailAddress(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, "Deleted successfully")
 }
 
-func (h *Handler) CreateUserEmailAddress(c *fiber.Ctx) error {
+func (h *Handler) CreateUserEmailAddress(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -307,7 +307,7 @@ func (h *Handler) CreateUserEmailAddress(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, newEmail)
 }
 
-func (h *Handler) AttemptEmailVerification(c *fiber.Ctx) error {
+func (h *Handler) AttemptEmailVerification(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -374,7 +374,7 @@ func (h *Handler) AttemptEmailVerification(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, "Email verified successfully")
 }
 
-func (h *Handler) PrepareEmailVerification(c *fiber.Ctx) error {
+func (h *Handler) PrepareEmailVerification(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -443,7 +443,7 @@ func (h *Handler) PrepareEmailVerification(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, "Verification code sent successfully")
 }
 
-func (h *Handler) GetUserPhoneNumbers(c *fiber.Ctx) error {
+func (h *Handler) GetUserPhoneNumbers(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -465,7 +465,7 @@ func (h *Handler) GetUserPhoneNumbers(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, phoneNumbers)
 }
 
-func (h *Handler) GetPhoneNumber(c *fiber.Ctx) error {
+func (h *Handler) GetPhoneNumber(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -495,7 +495,7 @@ func (h *Handler) GetPhoneNumber(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, phoneNumber)
 }
 
-func (h *Handler) AddPhoneNumber(c *fiber.Ctx) error {
+func (h *Handler) AddPhoneNumber(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -544,7 +544,7 @@ func (h *Handler) AddPhoneNumber(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, phoneNumber)
 }
 
-func (h *Handler) PreparePhoneVerification(c *fiber.Ctx) error {
+func (h *Handler) PreparePhoneVerification(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -591,7 +591,7 @@ func (h *Handler) PreparePhoneVerification(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, "Verification code sent successfully")
 }
 
-func (h *Handler) AttemptPhoneVerification(c *fiber.Ctx) error {
+func (h *Handler) AttemptPhoneVerification(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -660,7 +660,7 @@ func (h *Handler) AttemptPhoneVerification(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, "Phone number verified successfully")
 }
 
-func (h *Handler) DeletePhoneNumber(c *fiber.Ctx) error {
+func (h *Handler) DeletePhoneNumber(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -699,7 +699,7 @@ func (h *Handler) DeletePhoneNumber(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, "Deleted successfully")
 }
 
-func (h *Handler) GenerateAuthenticator(c *fiber.Ctx) error {
+func (h *Handler) GenerateAuthenticator(c fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 	session := handler.GetSession(c)
 
@@ -760,7 +760,7 @@ func (h *Handler) GenerateAuthenticator(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, resp)
 }
 
-func (h *Handler) VerifyAuthenticator(c *fiber.Ctx) error {
+func (h *Handler) VerifyAuthenticator(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -860,7 +860,7 @@ func (h *Handler) VerifyAuthenticator(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, authenticator)
 }
 
-func (h *Handler) DeleteAuthenticator(c *fiber.Ctx) error {
+func (h *Handler) DeleteAuthenticator(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -930,7 +930,7 @@ func (h *Handler) DeleteAuthenticator(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, "Authenticator deleted successfully")
 }
 
-func (h *Handler) GenerateBackupCodes(c *fiber.Ctx) error {
+func (h *Handler) GenerateBackupCodes(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -1000,7 +1000,7 @@ func (h *Handler) GenerateBackupCodes(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, backupCodes)
 }
 
-func (h *Handler) RegenerateBackupCodes(c *fiber.Ctx) error {
+func (h *Handler) RegenerateBackupCodes(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -1070,7 +1070,7 @@ func (h *Handler) RegenerateBackupCodes(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, backupCodes)
 }
 
-func (h *Handler) GetUserSignins(c *fiber.Ctx) error {
+func (h *Handler) GetUserSignins(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -1091,7 +1091,7 @@ func (h *Handler) GetUserSignins(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, signins)
 }
 
-func (h *Handler) UploadProfilePicture(c *fiber.Ctx) error {
+func (h *Handler) UploadProfilePicture(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -1138,7 +1138,7 @@ func (h *Handler) UploadProfilePicture(c *fiber.Ctx) error {
 	return handler.SendSuccess[any](c, nil)
 }
 
-func (h *Handler) SignOutFromSession(c *fiber.Ctx) error {
+func (h *Handler) SignOutFromSession(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -1174,7 +1174,7 @@ func (h *Handler) SignOutFromSession(c *fiber.Ctx) error {
 	return handler.SendSuccess[any](c, nil)
 }
 
-func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
+func (h *Handler) GetUserOrganizationMemberships(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -1309,7 +1309,7 @@ func (h *Handler) GetUserOrganizationMemberships(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, memberships)
 }
 
-func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
+func (h *Handler) GetUserWorkspaceMemberships(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -1514,7 +1514,7 @@ func (h *Handler) GetUserWorkspaceMemberships(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, memberships)
 }
 
-func (h *Handler) MakeEmailPrimary(c *fiber.Ctx) error {
+func (h *Handler) MakeEmailPrimary(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -1574,7 +1574,7 @@ func (h *Handler) MakeEmailPrimary(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, "Primary email updated successfully")
 }
 
-func (h *Handler) MakePhonePrimary(c *fiber.Ctx) error {
+func (h *Handler) MakePhonePrimary(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -1607,7 +1607,7 @@ func (h *Handler) MakePhonePrimary(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, "Primary phone updated successfully")
 }
 
-func (h *Handler) UpdatePassword(c *fiber.Ctx) error {
+func (h *Handler) UpdatePassword(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -1661,7 +1661,7 @@ func (h *Handler) UpdatePassword(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, "Password updated successfully")
 }
 
-func (h *Handler) RemovePassword(c *fiber.Ctx) error {
+func (h *Handler) RemovePassword(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -1711,7 +1711,7 @@ func (h *Handler) RemovePassword(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, "Password removed successfully")
 }
 
-func (h *Handler) DeleteAccount(c *fiber.Ctx) error {
+func (h *Handler) DeleteAccount(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -1764,7 +1764,7 @@ func (h *Handler) DeleteAccount(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, "Account deleted successfully")
 }
 
-func (h *Handler) DisconnectSocialConnection(c *fiber.Ctx) error {
+func (h *Handler) DisconnectSocialConnection(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -1790,7 +1790,7 @@ func (h *Handler) DisconnectSocialConnection(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, "Social connection disconnected successfully")
 }
 
-func (h *Handler) InitConnectSocial(c *fiber.Ctx) error {
+func (h *Handler) InitConnectSocial(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session.ActiveSignin == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -1868,7 +1868,7 @@ func (h *Handler) InitConnectSocial(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
+func (h *Handler) ConnectSocialCallback(c fiber.Ctx) error {
 	code := c.Query("code")
 	deployment := handler.GetDeployment(c)
 	session := handler.GetSession(c)
@@ -1998,7 +1998,7 @@ func (h *Handler) ConnectSocialCallback(c *fiber.Ctx) error {
 		)
 	}
 
-	token, err := conf.Exchange(c.Context(), code)
+	token, err := conf.Exchange(c.RequestCtx(), code)
 	if err != nil || !token.Valid() {
 		return handler.SendBadRequest(
 			c,

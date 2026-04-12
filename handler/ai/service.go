@@ -1378,7 +1378,7 @@ func (s *Service) GetAuthorizedBoardItem(deploymentID, actorID, itemID uint64, i
 }
 
 func (s *Service) GetBoardItemDetail(deploymentID, actorID, itemID uint64, includeArchived bool) (*ProjectTaskBoardItemDetail, error) {
-type boardItemDetailRow struct {
+	type boardItemDetailRow struct {
 		Item        json.RawMessage `gorm:"column:item"`
 		Events      json.RawMessage `gorm:"column:events"`
 		Assignments json.RawMessage `gorm:"column:assignments"`

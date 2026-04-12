@@ -3,11 +3,11 @@ package ai
 import (
 	"strconv"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/handler"
 )
 
-func (h *Handler) ListActorMcpServers(c *fiber.Ctx) error {
+func (h *Handler) ListActorMcpServers(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -21,7 +21,7 @@ func (h *Handler) ListActorMcpServers(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, servers)
 }
 
-func (h *Handler) ConnectActorMcpServer(c *fiber.Ctx) error {
+func (h *Handler) ConnectActorMcpServer(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -39,7 +39,7 @@ func (h *Handler) ConnectActorMcpServer(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, ActorMcpServerConnectResponse{AuthURL: authURL})
 }
 
-func (h *Handler) DisconnectActorMcpServer(c *fiber.Ctx) error {
+func (h *Handler) DisconnectActorMcpServer(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err

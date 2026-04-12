@@ -15,7 +15,7 @@ import (
 
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
@@ -47,7 +47,7 @@ func getuint64(s string) uint64 {
 }
 
 func (h *Handler) CreateOrganization(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	d := handler.GetDeployment(c)
 	b, validation := handler.Validate[CreateOrgRequest](c)
@@ -168,7 +168,7 @@ func (h *Handler) CreateOrganization(
 }
 
 func (h *Handler) LeaveOrganization(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgIDStr := c.Params("id")
 	orgID := getuint64(orgIDStr)
@@ -254,7 +254,7 @@ func (h *Handler) LeaveOrganization(
 }
 
 func (h *Handler) UpdateOrganization(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
 	b, validation := handler.Validate[UpdateOrgRequest](c)
@@ -333,7 +333,7 @@ func (h *Handler) UpdateOrganization(
 }
 
 func (h *Handler) DeleteOrganization(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
 	session := handler.GetSession(
@@ -397,7 +397,7 @@ func (h *Handler) DeleteOrganization(
 }
 
 func (h *Handler) GetOrganizationInvitations(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
 	// DEBUG: Start timing
@@ -567,7 +567,7 @@ func (h *Handler) GetOrganizationInvitations(
 }
 
 func (h *Handler) InviteMember(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
 	b, validation := handler.Validate[InviteMemberRequest](
@@ -768,7 +768,7 @@ func (h *Handler) InviteMember(
 }
 
 func (h *Handler) DiscardInvitation(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
 	invitationID := c.Params("invitationId")
@@ -806,7 +806,7 @@ func (h *Handler) DiscardInvitation(
 }
 
 func (h *Handler) ResendInvitation(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
 	invitationID := c.Params("invitationId")
@@ -871,7 +871,7 @@ func (h *Handler) ResendInvitation(
 }
 
 func (h *Handler) AcceptInvitation(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	b, validation := handler.Validate[AcceptInvitationRequest](c)
 	if validation != nil {
@@ -1166,7 +1166,7 @@ func (h *Handler) AcceptInvitation(
 }
 
 func (h *Handler) RemoveMember(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
 	memberID := c.Params("memberId")
@@ -1224,7 +1224,7 @@ func (h *Handler) RemoveMember(
 }
 
 func (h *Handler) AddMemberRole(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
 	memberID := c.Params("memberId")
@@ -1297,7 +1297,7 @@ func (h *Handler) AddMemberRole(
 }
 
 func (h *Handler) RemoveMemberRole(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgIDStr := c.Params("id")
 	memberIDStr := c.Params("memberId")
@@ -1388,7 +1388,7 @@ func (h *Handler) RemoveMemberRole(
 }
 
 func (h *Handler) GetOrganizationMembers(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
 	session := handler.GetSession(c)
@@ -1403,11 +1403,11 @@ func (h *Handler) GetOrganizationMembers(
 	}
 
 	d := handler.GetDeployment(c)
-	page := c.QueryInt("page", 1)
+	page := fiber.Query[int](c, "page", 1)
 	if page < 1 {
 		page = 1
 	}
-	limit := c.QueryInt("limit", 10)
+	limit := fiber.Query[int](c, "limit", 10)
 	if limit < 1 {
 		limit = 10
 	}
@@ -1565,7 +1565,7 @@ func (h *Handler) GetOrganizationMembers(
 }
 
 func (h *Handler) CreateOrganizationRole(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
 	session := handler.GetSession(c)
@@ -1618,7 +1618,7 @@ func (h *Handler) CreateOrganizationRole(
 }
 
 func (h *Handler) GetOrganizationRoles(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
 	session := handler.GetSession(c)
@@ -1640,7 +1640,7 @@ func (h *Handler) GetOrganizationRoles(
 }
 
 func (h *Handler) RemoveOrganizationRoles(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
 	roleID := c.Params("roleId")
@@ -1691,7 +1691,7 @@ func (h *Handler) RemoveOrganizationRoles(
 }
 
 func (h *Handler) GetOrganizationDomains(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
 	session := handler.GetSession(c)
@@ -1718,7 +1718,7 @@ func (h *Handler) GetOrganizationDomains(
 }
 
 func (h *Handler) AddOrganizationDomain(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
 	d := handler.GetDeployment(c)
@@ -1773,7 +1773,7 @@ func (h *Handler) AddOrganizationDomain(
 }
 
 func (h *Handler) VerifyOrganizationDomain(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
 	domainID := c.Params("domainId")
@@ -1844,7 +1844,7 @@ func (h *Handler) VerifyOrganizationDomain(
 }
 
 func (h *Handler) DeleteOrganizationDomain(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	orgID := c.Params("id")
 	domainID := c.Params("domainId")
@@ -1879,7 +1879,7 @@ func (h *Handler) DeleteOrganizationDomain(
 	})
 }
 
-func (h *Handler) GetEnterpriseConnections(c *fiber.Ctx) error {
+func (h *Handler) GetEnterpriseConnections(c fiber.Ctx) error {
 	orgID := c.Params("id")
 	d := handler.GetDeployment(c)
 
@@ -1908,7 +1908,7 @@ func (h *Handler) GetEnterpriseConnections(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, connections)
 }
 
-func (h *Handler) CreateEnterpriseConnection(c *fiber.Ctx) error {
+func (h *Handler) CreateEnterpriseConnection(c fiber.Ctx) error {
 	orgID := c.Params("id")
 	d := handler.GetDeployment(c)
 
@@ -1996,7 +1996,7 @@ func (h *Handler) CreateEnterpriseConnection(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, connection)
 }
 
-func (h *Handler) UpdateEnterpriseConnection(c *fiber.Ctx) error {
+func (h *Handler) UpdateEnterpriseConnection(c fiber.Ctx) error {
 	orgID := c.Params("id")
 	connectionID := c.Params("connectionId")
 	d := handler.GetDeployment(c)
@@ -2074,7 +2074,7 @@ func (h *Handler) UpdateEnterpriseConnection(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, connection)
 }
 
-func (h *Handler) DeleteEnterpriseConnection(c *fiber.Ctx) error {
+func (h *Handler) DeleteEnterpriseConnection(c fiber.Ctx) error {
 	orgID := c.Params("id")
 	connectionID := c.Params("connectionId")
 	d := handler.GetDeployment(c)
@@ -2109,7 +2109,7 @@ func (h *Handler) DeleteEnterpriseConnection(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) TestEnterpriseConnectionConfig(c *fiber.Ctx) error {
+func (h *Handler) TestEnterpriseConnectionConfig(c fiber.Ctx) error {
 	d := handler.GetDeployment(c)
 
 	if !d.B2BSettings.EnterpriseSsoEnabled {
@@ -2158,7 +2158,7 @@ func (h *Handler) TestEnterpriseConnectionConfig(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, result)
 }
 
-func (h *Handler) TestEnterpriseConnection(c *fiber.Ctx) error {
+func (h *Handler) TestEnterpriseConnection(c fiber.Ctx) error {
 	orgID := c.Params("id")
 	connectionID := c.Params("connectionId")
 
@@ -2320,7 +2320,7 @@ func validateOIDCConfig(issuerURL string, result TestConnectionResult) TestConne
 	return result
 }
 
-func (h *Handler) GenerateSCIMToken(c *fiber.Ctx) error {
+func (h *Handler) GenerateSCIMToken(c fiber.Ctx) error {
 	orgID := c.Params("id")
 	connectionID := c.Params("connectionId")
 	d := handler.GetDeployment(c)
@@ -2368,7 +2368,7 @@ func (h *Handler) GenerateSCIMToken(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, response)
 }
 
-func (h *Handler) GetSCIMToken(c *fiber.Ctx) error {
+func (h *Handler) GetSCIMToken(c fiber.Ctx) error {
 	orgID := c.Params("id")
 	connectionID := c.Params("connectionId")
 	d := handler.GetDeployment(c)
@@ -2423,7 +2423,7 @@ func (h *Handler) GetSCIMToken(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) RevokeSCIMToken(c *fiber.Ctx) error {
+func (h *Handler) RevokeSCIMToken(c fiber.Ctx) error {
 	orgID := c.Params("id")
 	connectionID := c.Params("connectionId")
 

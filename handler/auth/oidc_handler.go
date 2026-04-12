@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
@@ -24,7 +24,7 @@ import (
 )
 
 // OIDCLogin initiates the OIDC authentication flow
-func (h *Handler) OIDCLogin(c *fiber.Ctx, connection *model.EnterpriseConnection) error {
+func (h *Handler) OIDCLogin(c fiber.Ctx, connection *model.EnterpriseConnection) error {
 	redirectURI := c.Query("redirect_uri")
 
 	deployment := handler.GetDeployment(c)
@@ -110,7 +110,7 @@ func (h *Handler) OIDCLogin(c *fiber.Ctx, connection *model.EnterpriseConnection
 }
 
 // OIDCCallback handles the callback from the OIDC Identity Provider
-func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
+func (h *Handler) OIDCCallback(c fiber.Ctx) error {
 	code := c.Query("code")
 	stateParam := c.Query("state")
 	errorParam := c.Query("error")
@@ -360,7 +360,7 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 					q.Set("error", "access_denied")
 					q.Set("error_description", "User not found and automatic provisioning is disabled. Please contact your administrator.")
 					parsedURL.RawQuery = q.Encode()
-					return c.Redirect(parsedURL.String(), fiber.StatusFound)
+					return c.Redirect().Status(fiber.StatusFound).To(parsedURL.String())
 				}
 			}
 			return handler.SendForbidden(c, nil, "User not found and JIT provisioning is disabled - please contact your administrator")
@@ -400,7 +400,7 @@ func (h *Handler) OIDCCallback(c *fiber.Ctx) error {
 				}
 			}
 		}
-		return c.Redirect(redirectURI, fiber.StatusFound)
+		return c.Redirect().Status(fiber.StatusFound).To(redirectURI)
 	}
 
 	return handler.SendSuccess(c, fiber.Map{

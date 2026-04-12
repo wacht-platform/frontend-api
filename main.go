@@ -7,7 +7,7 @@ import (
 	"syscall"
 
 	"github.com/goccy/go-json"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/config"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
@@ -36,13 +36,15 @@ func main() {
 	}
 
 	app := fiber.New(fiber.Config{
-		JSONEncoder:             json.Marshal,
-		JSONDecoder:             json.Unmarshal,
-		ErrorHandler:            handler.DefaultErrorHandler,
-		EnableTrustedProxyCheck: true,
-		TrustedProxies:          []string{config.GetEnv("LOAD_BALANCER_IP", "127.0.0.1")},
-		ReadBufferSize:          16384,
-		BodyLimit:               50 * 1024 * 1024,
+		JSONEncoder:  json.Marshal,
+		JSONDecoder:  json.Unmarshal,
+		ErrorHandler: handler.DefaultErrorHandler,
+		TrustProxy:   true,
+		TrustProxyConfig: fiber.TrustProxyConfig{
+			Proxies: []string{config.GetEnv("LOAD_BALANCER_IP", "127.0.0.1")},
+		},
+		ReadBufferSize: 16384,
+		BodyLimit:      50 * 1024 * 1024,
 	})
 
 	router.Setup(app)

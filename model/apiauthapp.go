@@ -81,30 +81,30 @@ type ApiAuthApp struct {
 
 // ApiKey represents an API key for authentication
 type ApiKey struct {
-	ID            uint64         `gorm:"primarykey"                json:"id,string"`
-	DeploymentID  uint64         `json:"deployment_id,string"      gorm:"index;not null"`
-	OwnerUserID   *uint64        `json:"owner_user_id,string,omitempty"         gorm:"column:owner_user_id;index"`
-	AppSlug       string         `json:"app_slug"                  gorm:"column:app_slug;type:varchar(255);not null"`
-	Name          string         `json:"name"                      gorm:"type:varchar(255);not null"`
-	KeyPrefix     string         `json:"key_prefix"                gorm:"type:varchar(20);not null"`
-	KeySuffix     string         `json:"key_suffix"                gorm:"type:varchar(10);not null"`
-	KeyHash       string         `json:"-"                         gorm:"type:varchar(128);not null"` // SHA-256 hash
-	Permissions   []string       `json:"permissions"               gorm:"type:jsonb;serializer:json;default:'[]'::jsonb"`
-	OrgRolePerms  []string       `json:"org_role_permissions"       gorm:"column:org_role_permissions;type:jsonb;serializer:json;default:'[]'::jsonb"`
-	WsRolePerms   []string       `json:"workspace_role_permissions" gorm:"column:workspace_role_permissions;type:jsonb;serializer:json;default:'[]'::jsonb"`
-	Metadata      map[string]any `json:"metadata"                  gorm:"type:jsonb;serializer:json;default:'{}'::jsonb"`
-	RateLimitSchemeSlug *string  `json:"-"                         gorm:"column:rate_limit_scheme_slug;type:varchar(255)"`
-	OrgID         *uint64        `json:"organization_id,string,omitempty"         gorm:"column:organization_id;index"`
-	WorkspaceID   *uint64        `json:"workspace_id,string,omitempty"            gorm:"column:workspace_id;index"`
-	OrgMemberID   *uint64        `json:"organization_membership_id,string,omitempty" gorm:"column:organization_membership_id;index"`
-	WsMemberID    *uint64        `json:"workspace_membership_id,string,omitempty"    gorm:"column:workspace_membership_id;index"`
-	ExpiresAt     *time.Time     `json:"expires_at,omitempty"`
-	LastUsedAt    *time.Time     `json:"last_used_at,omitempty"`
-	IsActive      bool           `json:"is_active"                 gorm:"not null;default:true"`
-	CreatedAt     time.Time      `json:"created_at"                gorm:"autoCreateTime"`
-	UpdatedAt     time.Time      `json:"updated_at"                gorm:"autoUpdateTime"`
-	RevokedAt     *time.Time     `json:"revoked_at,omitempty"`
-	RevokedReason *string        `json:"revoked_reason,omitempty"  gorm:"type:text"`
+	ID                  uint64         `gorm:"primarykey"                json:"id,string"`
+	DeploymentID        uint64         `json:"deployment_id,string"      gorm:"index;not null"`
+	OwnerUserID         *uint64        `json:"owner_user_id,string,omitempty"         gorm:"column:owner_user_id;index"`
+	AppSlug             string         `json:"app_slug"                  gorm:"column:app_slug;type:varchar(255);not null"`
+	Name                string         `json:"name"                      gorm:"type:varchar(255);not null"`
+	KeyPrefix           string         `json:"key_prefix"                gorm:"type:varchar(20);not null"`
+	KeySuffix           string         `json:"key_suffix"                gorm:"type:varchar(10);not null"`
+	KeyHash             string         `json:"-"                         gorm:"type:varchar(128);not null"` // SHA-256 hash
+	Permissions         []string       `json:"permissions"               gorm:"type:jsonb;serializer:json;default:'[]'::jsonb"`
+	OrgRolePerms        []string       `json:"org_role_permissions"       gorm:"column:org_role_permissions;type:jsonb;serializer:json;default:'[]'::jsonb"`
+	WsRolePerms         []string       `json:"workspace_role_permissions" gorm:"column:workspace_role_permissions;type:jsonb;serializer:json;default:'[]'::jsonb"`
+	Metadata            map[string]any `json:"metadata"                  gorm:"type:jsonb;serializer:json;default:'{}'::jsonb"`
+	RateLimitSchemeSlug *string        `json:"-"                         gorm:"column:rate_limit_scheme_slug;type:varchar(255)"`
+	OrgID               *uint64        `json:"organization_id,string,omitempty"         gorm:"column:organization_id;index"`
+	WorkspaceID         *uint64        `json:"workspace_id,string,omitempty"            gorm:"column:workspace_id;index"`
+	OrgMemberID         *uint64        `json:"organization_membership_id,string,omitempty" gorm:"column:organization_membership_id;index"`
+	WsMemberID          *uint64        `json:"workspace_membership_id,string,omitempty"    gorm:"column:workspace_membership_id;index"`
+	ExpiresAt           *time.Time     `json:"expires_at,omitempty"`
+	LastUsedAt          *time.Time     `json:"last_used_at,omitempty"`
+	IsActive            bool           `json:"is_active"                 gorm:"not null;default:true"`
+	CreatedAt           time.Time      `json:"created_at"                gorm:"autoCreateTime"`
+	UpdatedAt           time.Time      `json:"updated_at"                gorm:"autoUpdateTime"`
+	RevokedAt           *time.Time     `json:"revoked_at,omitempty"`
+	RevokedReason       *string        `json:"revoked_reason,omitempty"  gorm:"type:text"`
 }
 
 // RateLimitScheme represents a reusable rate limit configuration

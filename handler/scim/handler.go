@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
@@ -23,7 +23,7 @@ func NewHandler() *Handler {
 	}
 }
 
-func (h *Handler) AuthMiddleware(c *fiber.Ctx) error {
+func (h *Handler) AuthMiddleware(c fiber.Ctx) error {
 	connectionIDStr := c.Params("connectionId")
 	if connectionIDStr == "" {
 		return h.sendSCIMError(c, 400, "Missing connection ID", "invalidValue")
@@ -66,7 +66,7 @@ func (h *Handler) AuthMiddleware(c *fiber.Ctx) error {
 	return c.Next()
 }
 
-func (h *Handler) GetServiceProviderConfig(c *fiber.Ctx) error {
+func (h *Handler) GetServiceProviderConfig(c fiber.Ctx) error {
 	connectionID := c.Locals("scim_connection_id").(uint64)
 	baseURL := h.getBaseURL(c)
 
@@ -113,7 +113,7 @@ func (h *Handler) GetServiceProviderConfig(c *fiber.Ctx) error {
 	return c.JSON(config)
 }
 
-func (h *Handler) GetSchemas(c *fiber.Ctx) error {
+func (h *Handler) GetSchemas(c fiber.Ctx) error {
 	// Simplified schema response - full schema definitions would be quite long
 	schemas := []any{
 		map[string]any{
@@ -135,7 +135,7 @@ func (h *Handler) GetSchemas(c *fiber.Ctx) error {
 	return c.JSON(response)
 }
 
-func (h *Handler) GetResourceTypes(c *fiber.Ctx) error {
+func (h *Handler) GetResourceTypes(c fiber.Ctx) error {
 	connectionID := c.Locals("scim_connection_id").(uint64)
 	baseURL := h.getBaseURL(c)
 
@@ -171,12 +171,12 @@ func (h *Handler) GetResourceTypes(c *fiber.Ctx) error {
 	return c.JSON(response)
 }
 
-func (h *Handler) CreateUser(c *fiber.Ctx) error {
+func (h *Handler) CreateUser(c fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
 	deployment := c.Locals("scim_deployment").(*model.Deployment)
 
 	var scimUser SCIMUser
-	if err := c.BodyParser(&scimUser); err != nil {
+	if err := c.Bind().Body(&scimUser); err != nil {
 		return h.sendSCIMError(c, 400, "Invalid request body", "invalidSyntax")
 	}
 
@@ -224,7 +224,7 @@ func (h *Handler) CreateUser(c *fiber.Ctx) error {
 	return c.Status(201).JSON(result)
 }
 
-func (h *Handler) ListUsers(c *fiber.Ctx) error {
+func (h *Handler) ListUsers(c fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
 	deploymentID := c.Locals("scim_deployment_id").(uint64)
 	organizationID := c.Locals("scim_organization_id").(uint64)
@@ -249,7 +249,7 @@ func (h *Handler) ListUsers(c *fiber.Ctx) error {
 	return c.JSON(response)
 }
 
-func (h *Handler) GetUser(c *fiber.Ctx) error {
+func (h *Handler) GetUser(c fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
 	deploymentID := c.Locals("scim_deployment_id").(uint64)
 
@@ -269,7 +269,7 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-func (h *Handler) ReplaceUser(c *fiber.Ctx) error {
+func (h *Handler) ReplaceUser(c fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
 	deploymentID := c.Locals("scim_deployment_id").(uint64)
 
@@ -280,7 +280,7 @@ func (h *Handler) ReplaceUser(c *fiber.Ctx) error {
 	}
 
 	var scimUser SCIMUser
-	if err := c.BodyParser(&scimUser); err != nil {
+	if err := c.Bind().Body(&scimUser); err != nil {
 		return h.sendSCIMError(c, 400, "Invalid request body", "invalidSyntax")
 	}
 
@@ -305,7 +305,7 @@ func (h *Handler) ReplaceUser(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-func (h *Handler) PatchUser(c *fiber.Ctx) error {
+func (h *Handler) PatchUser(c fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
 	deploymentID := c.Locals("scim_deployment_id").(uint64)
 
@@ -321,7 +321,7 @@ func (h *Handler) PatchUser(c *fiber.Ctx) error {
 	}
 
 	var patchOp SCIMPatchOp
-	if err := c.BodyParser(&patchOp); err != nil {
+	if err := c.Bind().Body(&patchOp); err != nil {
 		return h.sendSCIMError(c, 400, "Invalid request body", "invalidSyntax")
 	}
 
@@ -341,7 +341,7 @@ func (h *Handler) PatchUser(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-func (h *Handler) DeleteUser(c *fiber.Ctx) error {
+func (h *Handler) DeleteUser(c fiber.Ctx) error {
 	deploymentID := c.Locals("scim_deployment_id").(uint64)
 
 	userIDStr := c.Params("userId")
@@ -366,12 +366,12 @@ func (h *Handler) DeleteUser(c *fiber.Ctx) error {
 	return c.SendStatus(204)
 }
 
-func (h *Handler) CreateGroup(c *fiber.Ctx) error {
+func (h *Handler) CreateGroup(c fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
 	deploymentID := c.Locals("scim_deployment_id").(uint64)
 
 	var scimGroup SCIMGroup
-	if err := c.BodyParser(&scimGroup); err != nil {
+	if err := c.Bind().Body(&scimGroup); err != nil {
 		return h.sendSCIMError(c, 400, "Invalid request body", "invalidSyntax")
 	}
 
@@ -411,7 +411,7 @@ func (h *Handler) CreateGroup(c *fiber.Ctx) error {
 	return c.Status(201).JSON(result)
 }
 
-func (h *Handler) ListGroups(c *fiber.Ctx) error {
+func (h *Handler) ListGroups(c fiber.Ctx) error {
 	connectionID := c.Locals("scim_connection_id").(uint64)
 
 	startIndex, _ := strconv.Atoi(c.Query("startIndex", "1"))
@@ -432,7 +432,7 @@ func (h *Handler) ListGroups(c *fiber.Ctx) error {
 	return c.JSON(response)
 }
 
-func (h *Handler) GetGroup(c *fiber.Ctx) error {
+func (h *Handler) GetGroup(c fiber.Ctx) error {
 	connectionID := c.Locals("scim_connection_id").(uint64)
 
 	groupIDStr := c.Params("groupId")
@@ -451,7 +451,7 @@ func (h *Handler) GetGroup(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-func (h *Handler) ReplaceGroup(c *fiber.Ctx) error {
+func (h *Handler) ReplaceGroup(c fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
 	connectionID := c.Locals("scim_connection_id").(uint64)
 
@@ -467,7 +467,7 @@ func (h *Handler) ReplaceGroup(c *fiber.Ctx) error {
 	}
 
 	var scimGroup SCIMGroup
-	if err := c.BodyParser(&scimGroup); err != nil {
+	if err := c.Bind().Body(&scimGroup); err != nil {
 		return h.sendSCIMError(c, 400, "Invalid request body", "invalidSyntax")
 	}
 
@@ -488,7 +488,7 @@ func (h *Handler) ReplaceGroup(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-func (h *Handler) PatchGroup(c *fiber.Ctx) error {
+func (h *Handler) PatchGroup(c fiber.Ctx) error {
 	connection := c.Locals("scim_connection").(*model.EnterpriseConnection)
 	connectionID := c.Locals("scim_connection_id").(uint64)
 
@@ -504,7 +504,7 @@ func (h *Handler) PatchGroup(c *fiber.Ctx) error {
 	}
 
 	var patchOp SCIMPatchOp
-	if err := c.BodyParser(&patchOp); err != nil {
+	if err := c.Bind().Body(&patchOp); err != nil {
 		return h.sendSCIMError(c, 400, "Invalid request body", "invalidSyntax")
 	}
 
@@ -524,7 +524,7 @@ func (h *Handler) PatchGroup(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-func (h *Handler) DeleteGroup(c *fiber.Ctx) error {
+func (h *Handler) DeleteGroup(c fiber.Ctx) error {
 	connectionID := c.Locals("scim_connection_id").(uint64)
 
 	groupIDStr := c.Params("groupId")
@@ -549,12 +549,12 @@ func (h *Handler) DeleteGroup(c *fiber.Ctx) error {
 	return c.SendStatus(204)
 }
 
-func (h *Handler) sendSCIMError(c *fiber.Ctx, status int, detail, scimType string) error {
+func (h *Handler) sendSCIMError(c fiber.Ctx, status int, detail, scimType string) error {
 	c.Set("Content-Type", ContentTypeSCIM)
 	return c.Status(status).JSON(NewSCIMError(status, detail, scimType))
 }
 
-func (h *Handler) getBaseURL(c *fiber.Ctx) string {
+func (h *Handler) getBaseURL(c fiber.Ctx) string {
 	deployment := c.Locals("scim_deployment").(*model.Deployment)
 	return fmt.Sprintf("https://%s", deployment.BackendHost)
 }

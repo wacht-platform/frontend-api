@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pquerna/otp/totp"
 	"github.com/wacht-platform/frontend-api/database"
@@ -30,7 +30,7 @@ func NewHandler() *Handler {
 	}
 }
 
-func (h *Handler) SignIn(c *fiber.Ctx) error {
+func (h *Handler) SignIn(c fiber.Ctx) error {
 	b, validation := handler.Validate[SignInRequest](c)
 
 	if validation != nil {
@@ -62,7 +62,7 @@ func (h *Handler) SignIn(c *fiber.Ctx) error {
 }
 
 func (h *Handler) handleUsernameSignIn(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	b SignInRequest,
 	d model.Deployment,
 	session *model.Session,
@@ -240,7 +240,7 @@ func (h *Handler) handleUsernameSignIn(
 }
 
 func (h *Handler) handleEmailPasswordSignIn(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	b SignInRequest,
 	d model.Deployment,
 	session *model.Session,
@@ -417,7 +417,7 @@ func (h *Handler) handleEmailPasswordSignIn(
 }
 
 func (h *Handler) handleOTPSignIn(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	b SignInRequest,
 	session *model.Session,
 	method model.SignInMethod,
@@ -582,7 +582,7 @@ func (h *Handler) handleOTPSignIn(
 }
 
 func (h *Handler) handleMagicLinkSignIn(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	b SignInRequest,
 	d model.Deployment,
 	session *model.Session,
@@ -686,7 +686,7 @@ func (h *Handler) handleMagicLinkSignIn(
 	return handler.SendSuccess(c, session)
 }
 
-func (h *Handler) SignUp(c *fiber.Ctx) error {
+func (h *Handler) SignUp(c fiber.Ctx) error {
 	b, validation := handler.Validate[SignUpRequest](c)
 	if validation != nil {
 		return handler.SendBadRequest(c, validation, "Bad request body")
@@ -871,12 +871,12 @@ func (h *Handler) SignUp(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, session)
 }
 
-func (h *Handler) AuthMethods(c *fiber.Ctx) error {
+func (h *Handler) AuthMethods(c fiber.Ctx) error {
 	d := handler.GetDeployment(c)
 	return handler.SendSuccess(c, d.AuthSettings)
 }
 
-func (h *Handler) InitOAuth2(c *fiber.Ctx) error {
+func (h *Handler) InitOAuth2(c fiber.Ctx) error {
 	provider := model.SocialConnectionProvider(c.Query("provider"))
 	if provider == "" {
 		return handler.SendBadRequest(
@@ -940,7 +940,7 @@ func (h *Handler) InitOAuth2(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) OAuth2Callback(c *fiber.Ctx) error {
+func (h *Handler) OAuth2Callback(c fiber.Ctx) error {
 	code := c.Query("code")
 	deployment := handler.GetDeployment(c)
 	session := handler.GetSession(c)
@@ -1041,7 +1041,7 @@ func (h *Handler) OAuth2Callback(c *fiber.Ctx) error {
 		)
 	}
 
-	token, err := conf.Exchange(c.Context(), code)
+	token, err := conf.Exchange(c.RequestCtx(), code)
 	if err != nil || !token.Valid() {
 		return handler.SendBadRequest(
 			c,
@@ -1286,7 +1286,7 @@ func (h *Handler) OAuth2Callback(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, response)
 }
 
-func (h *Handler) CheckIdentifierAvailability(c *fiber.Ctx) error {
+func (h *Handler) CheckIdentifierAvailability(c fiber.Ctx) error {
 	identifier := c.Query("identifier")
 	identifierType := c.Query("type")
 	deployment := handler.GetDeployment(c)
@@ -1308,8 +1308,8 @@ func (h *Handler) CheckIdentifierAvailability(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
-	attemptIdentifier := c.QueryInt("attempt_identifier")
+func (h *Handler) PrepareVerification(c fiber.Ctx) error {
+	attemptIdentifier := fiber.Query[int](c, "attempt_identifier")
 	identifierType := c.Query("identifier_type")
 	strategy := c.Query("strategy")
 	redirectURI := c.Query("redirect_uri")
@@ -1613,7 +1613,7 @@ func (h *Handler) PrepareVerification(c *fiber.Ctx) error {
 	return handler.SendSuccess[any](c, nil)
 }
 
-func (h *Handler) VerifyMagicLink(c *fiber.Ctx) error {
+func (h *Handler) VerifyMagicLink(c fiber.Ctx) error {
 	token := c.Query("token")
 	attemptIDStr := c.Query("attempt")
 
@@ -1715,8 +1715,8 @@ func (h *Handler) VerifyMagicLink(c *fiber.Ctx) error {
 	}
 }
 
-func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
-	attemptIdentifier := c.QueryInt("attempt_identifier")
+func (h *Handler) AttemptVerification(c fiber.Ctx) error {
+	attemptIdentifier := fiber.Query[int](c, "attempt_identifier")
 	identifierType := c.Query("identifier_type")
 	session := handler.GetSession(c)
 	deployment := handler.GetDeployment(c)
@@ -1743,7 +1743,7 @@ func (h *Handler) AttemptVerification(c *fiber.Ctx) error {
 }
 
 func (h *Handler) handleSignInVerification(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	b *VerifyOTPRequest,
 	attemptIdentifier int,
 	session *model.Session,
@@ -2222,7 +2222,7 @@ func (h *Handler) handleSignInVerification(
 }
 
 func (h *Handler) handleSignUpVerification(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	b *VerifyOTPRequest,
 	attemptIdentifier int,
 	session *model.Session,
@@ -2365,8 +2365,8 @@ func (h *Handler) handleSignUpVerification(
 	return handler.SendSuccess(c, session)
 }
 
-func (h *Handler) CompleteProfile(c *fiber.Ctx) error {
-	attemptID := c.QueryInt("attempt_id")
+func (h *Handler) CompleteProfile(c fiber.Ctx) error {
+	attemptID := fiber.Query[int](c, "attempt_id")
 	if attemptID == 0 {
 		return handler.SendBadRequest(c, nil, "attempt_id is required")
 	}
@@ -2402,8 +2402,8 @@ func (h *Handler) CompleteProfile(c *fiber.Ctx) error {
 	return handler.SendBadRequest(c, nil, "Invalid attempt ID or attempt not found")
 }
 
-func (h *Handler) CompleteOAuthSignup(c *fiber.Ctx) error {
-	attemptID := c.QueryInt("attempt_id")
+func (h *Handler) CompleteOAuthSignup(c fiber.Ctx) error {
+	attemptID := fiber.Query[int](c, "attempt_id")
 	if attemptID == 0 {
 		return handler.SendBadRequest(c, nil, "attempt_id is required")
 	}
@@ -2512,8 +2512,8 @@ func (h *Handler) CompleteOAuthSignup(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
-	attemptID := c.QueryInt("attempt_id")
+func (h *Handler) CompleteSignInProfile(c fiber.Ctx) error {
+	attemptID := fiber.Query[int](c, "attempt_id")
 	if attemptID == 0 {
 		return handler.SendBadRequest(c, nil, "attempt_id is required")
 	}
@@ -2648,7 +2648,7 @@ func (h *Handler) CompleteSignInProfile(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, session)
 }
 
-func (h *Handler) ForgotPassword(c *fiber.Ctx) error {
+func (h *Handler) ForgotPassword(c fiber.Ctx) error {
 	b, validation := handler.Validate[ForgotPasswordRequest](c)
 	if validation != nil {
 		return handler.SendBadRequest(c, validation, "Bad request body")
@@ -2746,7 +2746,7 @@ func (h *Handler) ForgotPassword(c *fiber.Ctx) error {
 	return handler.SendSuccess[any](c, nil)
 }
 
-func (h *Handler) ResetPassword(c *fiber.Ctx) error {
+func (h *Handler) ResetPassword(c fiber.Ctx) error {
 	b, validation := handler.Validate[ResetPasswordRequest](c)
 	deployment := handler.GetDeployment(c)
 	if validation != nil {
@@ -2898,7 +2898,7 @@ func (h *Handler) ResetPassword(c *fiber.Ctx) error {
 }
 
 func (h *Handler) handleOAuthSignupCompletion(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	attempt *model.SignupAttempt,
 	b *SignUpRequest,
 	session *model.Session,
@@ -3005,7 +3005,7 @@ func (h *Handler) handleOAuthSignupCompletion(
 }
 
 func (h *Handler) handleSigninProfileCompletion(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	attempt *model.SignInAttempt,
 	b *SignUpRequest,
 	session *model.Session,

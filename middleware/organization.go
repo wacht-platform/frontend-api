@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
 )
 
-func SetOrganizationContext(c *fiber.Ctx) error {
+func SetOrganizationContext(c fiber.Ctx) error {
 	orgIDStr := c.Params("id")
 	if orgIDStr == "" {
 		return c.Next()

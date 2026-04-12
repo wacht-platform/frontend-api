@@ -10,8 +10,8 @@ import (
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/adaptor"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/adaptor"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
@@ -40,7 +40,7 @@ func (u *PasskeyUser) WebAuthnCredentials() []webauthn.Credential {
 	return u.Credentials
 }
 
-func (h *Handler) GetPasskeys(c *fiber.Ctx) error {
+func (h *Handler) GetPasskeys(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	d := handler.GetDeployment(c)
 
@@ -60,7 +60,7 @@ func (h *Handler) GetPasskeys(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, passkeys)
 }
 
-func (h *Handler) BeginPasskeyRegistration(c *fiber.Ctx) error {
+func (h *Handler) BeginPasskeyRegistration(c fiber.Ctx) error {
 	d := handler.GetDeployment(c)
 	session := handler.GetSession(c)
 
@@ -119,14 +119,14 @@ func (h *Handler) BeginPasskeyRegistration(c *fiber.Ctx) error {
 
 	sessionKey := fmt.Sprintf("passkey_reg:%d:%d", user.ID, session.ID)
 	sessionJSON, _ := json.Marshal(sessionData)
-	database.Redis.Set(c.Context(), sessionKey, sessionJSON, 5*time.Minute)
+	database.Redis.Set(c.RequestCtx(), sessionKey, sessionJSON, 5*time.Minute)
 
 	return handler.SendSuccess(c, fiber.Map{
 		"options": options,
 	})
 }
 
-func (h *Handler) FinishPasskeyRegistration(c *fiber.Ctx) error {
+func (h *Handler) FinishPasskeyRegistration(c fiber.Ctx) error {
 	d := handler.GetDeployment(c)
 	session := handler.GetSession(c)
 
@@ -146,7 +146,7 @@ func (h *Handler) FinishPasskeyRegistration(c *fiber.Ctx) error {
 	}
 
 	sessionKey := fmt.Sprintf("passkey_reg:%d:%d", user.ID, session.ID)
-	sessionJSON, err := database.Redis.Get(c.Context(), sessionKey).Bytes()
+	sessionJSON, err := database.Redis.Get(c.RequestCtx(), sessionKey).Bytes()
 	if err != nil {
 		return handler.SendBadRequest(c, nil, "Registration session expired")
 	}
@@ -213,14 +213,14 @@ func (h *Handler) FinishPasskeyRegistration(c *fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to save passkey")
 	}
 
-	database.Redis.Del(c.Context(), sessionKey)
+	database.Redis.Del(c.RequestCtx(), sessionKey)
 
 	return handler.SendSuccess(c, fiber.Map{
 		"passkey": passkey,
 	})
 }
 
-func (h *Handler) DeletePasskey(c *fiber.Ctx) error {
+func (h *Handler) DeletePasskey(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	d := handler.GetDeployment(c)
 
@@ -255,7 +255,7 @@ type RenamePasskeyRequest struct {
 	Name string `form:"name"`
 }
 
-func (h *Handler) RenamePasskey(c *fiber.Ctx) error {
+func (h *Handler) RenamePasskey(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	d := handler.GetDeployment(c)
 

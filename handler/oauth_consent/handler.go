@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/config"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
@@ -37,14 +37,14 @@ func NewHandler() *Handler {
 	}
 }
 
-func (h *Handler) Init(c *fiber.Ctx) error {
+func (h *Handler) Init(c fiber.Ctx) error {
 	handoffID := strings.TrimSpace(c.Query("handoff_id"))
 	if handoffID == "" {
 		return handler.SendBadRequest(c, nil, "handoff_id is required")
 	}
 
 	deployment := handler.GetDeployment(c)
-	handoff, err := loadOAuthConsentHandoff(c.Context(), handoffID)
+	handoff, err := loadOAuthConsentHandoff(c.RequestCtx(), handoffID)
 	if err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid or expired consent handoff")
 	}
@@ -56,7 +56,7 @@ func (h *Handler) Init(c *fiber.Ctx) error {
 	if session == nil {
 		return handler.SendUnauthorized(c, nil, "Session required")
 	}
-	if err := setSessionConsentHandoff(c.Context(), session.ID, handoffID); err != nil {
+	if err := setSessionConsentHandoff(c.RequestCtx(), session.ID, handoffID); err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to initialize consent session")
 	}
 
@@ -76,13 +76,11 @@ func (h *Handler) Init(c *fiber.Ctx) error {
 		}
 	}
 
-	return c.Redirect(
-		consentURL,
-		fiber.StatusTemporaryRedirect,
-	)
+	return c.Redirect().Status(fiber.StatusTemporaryRedirect).To(consentURL)
+
 }
 
-func (h *Handler) Details(c *fiber.Ctx) error {
+func (h *Handler) Details(c fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 	session := handler.GetSession(c)
 	if session == nil || session.ActiveSigninID == nil {
@@ -92,12 +90,12 @@ func (h *Handler) Details(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
-	handoffID, err := loadSessionConsentHandoff(c.Context(), session.ID)
+	handoffID, err := loadSessionConsentHandoff(c.RequestCtx(), session.ID)
 	if err != nil {
 		return handler.SendBadRequest(c, nil, "Consent session is missing or expired")
 	}
 
-	handoff, err := loadOAuthConsentHandoff(c.Context(), handoffID)
+	handoff, err := loadOAuthConsentHandoff(c.RequestCtx(), handoffID)
 	if err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid or expired consent handoff")
 	}
@@ -108,7 +106,7 @@ func (h *Handler) Details(c *fiber.Ctx) error {
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to initialize consent CSRF token")
 	}
-	if err := setSessionConsentCSRFToken(c.Context(), session.ID, handoffID, csrfToken); err != nil {
+	if err := setSessionConsentCSRFToken(c.RequestCtx(), session.ID, handoffID, csrfToken); err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to persist consent CSRF token")
 	}
 
@@ -131,7 +129,7 @@ func (h *Handler) Details(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) Submit(c *fiber.Ctx) error {
+func (h *Handler) Submit(c fiber.Ctx) error {
 	request, validation := handler.Validate[submitConsentRequest](c)
 	if validation != nil {
 		return handler.SendBadRequest(c, validation, "Bad request body")
@@ -146,19 +144,19 @@ func (h *Handler) Submit(c *fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
-	handoffID, err := loadSessionConsentHandoff(c.Context(), session.ID)
+	handoffID, err := loadSessionConsentHandoff(c.RequestCtx(), session.ID)
 	if err != nil {
 		return handler.SendBadRequest(c, nil, "Consent session is missing or expired")
 	}
 
-	handoff, err := loadOAuthConsentHandoff(c.Context(), handoffID)
+	handoff, err := loadOAuthConsentHandoff(c.RequestCtx(), handoffID)
 	if err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid or expired consent handoff")
 	}
 	if uint64(handoff.DeploymentID) != deployment.ID {
 		return handler.SendUnauthorized(c, nil, "Consent handoff is not valid for this deployment")
 	}
-	expectedCSRFToken, err := loadSessionConsentCSRFToken(c.Context(), session.ID, handoffID)
+	expectedCSRFToken, err := loadSessionConsentCSRFToken(c.RequestCtx(), session.ID, handoffID)
 	if err != nil {
 		return handler.SendBadRequest(c, nil, "Consent CSRF token is missing or expired")
 	}
@@ -198,7 +196,7 @@ func (h *Handler) Submit(c *fiber.Ctx) error {
 		}
 
 		effectiveScopes, err := resolveEffectiveScopes(
-			c.Context(),
+			c.RequestCtx(),
 			uint64(handoff.DeploymentID),
 			*session.ActiveSignin.UserID,
 			grantedResource,
@@ -230,17 +228,17 @@ func (h *Handler) Submit(c *fiber.Ctx) error {
 
 	location := strings.TrimSpace(resp.Header.Get("Location"))
 	if (resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusSeeOther || resp.StatusCode == http.StatusTemporaryRedirect || resp.StatusCode == http.StatusPermanentRedirect) && location != "" {
-		_ = deleteOAuthConsentHandoff(c.Context(), handoffID)
-		_ = deleteSessionConsentHandoff(c.Context(), session.ID)
-		_ = deleteSessionConsentCSRFToken(c.Context(), session.ID, handoffID)
-		return c.Redirect(location, fiber.StatusFound)
+		_ = deleteOAuthConsentHandoff(c.RequestCtx(), handoffID)
+		_ = deleteSessionConsentHandoff(c.RequestCtx(), session.ID)
+		_ = deleteSessionConsentCSRFToken(c.RequestCtx(), session.ID, handoffID)
+		return c.Redirect().Status(fiber.StatusFound).To(location)
 	}
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		_ = deleteOAuthConsentHandoff(c.Context(), handoffID)
-		_ = deleteSessionConsentHandoff(c.Context(), session.ID)
-		_ = deleteSessionConsentCSRFToken(c.Context(), session.ID, handoffID)
+		_ = deleteOAuthConsentHandoff(c.RequestCtx(), handoffID)
+		_ = deleteSessionConsentHandoff(c.RequestCtx(), session.ID)
+		_ = deleteSessionConsentCSRFToken(c.RequestCtx(), session.ID, handoffID)
 		return handler.SendSuccess(c, fiber.Map{"ok": true})
 	}
 

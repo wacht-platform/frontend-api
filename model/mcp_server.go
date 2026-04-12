@@ -16,9 +16,9 @@ func (McpServer) TableName() string {
 }
 
 type McpServerConfig struct {
-	Endpoint string             `json:"endpoint"`
-	Auth     *McpServerAuth     `json:"auth,omitempty"`
-	Headers  map[string]string  `json:"headers,omitempty"`
+	Endpoint string            `json:"endpoint"`
+	Auth     *McpServerAuth    `json:"auth,omitempty"`
+	Headers  map[string]string `json:"headers,omitempty"`
 }
 
 type McpServerAuth struct {

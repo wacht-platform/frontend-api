@@ -14,7 +14,7 @@ import (
 
 	"github.com/aymerick/raymond"
 	"github.com/goccy/go-json"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwt"
 	"github.com/wacht-platform/frontend-api/database"
@@ -43,7 +43,7 @@ type switchWorkspaceCTEResult struct {
 }
 
 func (h *Handler) GetCurrentSession(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	session := handler.GetSession(c)
 
@@ -51,7 +51,7 @@ func (h *Handler) GetCurrentSession(
 }
 
 func (h *Handler) SwitchActiveSignIn(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	session := handler.GetSession(c)
 
@@ -91,7 +91,7 @@ func (h *Handler) SwitchActiveSignIn(
 }
 
 func (h *Handler) SignOut(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	session := handler.GetSession(
 		c,
@@ -171,7 +171,7 @@ func (h *Handler) SignOut(
 }
 
 func (h *Handler) SwitchOrganization(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	session := handler.GetSession(c)
 	orgID := c.Query("organization_id")
@@ -298,7 +298,7 @@ func (h *Handler) SwitchOrganization(
 }
 
 func (h *Handler) SwitchWorkspace(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	session := handler.GetSession(c)
 	workspaceID := c.Query("workspace_id")
@@ -432,7 +432,7 @@ func (h *Handler) SwitchWorkspace(
 }
 
 func (h *Handler) GetToken(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 ) error {
 	deployment := handler.GetDeployment(c)
 	deployment.LoadPrivateKey(database.Connection)
@@ -454,8 +454,11 @@ func (h *Handler) GetToken(
 		template.TokenLifetime = 30
 	}
 
-	sessionId := c.Locals("session").(uint64)
-	session, err := utils.GetSessionByID(sessionId)
+	sessionId := c.Locals("session")
+	if sessionId == nil {
+		return handler.SendNotFound(c, nil, "Session not found")
+	}
+	session, err := utils.GetSessionByID(sessionId.(uint64))
 	if err != nil {
 		return handler.SendNotFound(c, nil, "Session not found")
 	}

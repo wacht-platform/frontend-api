@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
 )
@@ -22,7 +22,7 @@ func NewHandler() *Handler {
 	}
 }
 
-func (h *Handler) getApiAuthAppSession(c *fiber.Ctx) (*model.ApiAuthAppSession, error) {
+func (h *Handler) getApiAuthAppSession(c fiber.Ctx) (*model.ApiAuthAppSession, error) {
 	session := handler.GetSession(c)
 	if session == nil {
 		return nil, errors.New("session required")
@@ -31,7 +31,7 @@ func (h *Handler) getApiAuthAppSession(c *fiber.Ctx) (*model.ApiAuthAppSession, 
 	return h.service.GetActiveApiAuthAppSession(session.ID, deployment.ID)
 }
 
-func (h *Handler) GetSession(c *fiber.Ctx) error {
+func (h *Handler) GetSession(c fiber.Ctx) error {
 	apiAuthAppSession, err := h.getApiAuthAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active API auth app session")
@@ -57,7 +57,7 @@ func (h *Handler) GetSession(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) GetKeys(c *fiber.Ctx) error {
+func (h *Handler) GetKeys(c fiber.Ctx) error {
 	apiAuthAppSession, err := h.getApiAuthAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active API auth app session")
@@ -66,7 +66,7 @@ func (h *Handler) GetKeys(c *fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 
 	status := c.Query("status", "")
-	includeInactive := c.QueryBool("include_inactive", false)
+	includeInactive := fiber.Query[bool](c, "include_inactive", false)
 
 	keys, err := h.service.GetKeys(deployment.ID, apiAuthAppSession.AppSlug, status, includeInactive)
 	if err != nil {
@@ -76,7 +76,7 @@ func (h *Handler) GetKeys(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, keys)
 }
 
-func (h *Handler) CreateKey(c *fiber.Ctx) error {
+func (h *Handler) CreateKey(c fiber.Ctx) error {
 	apiAuthAppSession, err := h.getApiAuthAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active API auth app session")
@@ -106,7 +106,7 @@ func (h *Handler) CreateKey(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, result)
 }
 
-func (h *Handler) RotateKey(c *fiber.Ctx) error {
+func (h *Handler) RotateKey(c fiber.Ctx) error {
 	apiAuthAppSession, err := h.getApiAuthAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active API auth app session")
@@ -127,7 +127,7 @@ func (h *Handler) RotateKey(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, result)
 }
 
-func (h *Handler) RevokeKey(c *fiber.Ctx) error {
+func (h *Handler) RevokeKey(c fiber.Ctx) error {
 	apiAuthAppSession, err := h.getApiAuthAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active API auth app session")
@@ -149,7 +149,7 @@ func (h *Handler) RevokeKey(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, fiber.Map{"success": true})
 }
 
-func (h *Handler) GetAuditLogs(c *fiber.Ctx) error {
+func (h *Handler) GetAuditLogs(c fiber.Ctx) error {
 	apiAuthAppSession, err := h.getApiAuthAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active API auth app session")
@@ -204,7 +204,7 @@ func (h *Handler) GetAuditLogs(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, logs)
 }
 
-func (h *Handler) GetAuditAnalytics(c *fiber.Ctx) error {
+func (h *Handler) GetAuditAnalytics(c fiber.Ctx) error {
 	apiAuthAppSession, err := h.getApiAuthAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active API auth app session")
@@ -216,10 +216,10 @@ func (h *Handler) GetAuditAnalytics(c *fiber.Ctx) error {
 	endDate := c.Query("end_date", "")
 	keyID := c.Query("key_id", "")
 
-	includeTopKeys := c.QueryBool("include_top_keys", false)
-	includeTopPaths := c.QueryBool("include_top_paths", false)
-	includeBlockedReasons := c.QueryBool("include_blocked_reasons", false)
-	includeRateLimits := c.QueryBool("include_rate_limits", false)
+	includeTopKeys := fiber.Query[bool](c, "include_top_keys", false)
+	includeTopPaths := fiber.Query[bool](c, "include_top_paths", false)
+	includeBlockedReasons := fiber.Query[bool](c, "include_blocked_reasons", false)
+	includeRateLimits := fiber.Query[bool](c, "include_rate_limits", false)
 	topLimit, _ := strconv.Atoi(c.Query("top_limit", "10"))
 
 	if topLimit > 50 {
@@ -245,7 +245,7 @@ func (h *Handler) GetAuditAnalytics(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, analytics)
 }
 
-func (h *Handler) GetAuditTimeseries(c *fiber.Ctx) error {
+func (h *Handler) GetAuditTimeseries(c fiber.Ctx) error {
 	apiAuthAppSession, err := h.getApiAuthAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active API auth app session")

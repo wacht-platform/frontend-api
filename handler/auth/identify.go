@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
 	"github.com/wacht-platform/frontend-api/service"
@@ -21,7 +21,7 @@ type IdentifyResponse struct {
 	Provider     *string `json:"provider,omitempty"`
 }
 
-func (h *Handler) Identify(c *fiber.Ctx) error {
+func (h *Handler) Identify(c fiber.Ctx) error {
 	b, validation := handler.Validate[IdentifyRequest](c)
 	if validation != nil {
 		return handler.SendBadRequest(c, validation, "Bad request body")

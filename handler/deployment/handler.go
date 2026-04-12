@@ -3,33 +3,33 @@ package deployment
 import (
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
 	"gorm.io/gorm"
 )
 
-func GetDeployment(c *fiber.Ctx) error {
+func GetDeployment(c fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 	deployment.KepPair = nil
 
 	return handler.SendSuccess(c, deployment)
 }
 
-func GetMetadata(c *fiber.Ctx) error {
+func GetMetadata(c fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 
 	return handler.SendSuccess(c, deployment.UISettings)
 }
 
-func GetJwk(c *fiber.Ctx) error {
+func GetJwk(c fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 
 	return handler.SendSuccess(c, deployment.KepPair)
 }
 
-func ValidateInvitation(c *fiber.Ctx) error {
+func ValidateInvitation(c fiber.Ctx) error {
 	token := c.Query("token")
 	if token == "" {
 		return handler.SendBadRequest(c, nil, "Token is required")

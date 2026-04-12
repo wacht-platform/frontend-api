@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/contrib/websocket"
+	"github.com/gofiber/contrib/v3/websocket"
 	"github.com/nats-io/nats.go"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
@@ -146,12 +146,12 @@ func sessionFromConn(conn *websocket.Conn) *model.Session {
 		}
 	}
 
-	sessionID, ok := conn.Locals("session").(uint64)
-	if !ok {
+	sessionID := conn.Locals("session")
+	if sessionID == nil {
 		return nil
 	}
 
-	session, err := handler.GetSessionFromCacheOrDB(sessionID)
+	session, err := handler.GetSessionFromCacheOrDB(sessionID.(uint64))
 	if err != nil {
 		return nil
 	}

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/lestrrat-go/jwx/v3/jwt"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
@@ -26,7 +26,7 @@ const (
 	sessionDuration   = 6 * time.Hour
 )
 
-func SetRequestPrelude(c *fiber.Ctx) error {
+func SetRequestPrelude(c fiber.Ctx) error {
 	host := c.Hostname()
 	path := c.Path()
 
@@ -36,14 +36,14 @@ func SetRequestPrelude(c *fiber.Ctx) error {
 
 	whitelisted := strings.HasPrefix(path, "/.well") || strings.HasPrefix(path, "/scim")
 
-	if whitelisted || c.Context().IsOptions() {
+	if whitelisted || c.RequestCtx().IsOptions() {
 		return handleDeploymentOnly(c, host)
 	}
 
 	return handleDeploymentAndSession(c, host)
 }
 
-func handleDeploymentOnly(c *fiber.Ctx, host string) error {
+func handleDeploymentOnly(c fiber.Ctx, host string) error {
 	deployment, err := getDeploymentFromCacheOrDB(host)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"message": "Deployment not found"})
@@ -53,7 +53,7 @@ func handleDeploymentOnly(c *fiber.Ctx, host string) error {
 	return c.Next()
 }
 
-func handleDeploymentAndSession(c *fiber.Ctx, host string) error {
+func handleDeploymentAndSession(c fiber.Ctx, host string) error {
 	sessionToken := getSessionToken(c, host)
 
 	var deployment *model.Deployment
@@ -73,7 +73,7 @@ func handleDeploymentAndSession(c *fiber.Ctx, host string) error {
 	return handleExistingSession(c, *deployment, sessionToken)
 }
 
-func getSessionToken(c *fiber.Ctx, host string) string {
+func getSessionToken(c fiber.Ctx, host string) string {
 	if token := c.Cookies(sessionCookieName); token != "" {
 		return token
 	}
@@ -90,7 +90,7 @@ func getDeploymentFromCacheOrDB(host string) (*model.Deployment, error) {
 	return utils.GetDeploymentByHost(host)
 }
 
-func handleNewSession(c *fiber.Ctx, deployment model.Deployment) error {
+func handleNewSession(c fiber.Ctx, deployment model.Deployment) error {
 	var token string
 	session := model.NewSession()
 	deployment.LoadPrivateKey(database.Connection)
@@ -127,7 +127,7 @@ func handleNewSession(c *fiber.Ctx, deployment model.Deployment) error {
 	return c.Next()
 }
 
-func handleExistingSession(c *fiber.Ctx, deployment model.Deployment, sessionToken string) error {
+func handleExistingSession(c fiber.Ctx, deployment model.Deployment, sessionToken string) error {
 	token, err := utils.VerifyJWT(sessionToken, *deployment.KepPair, deployment.BackendHost)
 
 	if errors.Is(err, jwt.TokenExpiredError()) {
@@ -152,7 +152,7 @@ func handleExistingSession(c *fiber.Ctx, deployment model.Deployment, sessionTok
 	return c.Next()
 }
 
-func setSessionToken(c *fiber.Ctx, token string, isProduction bool, deployment model.Deployment) {
+func setSessionToken(c fiber.Ctx, token string, isProduction bool, deployment model.Deployment) {
 	if isProduction {
 		c.Cookie(&fiber.Cookie{
 			Name:     sessionCookieName,
@@ -167,7 +167,7 @@ func setSessionToken(c *fiber.Ctx, token string, isProduction bool, deployment m
 	}
 }
 
-func refreshSession(c *fiber.Ctx, expJwt jwt.Token, deployment model.Deployment) error {
+func refreshSession(c fiber.Ctx, expJwt jwt.Token, deployment model.Deployment) error {
 	deployment.LoadPrivateKey(database.Connection)
 
 	sessionID, rotatingTokenID, err := extractTokenClaims(expJwt)

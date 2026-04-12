@@ -3,12 +3,12 @@ package utils
 import (
 	"log"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/model"
 	"github.com/wacht-platform/frontend-api/service"
 )
 
-func PublishSignInEvent(deploymentID uint64, user *model.User, authMethod string, identifier *string, c *fiber.Ctx) {
+func PublishSignInEvent(deploymentID uint64, user *model.User, authMethod string, identifier *string, c fiber.Ctx) {
 	natsService := service.GetNATS()
 	ipAddress := c.IP()
 
@@ -41,7 +41,7 @@ func PublishSignInEvent(deploymentID uint64, user *model.User, authMethod string
 	}()
 }
 
-func PublishSignUpEvent(deploymentID uint64, user *model.User, authMethod string, identifier *string, c *fiber.Ctx) {
+func PublishSignUpEvent(deploymentID uint64, user *model.User, authMethod string, identifier *string, c fiber.Ctx) {
 	natsService := service.GetNATS()
 	ipAddress := c.IP()
 

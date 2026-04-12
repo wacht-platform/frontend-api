@@ -20,17 +20,17 @@ func (ProjectTaskBoard) TableName() string { return "project_task_boards" }
 
 type ProjectTaskBoardItem struct {
 	Model
-	BoardID          uint64          `json:"board_id,string" gorm:"not null;index"`
-	TaskKey          string          `json:"task_key" gorm:"not null"`
-	Title            string          `json:"title" gorm:"not null"`
-	Description      *string         `json:"description,omitempty"`
-	Status           string          `json:"status" gorm:"not null"`
-	Priority         string          `json:"priority" gorm:"not null"`
-	AssignedThreadID *uint64         `json:"assigned_thread_id,omitempty,string" gorm:"column:assigned_thread_id"`
-	Metadata         json.RawMessage `json:"metadata" gorm:"type:jsonb;not null"`
+	BoardID          uint64               `json:"board_id,string" gorm:"not null;index"`
+	TaskKey          string               `json:"task_key" gorm:"not null"`
+	Title            string               `json:"title" gorm:"not null"`
+	Description      *string              `json:"description,omitempty"`
+	Status           string               `json:"status" gorm:"not null"`
+	Priority         string               `json:"priority" gorm:"not null"`
+	AssignedThreadID *uint64              `json:"assigned_thread_id,omitempty,string" gorm:"column:assigned_thread_id"`
+	Metadata         json.RawMessage      `json:"metadata" gorm:"type:jsonb;not null"`
 	Schedule         *ProjectTaskSchedule `json:"schedule,omitempty" gorm:"-"`
-	CompletedAt      *time.Time      `json:"completed_at,omitempty"`
-	ArchivedAt       *time.Time      `json:"archived_at,omitempty"`
+	CompletedAt      *time.Time           `json:"completed_at,omitempty"`
+	ArchivedAt       *time.Time           `json:"archived_at,omitempty"`
 }
 
 func (ProjectTaskBoardItem) TableName() string { return "project_task_board_items" }

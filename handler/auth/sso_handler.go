@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/crewjam/saml"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
@@ -26,7 +26,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func (h *Handler) SSOLogin(c *fiber.Ctx) error {
+func (h *Handler) SSOLogin(c fiber.Ctx) error {
 	connectionIDStr := c.Query("connection_id")
 	redirectURI := c.Query("redirect_uri")
 
@@ -91,7 +91,7 @@ func (h *Handler) SSOLogin(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) EnterpriseSSOCallback(c *fiber.Ctx) error {
+func (h *Handler) EnterpriseSSOCallback(c fiber.Ctx) error {
 	samlResponse := c.FormValue("SAMLResponse")
 	relayState := c.FormValue("RelayState")
 
@@ -240,7 +240,7 @@ func (h *Handler) EnterpriseSSOCallback(c *fiber.Ctx) error {
 					q.Set("error", "access_denied")
 					q.Set("error_description", "User not found and automatic provisioning is disabled. Please contact your administrator.")
 					parsedURL.RawQuery = q.Encode()
-					return c.Redirect(parsedURL.String(), fiber.StatusFound)
+					return c.Redirect().Status(fiber.StatusFound).To(parsedURL.String())
 				}
 			}
 			return handler.SendForbidden(c, nil, "User not found and JIT provisioning is disabled - please contact your administrator")
@@ -280,7 +280,7 @@ func (h *Handler) EnterpriseSSOCallback(c *fiber.Ctx) error {
 				}
 			}
 		}
-		return c.Redirect(redirectURI, fiber.StatusFound)
+		return c.Redirect().Status(fiber.StatusFound).To(redirectURI)
 	}
 
 	return handler.SendSuccess(c, fiber.Map{
@@ -532,7 +532,7 @@ func decodeRelayState(relayState string, expectedDeploymentID uint64) (uint64, s
 	return attemptID, redirectURI, nil
 }
 
-func (h *Handler) SSOMetadata(c *fiber.Ctx) error {
+func (h *Handler) SSOMetadata(c fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 
 	var keypair model.DeploymentKeyPair

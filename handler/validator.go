@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 var validate = validator.New()
@@ -15,11 +15,11 @@ type ValidationError struct {
 	validationErrors []string
 }
 
-func Validate[T any](c *fiber.Ctx) (*T, *ValidationError) {
+func Validate[T any](c fiber.Ctx) (*T, *ValidationError) {
 	p := new(T)
 	validationError := &ValidationError{}
 
-	if err := c.BodyParser(p); err != nil {
+	if err := c.Bind().Body(p); err != nil {
 		log.Println("parse error", err)
 		validationError.parseError = err.Error()
 	}
@@ -42,7 +42,7 @@ func Validate[T any](c *fiber.Ctx) (*T, *ValidationError) {
 }
 
 func SendResponse[T any](
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	status int,
 	data T,
 	message string,
@@ -68,12 +68,12 @@ func SendResponse[T any](
 	})
 }
 
-func SendSuccess[T any](c *fiber.Ctx, data T) error {
+func SendSuccess[T any](c fiber.Ctx, data T) error {
 	return SendResponse(c, 200, data, "", nil)
 }
 
 func SendBadRequest(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	data any,
 	message string,
 	errors ...Error,
@@ -82,7 +82,7 @@ func SendBadRequest(
 }
 
 func SendUnauthorized(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	data any,
 	message string,
 	errors ...Error,
@@ -91,7 +91,7 @@ func SendUnauthorized(
 }
 
 func SendForbidden(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	data any,
 	message string,
 	errors ...Error,
@@ -100,7 +100,7 @@ func SendForbidden(
 }
 
 func SendNotFound(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	data any,
 	message string,
 	errors ...Error,
@@ -109,7 +109,7 @@ func SendNotFound(
 }
 
 func SendInternalServerError(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	data any,
 	message string,
 	errors ...Error,
@@ -118,7 +118,7 @@ func SendInternalServerError(
 }
 
 func SendTooManyRequests(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	data any,
 	message string,
 	errors ...Error,

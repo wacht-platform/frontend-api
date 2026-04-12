@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
-	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/cors"
+	"github.com/gofiber/fiber/v3/middleware/limiter"
+	"github.com/gofiber/fiber/v3/middleware/recover"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/middleware"
 	"github.com/wacht-platform/frontend-api/service"
@@ -43,11 +43,11 @@ func setupMiddleware(app *fiber.App) {
 		Max:        20,
 		Expiration: 1 * time.Minute,
 		Storage:    middleware.NewNatsStorage(natsService),
-		KeyGenerator: func(c *fiber.Ctx) string {
+		KeyGenerator: func(c fiber.Ctx) string {
 			now := time.Now()
 			return fmt.Sprintf("%s:%s:%d:%d", c.IP(), c.Path(), now.Hour(), now.Minute())
 		},
-		LimitReached: func(c *fiber.Ctx) error {
+		LimitReached: func(c fiber.Ctx) error {
 			return handler.SendTooManyRequests(
 				c,
 				nil,
@@ -57,13 +57,13 @@ func setupMiddleware(app *fiber.App) {
 		},
 	}))
 	app.Use(middleware.SetRequestPrelude)
-	app.Use(func(c *fiber.Ctx) error {
+	app.Use(func(c fiber.Ctx) error {
 		cfg := corsSettings(c)
 		return cors.New(cfg)(c)
 	})
 }
 
-func corsSettings(c *fiber.Ctx) cors.Config {
+func corsSettings(c fiber.Ctx) cors.Config {
 	deployment := handler.GetDeployment(c)
 
 	if deployment.IsProduction() {
@@ -76,7 +76,7 @@ func corsSettings(c *fiber.Ctx) cors.Config {
 				return strings.HasSuffix(origin, strings.Join(parts[len(parts)-2:], "."))
 			},
 			AllowCredentials: true,
-			AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
+			AllowMethods:     []string{"GET", "POST", "HEAD", "PUT", "DELETE", "PATCH", "OPTIONS"},
 		}
 	}
 
@@ -84,8 +84,8 @@ func corsSettings(c *fiber.Ctx) cors.Config {
 		AllowOriginsFunc: func(origin string) bool {
 			return true
 		},
-		ExposeHeaders:    "X-Development-Session",
-		AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
+		ExposeHeaders:    []string{"X-Development-Session"},
+		AllowMethods:     []string{"GET", "POST", "HEAD", "PUT", "DELETE", "PATCH", "OPTIONS"},
 		AllowCredentials: true,
 	}
 }

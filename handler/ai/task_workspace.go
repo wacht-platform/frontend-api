@@ -22,7 +22,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/pkg/idgen"
 	"gorm.io/gorm"
@@ -846,7 +846,7 @@ func (s *Service) uploadBoardItemTaskWorkspaceFiles(
 	return uploadTaskWorkspaceFilesForTaskKey(deploymentID, board.ProjectID, item.TaskKey, files)
 }
 
-func (h *Handler) ListBoardItemTaskWorkspaceFiles(c *fiber.Ctx) error {
+func (h *Handler) ListBoardItemTaskWorkspaceFiles(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -875,7 +875,7 @@ func (h *Handler) ListBoardItemTaskWorkspaceFiles(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, listing)
 }
 
-func (h *Handler) GetBoardItemTaskWorkspaceFileContent(c *fiber.Ctx) error {
+func (h *Handler) GetBoardItemTaskWorkspaceFileContent(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -915,7 +915,7 @@ func (h *Handler) GetBoardItemTaskWorkspaceFileContent(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, content)
 }
 
-func (h *Handler) ListThreadFilesystemEntries(c *fiber.Ctx) error {
+func (h *Handler) ListThreadFilesystemEntries(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -943,7 +943,7 @@ func (h *Handler) ListThreadFilesystemEntries(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, listing)
 }
 
-func (h *Handler) GetThreadFilesystemFileContent(c *fiber.Ctx) error {
+func (h *Handler) GetThreadFilesystemFileContent(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err

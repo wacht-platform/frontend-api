@@ -88,8 +88,16 @@ func (s *NatsStorage) Get(key string) ([]byte, error) {
 	return nil, nil
 }
 
+func (s *NatsStorage) GetWithContext(_ context.Context, key string) ([]byte, error) {
+	return s.Get(key)
+}
+
 func (s *NatsStorage) Set(key string, val []byte, exp time.Duration) error {
 	return s.SetWithExp(key, val, exp)
+}
+
+func (s *NatsStorage) SetWithContext(_ context.Context, key string, val []byte, exp time.Duration) error {
+	return s.Set(key, val, exp)
 }
 
 func (s *NatsStorage) SetWithExp(key string, val []byte, exp time.Duration) error {
@@ -156,8 +164,16 @@ func (s *NatsStorage) Delete(key string) error {
 	return nil
 }
 
+func (s *NatsStorage) DeleteWithContext(_ context.Context, key string) error {
+	return s.Delete(key)
+}
+
 func (s *NatsStorage) Reset() error {
 	return nil
+}
+
+func (s *NatsStorage) ResetWithContext(_ context.Context) error {
+	return s.Reset()
 }
 
 func (s *NatsStorage) Close() error {

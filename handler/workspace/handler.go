@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/lib/pq"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
@@ -21,7 +21,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-func getuint64Param(c *fiber.Ctx, paramName string) (uint64, error) {
+func getuint64Param(c fiber.Ctx, paramName string) (uint64, error) {
 	valStr := c.Params(paramName)
 	valuint64, err := strconv.ParseUint(valStr, 10, 64)
 	if err != nil {
@@ -40,7 +40,7 @@ func NewHandler() *Handler {
 	}
 }
 
-func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
+func (h *Handler) CreateWorkspace(c fiber.Ctx) error {
 	b, validation := handler.Validate[CreateWorkspaceRequest](c)
 	deployment := handler.GetDeployment(c)
 	img, _ := c.FormFile("image")
@@ -269,7 +269,7 @@ func (h *Handler) CreateWorkspace(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
+func (h *Handler) GetWorkspaceMembers(c fiber.Ctx) error {
 	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, err.Error())
@@ -285,8 +285,8 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 	}
 
 	d := handler.GetDeployment(c)
-	page := max(c.QueryInt("page", 1), 1)
-	limit := c.QueryInt("limit", 10)
+	page := max(fiber.Query[int](c, "page", 1), 1)
+	limit := fiber.Query[int](c, "limit", 10)
 	if limit < 1 {
 		limit = 10
 	}
@@ -441,7 +441,7 @@ func (h *Handler) GetWorkspaceMembers(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) GetWorkspaceRoles(c *fiber.Ctx) error {
+func (h *Handler) GetWorkspaceRoles(c fiber.Ctx) error {
 	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, err.Error())
@@ -466,7 +466,7 @@ func (h *Handler) GetWorkspaceRoles(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, roles)
 }
 
-func (h *Handler) CreateWorkspaceRole(c *fiber.Ctx) error {
+func (h *Handler) CreateWorkspaceRole(c fiber.Ctx) error {
 	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, err.Error())
@@ -496,7 +496,7 @@ func (h *Handler) CreateWorkspaceRole(c *fiber.Ctx) error {
 		Permissions []string `json:"permissions" form:"permissions"`
 	}
 
-	if err := c.BodyParser(&body); err != nil {
+	if err := c.Bind().Body(&body); err != nil {
 		return handler.SendBadRequest(c, err, "Invalid request body")
 	}
 
@@ -523,7 +523,7 @@ func (h *Handler) CreateWorkspaceRole(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, role)
 }
 
-func (h *Handler) DeleteWorkspaceRole(c *fiber.Ctx) error {
+func (h *Handler) DeleteWorkspaceRole(c fiber.Ctx) error {
 	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, err.Error())
@@ -597,7 +597,7 @@ func (h *Handler) DeleteWorkspaceRole(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) AddWorkspaceMemberRole(c *fiber.Ctx) error {
+func (h *Handler) AddWorkspaceMemberRole(c fiber.Ctx) error {
 	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid workspace ID: "+err.Error())
@@ -671,7 +671,7 @@ func (h *Handler) AddWorkspaceMemberRole(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, fiber.Map{"success": true})
 }
 
-func (h *Handler) RemoveWorkspaceMemberRole(c *fiber.Ctx) error {
+func (h *Handler) RemoveWorkspaceMemberRole(c fiber.Ctx) error {
 	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid workspace ID: "+err.Error())
@@ -763,7 +763,7 @@ func (h *Handler) RemoveWorkspaceMemberRole(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, fiber.Map{"success": true})
 }
 
-func (h *Handler) UpdateWorkspace(c *fiber.Ctx) error {
+func (h *Handler) UpdateWorkspace(c fiber.Ctx) error {
 	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid workspace ID: "+err.Error())
@@ -843,7 +843,7 @@ func (h *Handler) UpdateWorkspace(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) DeleteWorkspace(c *fiber.Ctx) error {
+func (h *Handler) DeleteWorkspace(c fiber.Ctx) error {
 	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid workspace ID: "+err.Error())
@@ -913,7 +913,7 @@ func (h *Handler) DeleteWorkspace(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) RemoveMember(c *fiber.Ctx) error {
+func (h *Handler) RemoveMember(c fiber.Ctx) error {
 	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid workspace ID: "+err.Error())

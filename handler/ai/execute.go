@@ -14,7 +14,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
@@ -89,7 +89,7 @@ func parseRunApprovalSelections(form *multipart.Form) ([]ToolApprovalSelection, 
 	return approvals, nil
 }
 
-func parseRunRequestForm(c *fiber.Ctx) (*NewMessageRequest, *ApprovalResponseRequest, *CancelRequest, []*multipart.FileHeader, error) {
+func parseRunRequestForm(c fiber.Ctx) (*NewMessageRequest, *ApprovalResponseRequest, *CancelRequest, []*multipart.FileHeader, error) {
 	form, err := c.MultipartForm()
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("invalid multipart form")
@@ -146,7 +146,7 @@ func parseRunRequestForm(c *fiber.Ctx) (*NewMessageRequest, *ApprovalResponseReq
 	return newMessage, approvalResponse, cancelRequest, files, nil
 }
 
-func (h *Handler) RunThread(c *fiber.Ctx) error {
+func (h *Handler) RunThread(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session == nil {
 		return handler.SendUnauthorized(c, nil, "Session required")
@@ -207,7 +207,7 @@ func (h *Handler) RunThread(c *fiber.Ctx) error {
 	}
 }
 func (h *Handler) handleNewMessage(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	deploymentID, threadID uint64,
 	agentID *int64,
 	thread *model.AgentThread,
@@ -353,7 +353,7 @@ func (h *Handler) handleNewMessage(
 }
 
 func (h *Handler) handleApprovalResponse(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	deploymentID, threadID uint64,
 	agentID *int64,
 	thread *model.AgentThread,
@@ -481,7 +481,7 @@ func (h *Handler) handleApprovalResponse(
 }
 
 func (h *Handler) handleCancel(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	deploymentID, threadID uint64,
 	natsService *service.NatsService,
 	hasInterruptibleExecution bool,

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
 )
@@ -22,7 +22,7 @@ type WebhookAppSessionResponse struct {
 	WebhookApp model.WebhookApp `json:"webhook_app"`
 }
 
-func (h *Handler) getWebhookAppSession(c *fiber.Ctx) (*model.WebhookAppSession, error) {
+func (h *Handler) getWebhookAppSession(c fiber.Ctx) (*model.WebhookAppSession, error) {
 	session := handler.GetSession(c)
 	if session == nil {
 		return nil, errors.New("session required")
@@ -31,7 +31,7 @@ func (h *Handler) getWebhookAppSession(c *fiber.Ctx) (*model.WebhookAppSession, 
 	return h.service.GetActiveWebhookAppSession(session.ID, deployment.ID)
 }
 
-func (h *Handler) GetSession(c *fiber.Ctx) error {
+func (h *Handler) GetSession(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -50,7 +50,7 @@ func (h *Handler) GetSession(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) GetSettings(c *fiber.Ctx) error {
+func (h *Handler) GetSettings(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -67,7 +67,7 @@ func (h *Handler) GetSettings(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) UpdateSettings(c *fiber.Ctx) error {
+func (h *Handler) UpdateSettings(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -97,7 +97,7 @@ func (h *Handler) UpdateSettings(c *fiber.Ctx) error {
 	})
 }
 
-func (h *Handler) GetEndpoints(c *fiber.Ctx) error {
+func (h *Handler) GetEndpoints(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -113,7 +113,7 @@ func (h *Handler) GetEndpoints(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, endpoints)
 }
 
-func (h *Handler) GetEvents(c *fiber.Ctx) error {
+func (h *Handler) GetEvents(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -129,7 +129,7 @@ func (h *Handler) GetEvents(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, events)
 }
 
-func (h *Handler) GetDeliveries(c *fiber.Ctx) error {
+func (h *Handler) GetDeliveries(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -138,8 +138,8 @@ func (h *Handler) GetDeliveries(c *fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 
 	// Get query parameters
-	limit := c.QueryInt("limit", 50)
-	offset := c.QueryInt("offset", 0)
+	limit := fiber.Query[int](c, "limit", 50)
+	offset := fiber.Query[int](c, "offset", 0)
 	status := c.Query("status", "")
 	eventName := c.Query("event_name", "")
 	endpointID := c.Query("endpoint_id", "")
@@ -193,7 +193,7 @@ func (h *Handler) GetDeliveries(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, deliveries)
 }
 
-func (h *Handler) GetAnalytics(c *fiber.Ctx) error {
+func (h *Handler) GetAnalytics(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -228,7 +228,7 @@ func (h *Handler) GetAnalytics(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, analytics)
 }
 
-func (h *Handler) GetTimeseries(c *fiber.Ctx) error {
+func (h *Handler) GetTimeseries(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -254,7 +254,7 @@ func (h *Handler) GetTimeseries(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, timeseries)
 }
 
-func (h *Handler) GetStats(c *fiber.Ctx) error {
+func (h *Handler) GetStats(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -270,7 +270,7 @@ func (h *Handler) GetStats(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, stats)
 }
 
-func (h *Handler) GetCatalog(c *fiber.Ctx) error {
+func (h *Handler) GetCatalog(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -286,7 +286,7 @@ func (h *Handler) GetCatalog(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, catalog)
 }
 
-func (h *Handler) CreateEndpoint(c *fiber.Ctx) error {
+func (h *Handler) CreateEndpoint(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -309,7 +309,7 @@ func (h *Handler) CreateEndpoint(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, result.Endpoint)
 }
 
-func (h *Handler) UpdateEndpoint(c *fiber.Ctx) error {
+func (h *Handler) UpdateEndpoint(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -338,7 +338,7 @@ func (h *Handler) UpdateEndpoint(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, result.Endpoint)
 }
 
-func (h *Handler) DeleteEndpoint(c *fiber.Ctx) error {
+func (h *Handler) DeleteEndpoint(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -360,7 +360,7 @@ func (h *Handler) DeleteEndpoint(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, result)
 }
 
-func (h *Handler) RotateSecret(c *fiber.Ctx) error {
+func (h *Handler) RotateSecret(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -376,7 +376,7 @@ func (h *Handler) RotateSecret(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, app)
 }
 
-func (h *Handler) ReplayDelivery(c *fiber.Ctx) error {
+func (h *Handler) ReplayDelivery(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -412,7 +412,7 @@ func (h *Handler) ReplayDelivery(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, result)
 }
 
-func (h *Handler) GetReplayTaskStatus(c *fiber.Ctx) error {
+func (h *Handler) GetReplayTaskStatus(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -436,15 +436,15 @@ func (h *Handler) GetReplayTaskStatus(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, result)
 }
 
-func (h *Handler) ListReplayTasks(c *fiber.Ctx) error {
+func (h *Handler) ListReplayTasks(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
 	}
 
 	deployment := handler.GetDeployment(c)
-	limit := c.QueryInt("limit", 20)
-	offset := c.QueryInt("offset", 0)
+	limit := fiber.Query[int](c, "limit", 20)
+	offset := fiber.Query[int](c, "offset", 0)
 
 	result, err := h.service.ListReplayTasks(deployment.ID, webhookAppSession.AppSlug, limit, offset)
 	if err != nil {
@@ -458,7 +458,7 @@ func (h *Handler) ListReplayTasks(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, result)
 }
 
-func (h *Handler) CancelReplayTask(c *fiber.Ctx) error {
+func (h *Handler) CancelReplayTask(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -482,7 +482,7 @@ func (h *Handler) CancelReplayTask(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, result)
 }
 
-func (h *Handler) TestEndpoint(c *fiber.Ctx) error {
+func (h *Handler) TestEndpoint(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -514,7 +514,7 @@ func (h *Handler) TestEndpoint(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, result)
 }
 
-func (h *Handler) GetDelivery(c *fiber.Ctx) error {
+func (h *Handler) GetDelivery(c fiber.Ctx) error {
 	webhookAppSession, err := h.getWebhookAppSession(c)
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "No active webhook app session")
@@ -540,7 +540,7 @@ func (h *Handler) GetDelivery(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, delivery)
 }
 
-func extractHeaders(c *fiber.Ctx) map[string]string {
+func extractHeaders(c fiber.Ctx) map[string]string {
 	headers := make(map[string]string)
 
 	if form, err := c.MultipartForm(); err == nil {
@@ -552,7 +552,7 @@ func extractHeaders(c *fiber.Ctx) map[string]string {
 		}
 	}
 
-	c.Context().PostArgs().VisitAll(func(key, value []byte) {
+	c.RequestCtx().PostArgs().VisitAll(func(key, value []byte) {
 		k := string(key)
 		if strings.HasPrefix(k, "headers[") && strings.HasSuffix(k, "]") {
 			headerKey := k[8 : len(k)-1]

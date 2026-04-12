@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 type Error struct {
@@ -193,7 +193,7 @@ func (e Error) Is(target error) bool {
 	return e.Code == t.Code
 }
 
-func DefaultErrorHandler(c *fiber.Ctx, err error) error {
+func DefaultErrorHandler(c fiber.Ctx, err error) error {
 	code := fiber.StatusInternalServerError
 
 	var e *fiber.Error

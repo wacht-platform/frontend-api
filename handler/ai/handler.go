@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
 )
@@ -23,7 +23,7 @@ func sessionHasActor(agentSession *model.AgentSession, actorID uint64) bool {
 	return agentSession.ActorID == actorID
 }
 
-func (h *Handler) getActorScope(c *fiber.Ctx) (uint64, *model.AgentSession, error) {
+func (h *Handler) getActorScope(c fiber.Ctx) (uint64, *model.AgentSession, error) {
 	session := handler.GetSession(c)
 	if session == nil {
 		return 0, nil, fiber.NewError(fiber.StatusUnauthorized, "Session required")
@@ -36,7 +36,7 @@ func (h *Handler) getActorScope(c *fiber.Ctx) (uint64, *model.AgentSession, erro
 	return agentSession.ActorID, agentSession, nil
 }
 
-func parseIDParam(c *fiber.Ctx, name string) (uint64, error) {
+func parseIDParam(c fiber.Ctx, name string) (uint64, error) {
 	return strconv.ParseUint(c.Params(name), 10, 64)
 }
 
@@ -92,7 +92,7 @@ func parseTimeIDCursor(raw string) (*time.Time, *uint64, error) {
 	return &cursorTime, &id, nil
 }
 
-func requireMultipartFormRequest(c *fiber.Ctx) error {
+func requireMultipartFormRequest(c fiber.Ctx) error {
 	contentType := strings.ToLower(strings.TrimSpace(c.Get("Content-Type")))
 	if strings.HasPrefix(contentType, "multipart/form-data") {
 		return nil
@@ -100,7 +100,7 @@ func requireMultipartFormRequest(c *fiber.Ctx) error {
 	return handler.SendBadRequest(c, nil, "multipart/form-data is required")
 }
 
-func (h *Handler) ListActors(c *fiber.Ctx) error {
+func (h *Handler) ListActors(c fiber.Ctx) error {
 	_, agentSession, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -113,7 +113,7 @@ func (h *Handler) ListActors(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, actors)
 }
 
-func (h *Handler) ListActorProjects(c *fiber.Ctx) error {
+func (h *Handler) ListActorProjects(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -126,13 +126,13 @@ func (h *Handler) ListActorProjects(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, projects)
 }
 
-func (h *Handler) SearchActorProjects(c *fiber.Ctx) error {
+func (h *Handler) SearchActorProjects(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
 	}
 
-	limit := c.QueryInt("limit", 12)
+	limit := fiber.Query[int](c, "limit", 12)
 	if limit <= 0 {
 		limit = 12
 	}
@@ -160,7 +160,7 @@ func (h *Handler) SearchActorProjects(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, projects)
 }
 
-func (h *Handler) CreateActorProject(c *fiber.Ctx) error {
+func (h *Handler) CreateActorProject(c fiber.Ctx) error {
 	actorID, agentSession, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -184,7 +184,7 @@ func (h *Handler) CreateActorProject(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, project)
 }
 
-func (h *Handler) CreateActorThread(c *fiber.Ctx) error {
+func (h *Handler) CreateActorThread(c fiber.Ctx) error {
 	actorID, agentSession, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -215,7 +215,7 @@ func (h *Handler) CreateActorThread(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, thread)
 }
 
-func (h *Handler) GetActorProject(c *fiber.Ctx) error {
+func (h *Handler) GetActorProject(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -232,7 +232,7 @@ func (h *Handler) GetActorProject(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, project)
 }
 
-func (h *Handler) UpdateActorProject(c *fiber.Ctx) error {
+func (h *Handler) UpdateActorProject(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -253,7 +253,7 @@ func (h *Handler) UpdateActorProject(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, project)
 }
 
-func (h *Handler) ArchiveActorProject(c *fiber.Ctx) error {
+func (h *Handler) ArchiveActorProject(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -270,7 +270,7 @@ func (h *Handler) ArchiveActorProject(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, project)
 }
 
-func (h *Handler) UnarchiveActorProject(c *fiber.Ctx) error {
+func (h *Handler) UnarchiveActorProject(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -287,7 +287,7 @@ func (h *Handler) UnarchiveActorProject(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, project)
 }
 
-func (h *Handler) GetProjectBoard(c *fiber.Ctx) error {
+func (h *Handler) GetProjectBoard(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -307,7 +307,7 @@ func (h *Handler) GetProjectBoard(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, board)
 }
 
-func (h *Handler) ListProjectBoardItems(c *fiber.Ctx) error {
+func (h *Handler) ListProjectBoardItems(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -324,7 +324,7 @@ func (h *Handler) ListProjectBoardItems(c *fiber.Ctx) error {
 	if err != nil {
 		return handler.SendSuccess(c, []model.ProjectTaskBoardItem{})
 	}
-	limit := c.QueryInt("limit", 60)
+	limit := fiber.Query[int](c, "limit", 60)
 	if limit <= 0 {
 		limit = 60
 	}
@@ -372,7 +372,7 @@ func (h *Handler) ListProjectBoardItems(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, items)
 }
 
-func (h *Handler) CreateProjectBoardItem(c *fiber.Ctx) error {
+func (h *Handler) CreateProjectBoardItem(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -427,7 +427,7 @@ func (h *Handler) CreateProjectBoardItem(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, item)
 }
 
-func (h *Handler) GetBoardItemDetail(c *fiber.Ctx) error {
+func (h *Handler) GetBoardItemDetail(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -449,7 +449,7 @@ func (h *Handler) GetBoardItemDetail(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, detail)
 }
 
-func (h *Handler) UpdateBoardItem(c *fiber.Ctx) error {
+func (h *Handler) UpdateBoardItem(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -521,7 +521,7 @@ func (h *Handler) UpdateBoardItem(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, item)
 }
 
-func (h *Handler) ArchiveBoardItem(c *fiber.Ctx) error {
+func (h *Handler) ArchiveBoardItem(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -538,7 +538,7 @@ func (h *Handler) ArchiveBoardItem(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, item)
 }
 
-func (h *Handler) UnarchiveBoardItem(c *fiber.Ctx) error {
+func (h *Handler) UnarchiveBoardItem(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -555,7 +555,7 @@ func (h *Handler) UnarchiveBoardItem(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, item)
 }
 
-func (h *Handler) AppendBoardItemJournal(c *fiber.Ctx) error {
+func (h *Handler) AppendBoardItemJournal(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -622,7 +622,7 @@ func (h *Handler) AppendBoardItemJournal(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, event)
 }
 
-func (h *Handler) ListProjectThreads(c *fiber.Ctx) error {
+func (h *Handler) ListProjectThreads(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -639,7 +639,7 @@ func (h *Handler) ListProjectThreads(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, threads)
 }
 
-func (h *Handler) ListProjectThreadsPage(c *fiber.Ctx) error {
+func (h *Handler) ListProjectThreadsPage(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -653,7 +653,7 @@ func (h *Handler) ListProjectThreadsPage(c *fiber.Ctx) error {
 		return handler.SendNotFound(c, nil, "Project not found")
 	}
 
-	limit := c.QueryInt("limit", 10)
+	limit := fiber.Query[int](c, "limit", 10)
 	if limit <= 0 {
 		limit = 10
 	}
@@ -683,13 +683,13 @@ func (h *Handler) ListProjectThreadsPage(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, threads)
 }
 
-func (h *Handler) SearchActorThreads(c *fiber.Ctx) error {
+func (h *Handler) SearchActorThreads(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
 	}
 
-	limit := c.QueryInt("limit", 16)
+	limit := fiber.Query[int](c, "limit", 16)
 	if limit <= 0 {
 		limit = 16
 	}
@@ -717,7 +717,7 @@ func (h *Handler) SearchActorThreads(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, threads)
 }
 
-func (h *Handler) CreateProjectThread(c *fiber.Ctx) error {
+func (h *Handler) CreateProjectThread(c fiber.Ctx) error {
 	actorID, agentSession, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -744,7 +744,7 @@ func (h *Handler) CreateProjectThread(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, thread)
 }
 
-func (h *Handler) UpdateThread(c *fiber.Ctx) error {
+func (h *Handler) UpdateThread(c fiber.Ctx) error {
 	actorID, agentSession, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -768,7 +768,7 @@ func (h *Handler) UpdateThread(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, thread)
 }
 
-func (h *Handler) ArchiveThread(c *fiber.Ctx) error {
+func (h *Handler) ArchiveThread(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -788,7 +788,7 @@ func (h *Handler) ArchiveThread(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, thread)
 }
 
-func (h *Handler) UnarchiveThread(c *fiber.Ctx) error {
+func (h *Handler) UnarchiveThread(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -805,7 +805,7 @@ func (h *Handler) UnarchiveThread(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, thread)
 }
 
-func (h *Handler) GetThread(c *fiber.Ctx) error {
+func (h *Handler) GetThread(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -822,7 +822,7 @@ func (h *Handler) GetThread(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, thread)
 }
 
-func (h *Handler) ListThreadEvents(c *fiber.Ctx) error {
+func (h *Handler) ListThreadEvents(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -836,7 +836,7 @@ func (h *Handler) ListThreadEvents(c *fiber.Ctx) error {
 		return handler.SendForbidden(c, nil, "Forbidden")
 	}
 
-	limit := c.QueryInt("limit", 40)
+	limit := fiber.Query[int](c, "limit", 40)
 	if limit <= 0 {
 		limit = 40
 	}
@@ -876,7 +876,7 @@ func (h *Handler) ListThreadEvents(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, events)
 }
 
-func (h *Handler) ListThreadAssignments(c *fiber.Ctx) error {
+func (h *Handler) ListThreadAssignments(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -890,7 +890,7 @@ func (h *Handler) ListThreadAssignments(c *fiber.Ctx) error {
 		return handler.SendForbidden(c, nil, "Forbidden")
 	}
 
-	limit := c.QueryInt("limit", 40)
+	limit := fiber.Query[int](c, "limit", 40)
 	if limit <= 0 {
 		limit = 40
 	}
@@ -929,7 +929,7 @@ func (h *Handler) ListThreadAssignments(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, assignments)
 }
 
-func (h *Handler) ListThreadTaskGraphs(c *fiber.Ctx) error {
+func (h *Handler) ListThreadTaskGraphs(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
@@ -943,7 +943,7 @@ func (h *Handler) ListThreadTaskGraphs(c *fiber.Ctx) error {
 		return handler.SendForbidden(c, nil, "Forbidden")
 	}
 
-	limit := c.QueryInt("limit", 10)
+	limit := fiber.Query[int](c, "limit", 10)
 	if limit < 1 {
 		limit = 10
 	}

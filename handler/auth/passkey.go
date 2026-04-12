@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
@@ -41,7 +41,7 @@ func (u *PasskeyUser) WebAuthnCredentials() []webauthn.Credential {
 	return u.Credentials
 }
 
-func (h *Handler) BeginPasskeyLogin(c *fiber.Ctx) error {
+func (h *Handler) BeginPasskeyLogin(c fiber.Ctx) error {
 	d := handler.GetDeployment(c)
 	session := handler.GetSession(c)
 
@@ -69,14 +69,14 @@ func (h *Handler) BeginPasskeyLogin(c *fiber.Ctx) error {
 
 	sessionKey := fmt.Sprintf("passkey_login:%d", session.ID)
 	sessionJSON, _ := json.Marshal(sessionData)
-	database.Redis.Set(c.Context(), sessionKey, sessionJSON, 5*time.Minute)
+	database.Redis.Set(c.RequestCtx(), sessionKey, sessionJSON, 5*time.Minute)
 
 	return handler.SendSuccess(c, fiber.Map{
 		"options": options,
 	})
 }
 
-func (h *Handler) FinishPasskeyLogin(c *fiber.Ctx) error {
+func (h *Handler) FinishPasskeyLogin(c fiber.Ctx) error {
 	d := handler.GetDeployment(c)
 	session := handler.GetSession(c)
 
@@ -85,7 +85,7 @@ func (h *Handler) FinishPasskeyLogin(c *fiber.Ctx) error {
 	}
 
 	sessionKey := fmt.Sprintf("passkey_login:%d", session.ID)
-	sessionJSON, err := database.Redis.Get(c.Context(), sessionKey).Bytes()
+	sessionJSON, err := database.Redis.Get(c.RequestCtx(), sessionKey).Bytes()
 	if err != nil {
 		return handler.SendBadRequest(c, nil, "Login session expired")
 	}
@@ -240,7 +240,7 @@ func (h *Handler) FinishPasskeyLogin(c *fiber.Ctx) error {
 
 	signIn.User = &user
 
-	database.Redis.Del(c.Context(), sessionKey)
+	database.Redis.Del(c.RequestCtx(), sessionKey)
 
 	session.SigninAttempts = append(session.SigninAttempts, *attempt)
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)

@@ -5,14 +5,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
 	"gorm.io/gorm"
 )
 
-func List(c *fiber.Ctx) error {
+func List(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -21,7 +21,7 @@ func List(c *fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 
 	var req model.NotificationListRequest
-	if err := c.QueryParser(&req); err != nil {
+	if err := c.Bind().Query(&req); err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid query parameters")
 	}
 	req.SetDefaults()
@@ -60,14 +60,14 @@ func List(c *fiber.Ctx) error {
 	return handler.SendSuccess(c, response)
 }
 
-func GetScopeUnread(c *fiber.Ctx) error {
+func GetScopeUnread(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
 	}
 
 	var req model.NotificationListRequest
-	if err := c.QueryParser(&req); err != nil {
+	if err := c.Bind().Query(&req); err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid query parameters")
 	}
 
@@ -78,7 +78,7 @@ func GetScopeUnread(c *fiber.Ctx) error {
 	})
 }
 
-func MarkAsRead(c *fiber.Ctx) error {
+func MarkAsRead(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -119,7 +119,7 @@ func MarkAsRead(c *fiber.Ctx) error {
 	})
 }
 
-func MarkAsUnread(c *fiber.Ctx) error {
+func MarkAsUnread(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -160,7 +160,7 @@ func MarkAsUnread(c *fiber.Ctx) error {
 	})
 }
 
-func MarkAllAsRead(c *fiber.Ctx) error {
+func MarkAllAsRead(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -169,7 +169,7 @@ func MarkAllAsRead(c *fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 
 	var req model.NotificationListRequest
-	if err := c.QueryParser(&req); err != nil {
+	if err := c.Bind().Query(&req); err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid query parameters")
 	}
 
@@ -197,7 +197,7 @@ func MarkAllAsRead(c *fiber.Ctx) error {
 	})
 }
 
-func ArchiveAllRead(c *fiber.Ctx) error {
+func ArchiveAllRead(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -206,7 +206,7 @@ func ArchiveAllRead(c *fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 
 	var req model.NotificationListRequest
-	if err := c.QueryParser(&req); err != nil {
+	if err := c.Bind().Query(&req); err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid query parameters")
 	}
 
@@ -235,7 +235,7 @@ func ArchiveAllRead(c *fiber.Ctx) error {
 	})
 }
 
-func Archive(c *fiber.Ctx) error {
+func Archive(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")
@@ -277,7 +277,7 @@ func Archive(c *fiber.Ctx) error {
 	})
 }
 
-func Star(c *fiber.Ctx) error {
+func Star(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	if session == nil {
 		return handler.SendUnauthorized(c, nil, "Unauthorized")

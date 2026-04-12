@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
@@ -100,14 +100,14 @@ type ExchangeTicketResponse struct {
 	Session    *model.Session  `json:"session,omitempty"`
 }
 
-func (h *Handler) ExchangeTicket(c *fiber.Ctx) error {
+func (h *Handler) ExchangeTicket(c fiber.Ctx) error {
 	ticket := c.Query("ticket")
 	if ticket == "" {
 		return handler.SendBadRequest(c, nil, "ticket is required")
 	}
 
 	redisKey := fmt.Sprintf("session:ticket:%s", ticket)
-	ticketJSON, err := database.Redis.Get(c.Context(), redisKey).Result()
+	ticketJSON, err := database.Redis.Get(c.RequestCtx(), redisKey).Result()
 	if err != nil {
 		return handler.SendUnauthorized(c, nil, "Invalid or expired ticket")
 	}
@@ -143,7 +143,7 @@ func (h *Handler) ExchangeTicket(c *fiber.Ctx) error {
 }
 
 func (h *Handler) handleImpersonationExchange(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	payload *SessionTicketPayload,
 	deployment *model.Deployment,
 	ticket string,
@@ -221,7 +221,7 @@ func (h *Handler) handleImpersonationExchange(
 
 	// Delete ticket from Redis (single-use enforcement)
 	redisKey := fmt.Sprintf("session:ticket:%s", ticket)
-	if err := database.Redis.Del(c.Context(), redisKey).Err(); err != nil {
+	if err := database.Redis.Del(c.RequestCtx(), redisKey).Err(); err != nil {
 		// Log error but don't fail the request
 		fmt.Printf("Warning: Failed to delete ticket after exchange: %v\n", err)
 	}
@@ -237,7 +237,7 @@ func (h *Handler) handleImpersonationExchange(
 }
 
 func (h *Handler) handleAgentAccessExchange(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	payload *SessionTicketPayload,
 	deployment *model.Deployment,
 	ticket string,
@@ -363,7 +363,7 @@ func (h *Handler) handleAgentAccessExchange(
 
 	// Delete ticket from Redis (single-use enforcement)
 	redisKey := fmt.Sprintf("session:ticket:%s", ticket)
-	if err := database.Redis.Del(c.Context(), redisKey).Err(); err != nil {
+	if err := database.Redis.Del(c.RequestCtx(), redisKey).Err(); err != nil {
 		fmt.Printf("Warning: Failed to delete ticket after exchange: %v\n", err)
 	}
 
@@ -563,7 +563,7 @@ func (h *Handler) getAllowlistedActors(deploymentID uint64, actorIDs []int64) ([
 }
 
 func (h *Handler) handleWebhookAppAccessExchange(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	payload *SessionTicketPayload,
 	deployment *model.Deployment,
 	ticket string,
@@ -610,7 +610,7 @@ func (h *Handler) handleWebhookAppAccessExchange(
 	}
 
 	redisKey := fmt.Sprintf("session:ticket:%s", ticket)
-	if err := database.Redis.Del(c.Context(), redisKey).Err(); err != nil {
+	if err := database.Redis.Del(c.RequestCtx(), redisKey).Err(); err != nil {
 		fmt.Printf("Warning: Failed to delete ticket after exchange: %v\n", err)
 	}
 
@@ -644,7 +644,7 @@ func (h *Handler) getWebhookApp(deploymentID uint64, appSlug string) (*WebhookAp
 }
 
 func (h *Handler) handleApiAuthAccessExchange(
-	c *fiber.Ctx,
+	c fiber.Ctx,
 	payload *SessionTicketPayload,
 	deployment *model.Deployment,
 	ticket string,
@@ -690,7 +690,7 @@ func (h *Handler) handleApiAuthAccessExchange(
 	}
 
 	redisKey := fmt.Sprintf("session:ticket:%s", ticket)
-	if err := database.Redis.Del(c.Context(), redisKey).Err(); err != nil {
+	if err := database.Redis.Del(c.RequestCtx(), redisKey).Err(); err != nil {
 		fmt.Printf("Warning: Failed to delete ticket after exchange: %v\n", err)
 	}
 

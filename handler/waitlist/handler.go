@@ -1,7 +1,7 @@
 package waitlist
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
 )
@@ -16,7 +16,7 @@ func NewHandler() *Handler {
 	}
 }
 
-func (h *Handler) JoinWaitlist(c *fiber.Ctx) error {
+func (h *Handler) JoinWaitlist(c fiber.Ctx) error {
 	b, validation := handler.Validate[JoinWaitlistRequest](c)
 	if validation != nil {
 		return handler.SendBadRequest(c, validation, "Bad request body")

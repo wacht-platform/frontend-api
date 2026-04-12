@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/model"
 )
 
-func SetWorkspaceContext(c *fiber.Ctx) error {
+func SetWorkspaceContext(c fiber.Ctx) error {
 	workspaceIDStr := c.Params("id")
 	if workspaceIDStr == "" {
 		workspaceIDStr = c.Params("workspaceId")

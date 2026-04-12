@@ -1,18 +1,18 @@
 package handler
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/model"
 	"github.com/wacht-platform/frontend-api/utils"
 )
 
-func GetDeployment(c *fiber.Ctx) model.Deployment {
+func GetDeployment(c fiber.Ctx) model.Deployment {
 	deployment := c.Locals("deployment")
 
 	return deployment.(model.Deployment)
 }
 
-func GetSession(c *fiber.Ctx) *model.Session {
+func GetSession(c fiber.Ctx) *model.Session {
 	if sessionData := c.Locals("session_data"); sessionData != nil {
 		return sessionData.(*model.Session)
 	}
@@ -41,7 +41,7 @@ func GetSessionFromCacheOrDB(sessionID uint64) (*model.Session, error) {
 	return utils.GetSessionByID(sessionID)
 }
 
-func RemoveSessionFromCacheAndLocals(c *fiber.Ctx, id uint64) {
+func RemoveSessionFromCacheAndLocals(c fiber.Ctx, id uint64) {
 	utils.RemoveCachedSession(id)
 
 	c.Locals("session_data", nil)
