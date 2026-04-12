@@ -30,7 +30,7 @@ func setupRoutes(app *fiber.App) {
 	setupUserRoutes(app)
 	setupWaitlistRoutes(app)
 	setupNotificationRoutes(app)
-	setupAgentRoutes(app)
+	setupAiRoutes(app)
 	setupWebhookAppRoutes(app)
 	setupApiAuthAppRoutes(app)
 	setupSCIMRoutes(app)

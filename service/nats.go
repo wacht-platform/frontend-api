@@ -273,6 +273,10 @@ func GetNATS() *NatsService {
 	return natsService
 }
 
+func (s *NatsService) Conn() *nats.Conn {
+	return s.nc
+}
+
 func (s *NatsService) publishTaskWithID(ctx context.Context, taskType string, payload interface{}) (string, error) {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -526,14 +530,26 @@ func (s *NatsService) PublishBillingEvent(deploymentID, resourceID uint64, event
 	return s.publishTask(context.Background(), string(BillingEvent), task)
 }
 
-// Agent execution types
-type AgentExecutionRequest struct {
-	DeploymentID   string  `json:"deployment_id"`
-	ContextID      string  `json:"context_id"`
-	AgentID        *string `json:"agent_id,omitempty"`
-	AgentName      *string `json:"agent_name,omitempty"`
-	Type           string  `json:"type"`
-	ConversationID string  `json:"conversation_id,omitempty"`
+type ToolApprovalSelection struct {
+	ToolName string `json:"tool_name"`
+	Mode     string `json:"mode"`
+}
+
+type AgentExecutionPayload struct {
+	DeploymentID     string                  `json:"deployment_id"`
+	ThreadID         string                  `json:"thread_id"`
+	ThreadEventID    *string                 `json:"thread_event_id,omitempty"`
+	AgentID          *string                 `json:"agent_id,omitempty"`
+	Type             string                  `json:"type"`
+	ConversationID   *string                 `json:"conversation_id,omitempty"`
+	RequestMessageID *string                 `json:"request_message_id,omitempty"`
+	Approvals        []ToolApprovalSelection `json:"approvals"`
+	EventID          *string                 `json:"event_id,omitempty"`
+}
+
+type ThreadSchedulePayload struct {
+	DeploymentID string `json:"deployment_id"`
+	ThreadID     string `json:"thread_id"`
 }
 
 func (s *NatsService) PublishAgentExecution(
@@ -548,25 +564,25 @@ func (s *NatsService) PublishAgentExecution(
 		str := fmt.Sprintf("%d", *agentID)
 		agentIDStr = &str
 	}
+	conversationIDStr := fmt.Sprintf("%d", conversationID)
 
-	req := AgentExecutionRequest{
+	req := AgentExecutionPayload{
 		DeploymentID:   fmt.Sprintf("%d", deploymentID),
-		ContextID:      fmt.Sprintf("%d", contextID),
+		ThreadID:       fmt.Sprintf("%d", contextID),
 		AgentID:        agentIDStr,
 		Type:           executionType,
-		ConversationID: fmt.Sprintf("%d", conversationID),
+		ConversationID: &conversationIDStr,
 	}
 
 	return s.publishTask(ctx, "agent.execution_request", req)
 }
 
-// PublishAgentExecutionWithResult publishes a platform function result execution request
-func (s *NatsService) PublishAgentExecutionWithResult(
+func (s *NatsService) PublishAgentApprovalResponse(
 	ctx context.Context,
 	deploymentID, contextID uint64,
 	agentID *int64,
-	executionID string,
-	result map[string]interface{},
+	requestMessageID string,
+	approvals []ToolApprovalSelection,
 ) error {
 	var agentIDStr *string
 	if agentID != nil {
@@ -574,26 +590,28 @@ func (s *NatsService) PublishAgentExecutionWithResult(
 		agentIDStr = &str
 	}
 
-	req := AgentExecutionRequestWithResult{
-		DeploymentID: fmt.Sprintf("%d", deploymentID),
-		ContextID:    fmt.Sprintf("%d", contextID),
-		AgentID:      agentIDStr,
-		Type:         "platform_function_result",
-		ExecutionID:  executionID,
-		Result:       result,
+	req := AgentExecutionPayload{
+		DeploymentID:     fmt.Sprintf("%d", deploymentID),
+		ThreadID:         fmt.Sprintf("%d", contextID),
+		AgentID:          agentIDStr,
+		Type:             "approval_response",
+		RequestMessageID: &requestMessageID,
+		Approvals:        approvals,
 	}
 
 	return s.publishTask(ctx, "agent.execution_request", req)
 }
 
-type AgentExecutionRequestWithResult struct {
-	DeploymentID string                 `json:"deployment_id"`
-	ContextID    string                 `json:"context_id"`
-	AgentID      *string                `json:"agent_id,omitempty"`
-	AgentName    *string                `json:"agent_name,omitempty"`
-	Type         string                 `json:"type"`
-	ExecutionID  string                 `json:"execution_id"`
-	Result       map[string]interface{} `json:"result"`
+func (s *NatsService) PublishThreadSchedule(
+	ctx context.Context,
+	deploymentID, threadID uint64,
+) error {
+	req := ThreadSchedulePayload{
+		DeploymentID: fmt.Sprintf("%d", deploymentID),
+		ThreadID:     fmt.Sprintf("%d", threadID),
+	}
+
+	return s.publishTask(ctx, "agent.thread_schedule", req)
 }
 
 func (s *NatsService) PublishRateLimit(payload []byte) error {
@@ -633,16 +651,15 @@ func (s *NatsService) getAgentExecutionKV(ctx context.Context) (jetstream.KeyVal
 	return kv, nil
 }
 
-func (s *NatsService) SignalAgentExecutionCancellation(ctx context.Context, contextID uint64) error {
+func (s *NatsService) AdvanceAgentExecutionToken(ctx context.Context, contextID uint64) error {
 	kv, err := s.getAgentExecutionKV(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get execution token kv: %w", err)
 	}
 
-	key := fmt.Sprintf("%d", contextID)
-	marker := fmt.Sprintf("cancel:%d", time.Now().UnixNano())
-	if _, err := kv.Put(ctx, key, []byte(marker)); err != nil {
-		return fmt.Errorf("failed to signal agent execution cancellation: %w", err)
+	token := fmt.Sprintf("%d", idgen.NextID())
+	if _, err := kv.Put(ctx, fmt.Sprintf("%d", contextID), []byte(token)); err != nil {
+		return fmt.Errorf("failed to advance execution token: %w", err)
 	}
 
 	return nil

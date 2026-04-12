@@ -16,6 +16,11 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	agentSessionActorSubjectTypeUser = "user"
+	defaultActorMetadataJSON         = "{}"
+)
+
 type TicketType string
 
 const (
@@ -29,11 +34,11 @@ type SessionTicketPayload struct {
 	TicketType             TicketType                    `json:"ticket_type"`
 	DeploymentID           string                        `json:"deployment_id"`
 	UserID                 *string                       `json:"user_id,omitempty"`
+	ActorID                *string                       `json:"actor_id,omitempty"`
 	AgentIDs               []string                      `json:"agent_ids,omitempty"`
 	AgentSessionIdentifier *model.AgentSessionIdentifier `json:"agent_session_identifier,omitempty"`
 	WebhookAppSlug         *string                       `json:"webhook_app_slug,omitempty"`
 	ApiAuthAppSlug         *string                       `json:"api_auth_app_slug,omitempty"`
-	ContextGroup           *string                       `json:"context_group,omitempty"`
 	ExpiresAt              int64                         `json:"expires_at"`
 }
 
@@ -42,10 +47,30 @@ type ExchangeTicketRequest struct {
 }
 
 type AgentInfo struct {
-	ID           string                   `json:"id"`
-	Name         string                   `json:"name"`
-	Description  string                   `json:"description"`
-	Integrations []model.AgentIntegration `json:"integrations"`
+	ID          uint64      `json:"id,string"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	ChildAgents []AgentInfo `json:"child_agents,omitempty"`
+}
+
+type allowlistedAgentRow struct {
+	ID          uint64          `gorm:"column:id"`
+	Name        string          `gorm:"column:name"`
+	Description string          `gorm:"column:description"`
+	ChildAgents json.RawMessage `gorm:"column:child_agents"`
+}
+
+type hydratedSessionExchangeRow struct {
+	SessionID uint64          `gorm:"column:session_id"`
+	Actor     json.RawMessage `gorm:"column:actor"`
+	Agents    json.RawMessage `gorm:"column:agents"`
+}
+
+type ActorInfo struct {
+	ID          uint64  `json:"id,string"`
+	DisplayName *string `json:"display_name,omitempty"`
+	SubjectType string  `json:"subject_type"`
+	ExternalKey string  `json:"external_key"`
 }
 
 type WebhookAppInfo struct {
@@ -65,14 +90,14 @@ type ApiAuthAppInfo struct {
 }
 
 type ExchangeTicketResponse struct {
-	Success      bool            `json:"success"`
-	Message      string          `json:"message,omitempty"`
-	SessionID    *string         `json:"session_id,omitempty"`
-	ContextGroup *string         `json:"context_group,omitempty"`
-	Agents       []AgentInfo     `json:"agents,omitempty"`
-	WebhookApp   *WebhookAppInfo `json:"webhook_app,omitempty"`
-	ApiAuthApp   *ApiAuthAppInfo `json:"api_auth_app,omitempty"`
-	Session      *model.Session  `json:"session,omitempty"`
+	Success    bool            `json:"success"`
+	Message    string          `json:"message,omitempty"`
+	SessionID  *uint64         `json:"session_id,string,omitempty"`
+	Actor      *ActorInfo      `json:"actor,omitempty"`
+	Agents     []AgentInfo     `json:"agents,omitempty"`
+	WebhookApp *WebhookAppInfo `json:"webhook_app,omitempty"`
+	ApiAuthApp *ApiAuthAppInfo `json:"api_auth_app,omitempty"`
+	Session    *model.Session  `json:"session,omitempty"`
 }
 
 func (h *Handler) ExchangeTicket(c *fiber.Ctx) error {
@@ -234,27 +259,71 @@ func (h *Handler) handleAgentAccessExchange(
 		if err != nil {
 			return handler.SendBadRequest(c, err, fmt.Sprintf("Invalid agent_id: %s", idStr))
 		}
+		if id < 0 {
+			return handler.SendBadRequest(c, nil, fmt.Sprintf("Invalid agent_id: %s", idStr))
+		}
 		agentIDs[i] = id
 	}
 
-	// Determine identifier mode and effective context group.
+	// Determine identifier mode and effective actor scope.
 	identifier := model.AgentSessionIdentifierStatic
 	if payload.AgentSessionIdentifier != nil {
 		identifier = *payload.AgentSessionIdentifier
 	}
 
-	var contextGroup string
+	var actorID uint64
 	switch identifier {
 	case model.AgentSessionIdentifierStatic:
-		if payload.ContextGroup == nil || *payload.ContextGroup == "" {
-			return handler.SendBadRequest(c, nil, "context_group is required for static agent_access tickets")
+		if payload.ActorID == nil || *payload.ActorID == "" {
+			return handler.SendBadRequest(c, nil, "actor_id is required for static agent_access tickets")
 		}
-		contextGroup = *payload.ContextGroup
+		parsedActorID, err := strconv.ParseUint(*payload.ActorID, 10, 64)
+		if err != nil {
+			return handler.SendBadRequest(c, nil, "Invalid actor_id")
+		}
+		var actor model.Actor
+		if err := database.Connection.
+			Where("id = ? AND deployment_id = ?", parsedActorID, deployment.ID).
+			First(&actor).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return handler.SendBadRequest(c, nil, "actor_id was not found for this deployment")
+			}
+			return handler.SendInternalServerError(c, err, "Failed to load actor")
+		}
+		actorID = parsedActorID
 	case model.AgentSessionIdentifierSignin:
 		if session.ActiveSignin == nil || session.ActiveSignin.UserID == nil {
 			return handler.SendUnauthorized(c, nil, "No active sign in for signin agent_access ticket")
 		}
-		contextGroup = strconv.FormatUint(*session.ActiveSignin.UserID, 10)
+
+		externalKey := strconv.FormatUint(*session.ActiveSignin.UserID, 10)
+		var actor model.Actor
+		err := database.Connection.
+			Where(
+				"deployment_id = ? AND subject_type = ? AND external_key = ?",
+				deployment.ID,
+				agentSessionActorSubjectTypeUser,
+				externalKey,
+			).
+			First(&actor).Error
+		if err != nil {
+			if err != gorm.ErrRecordNotFound {
+				return handler.SendInternalServerError(c, err, "Failed to load actor")
+			}
+
+			actor = model.Actor{
+				Model:        model.Model{ID: idgen.NextID()},
+				DeploymentID: deployment.ID,
+				SubjectType:  agentSessionActorSubjectTypeUser,
+				ExternalKey:  externalKey,
+				Metadata:     json.RawMessage(defaultActorMetadataJSON),
+			}
+			if err := database.Connection.Create(&actor).Error; err != nil {
+				return handler.SendInternalServerError(c, err, "Failed to create actor")
+			}
+		}
+
+		actorID = actor.ID
 	default:
 		return handler.SendBadRequest(c, nil, "Invalid agent_session_identifier")
 	}
@@ -266,12 +335,11 @@ func (h *Handler) handleAgentAccessExchange(
 		expiresAt = &t
 	}
 
-	// Expire old agent sessions for this session
-	now := time.Now()
-	if err := database.Connection.Model(&model.AgentSession{}).
-		Where("session_id = ? AND (expires_at IS NULL OR expires_at > ?)", session.ID, now).
-		Update("expires_at", now).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to expire old sessions")
+	// Replace any existing agent session for this browser session and deployment.
+	if err := database.Connection.
+		Where("deployment_id = ? AND session_id = ?", deployment.ID, session.ID).
+		Delete(&model.AgentSession{}).Error; err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to replace old agent session")
 	}
 
 	// Create new AgentSession
@@ -279,7 +347,7 @@ func (h *Handler) handleAgentAccessExchange(
 		session.ID,
 		deployment.ID,
 		identifier,
-		contextGroup,
+		actorID,
 		agentIDs,
 		expiresAt,
 	)
@@ -288,9 +356,9 @@ func (h *Handler) handleAgentAccessExchange(
 		return handler.SendInternalServerError(c, err, "Failed to create agent session")
 	}
 
-	agents, err := h.getAllowlistedAgents(deployment.ID, agentIDs)
+	response, err := h.getHydratedSessionExchangeResponse(session.ID, deployment.ID)
 	if err != nil {
-		return handler.SendInternalServerError(c, err, err.Error())
+		return handler.SendInternalServerError(c, err, "Failed to fetch agent session")
 	}
 
 	// Delete ticket from Redis (single-use enforcement)
@@ -300,12 +368,87 @@ func (h *Handler) handleAgentAccessExchange(
 	}
 
 	return handler.SendSuccess(c, ExchangeTicketResponse{
-		Success:      true,
-		Message:      "Agent session created",
-		SessionID:    ptr(strconv.FormatUint(agentSession.ID, 10)),
-		ContextGroup: &contextGroup,
-		Agents:       agents,
+		Success:   true,
+		Message:   "Agent session created",
+		SessionID: response.SessionID,
+		Actor:     response.Actor,
+		Agents:    response.Agents,
 	})
+}
+
+func (h *Handler) getHydratedSessionExchangeResponse(sessionID uint64, deploymentID uint64) (*ExchangeTicketResponse, error) {
+	var row hydratedSessionExchangeRow
+	if err := database.Connection.Raw(`
+		SELECT
+			s.id AS session_id,
+			json_build_object(
+				'id', a.id::text,
+				'display_name', a.display_name,
+				'subject_type', a.subject_type,
+				'external_key', a.external_key
+			) AS actor,
+			COALESCE((
+				SELECT json_agg(
+					json_build_object(
+						'id', root.id::text,
+						'name', root.name,
+						'description', root.description,
+						'child_agents', COALESCE(children.child_agents, '[]'::json)
+					)
+					ORDER BY root.name ASC
+				)
+				FROM ai_agents root
+				LEFT JOIN LATERAL (
+					SELECT json_agg(
+						json_build_object(
+							'id', child.id::text,
+							'name', child.name,
+							'description', child.description
+						)
+						ORDER BY child.name ASC
+					) AS child_agents
+					FROM ai_agents child
+					WHERE child.deployment_id = s.deployment_id
+						AND child.id IN (
+							SELECT value::bigint
+							FROM jsonb_array_elements_text(COALESCE(root.sub_agents, '[]'::jsonb))
+						)
+				) children ON TRUE
+				WHERE root.deployment_id = s.deployment_id
+					AND root.id = ANY(s.agent_ids)
+			), '[]'::json) AS agents
+		FROM agent_sessions s
+		JOIN actors a
+			ON a.id = s.actor_id
+			AND a.deployment_id = s.deployment_id
+		WHERE s.session_id = ?
+			AND s.deployment_id = ?
+			AND (s.expires_at IS NULL OR s.expires_at > ?)
+		LIMIT 1
+	`, sessionID, deploymentID, time.Now()).Scan(&row).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch hydrated agent session: %w", err)
+	}
+	if row.SessionID == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	response := &ExchangeTicketResponse{
+		SessionID: ptr(row.SessionID),
+	}
+	if len(row.Actor) > 0 && string(row.Actor) != "null" {
+		var actor ActorInfo
+		if err := json.Unmarshal(row.Actor, &actor); err != nil {
+			return nil, fmt.Errorf("failed to parse session actor: %w", err)
+		}
+		response.Actor = &actor
+	}
+	if len(row.Agents) > 0 && string(row.Agents) != "null" {
+		if err := json.Unmarshal(row.Agents, &response.Agents); err != nil {
+			return nil, fmt.Errorf("failed to parse session agents: %w", err)
+		}
+	}
+
+	return response, nil
 }
 
 func (h *Handler) createSignInAttempt(
@@ -340,28 +483,79 @@ func (h *Handler) createSignIn(
 }
 
 func (h *Handler) getAllowlistedAgents(deploymentID uint64, agentIDs []int64) ([]AgentInfo, error) {
-	var agents []model.AiAgent
-	if err := database.Connection.
-		Where("deployment_id = ? AND id IN ?", deploymentID, agentIDs).
-		Find(&agents).Error; err != nil {
+	var rows []allowlistedAgentRow
+	if err := database.Connection.Raw(`
+		WITH selected_agents AS (
+			SELECT a.id, a.name, a.description, COALESCE(a.sub_agents, '[]'::jsonb) AS sub_agents
+			FROM ai_agents a
+			WHERE a.deployment_id = ? AND a.id = ANY(?)
+		)
+		SELECT
+			a.id,
+			a.name,
+			a.description,
+			COALESCE(children.child_agents, '[]'::json) AS child_agents
+		FROM selected_agents a
+		LEFT JOIN LATERAL (
+			SELECT json_agg(
+				json_build_object(
+					'id', c.id::text,
+					'name', c.name,
+					'description', COALESCE(c.description, '')
+				)
+				ORDER BY c.name ASC
+			) AS child_agents
+			FROM ai_agents c
+			WHERE c.deployment_id = ?
+				AND c.id IN (
+					SELECT value::bigint
+					FROM jsonb_array_elements_text(a.sub_agents)
+				)
+		) children ON TRUE
+		ORDER BY a.name ASC
+	`, deploymentID, agentIDs, deploymentID).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("failed to fetch agents: %w", err)
 	}
 
-	var result []AgentInfo
-
-	for _, agent := range agents {
-		var integrations []model.AgentIntegration
-		if err := database.Connection.
-			Where("deployment_id = ? AND agent_id = ?", deploymentID, agent.ID).
-			Find(&integrations).Error; err != nil {
-			return nil, fmt.Errorf("failed to fetch integrations for agent %d: %w", agent.ID, err)
+	result := make([]AgentInfo, 0, len(rows))
+	for _, row := range rows {
+		agent := AgentInfo{
+			ID:          row.ID,
+			Name:        row.Name,
+			Description: row.Description,
 		}
 
-		result = append(result, AgentInfo{
-			ID:           fmt.Sprintf("%d", agent.ID),
-			Name:         agent.Name,
-			Description:  agent.Description,
-			Integrations: integrations,
+		if len(row.ChildAgents) > 0 && string(row.ChildAgents) != "null" {
+			var children []AgentInfo
+			if err := json.Unmarshal(row.ChildAgents, &children); err != nil {
+				return nil, fmt.Errorf("failed to parse child agents for agent %d: %w", row.ID, err)
+			}
+			if len(children) > 0 {
+				agent.ChildAgents = children
+			}
+		}
+
+		result = append(result, agent)
+	}
+
+	return result, nil
+}
+
+func (h *Handler) getAllowlistedActors(deploymentID uint64, actorIDs []int64) ([]ActorInfo, error) {
+	var actors []model.Actor
+	if err := database.Connection.
+		Where("deployment_id = ? AND id IN ?", deploymentID, actorIDs).
+		Find(&actors).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch actors: %w", err)
+	}
+
+	var result []ActorInfo
+	for _, actor := range actors {
+		result = append(result, ActorInfo{
+			ID:          actor.ID,
+			DisplayName: actor.DisplayName,
+			SubjectType: actor.SubjectType,
+			ExternalKey: actor.ExternalKey,
 		})
 	}
 
@@ -412,7 +606,7 @@ func (h *Handler) handleWebhookAppAccessExchange(
 
 	webhookApp, err := h.getWebhookApp(deployment.ID, appSlug)
 	if err != nil {
-		return handler.SendInternalServerError(c, err, err.Error())
+		return handler.SendInternalServerError(c, err, "Internal server error")
 	}
 
 	redisKey := fmt.Sprintf("session:ticket:%s", ticket)
@@ -423,7 +617,7 @@ func (h *Handler) handleWebhookAppAccessExchange(
 	return handler.SendSuccess(c, ExchangeTicketResponse{
 		Success:    true,
 		Message:    "Webhook app session created",
-		SessionID:  ptr(strconv.FormatUint(webhookAppSession.ID, 10)),
+		SessionID:  ptr(webhookAppSession.ID),
 		WebhookApp: webhookApp,
 	})
 }
@@ -492,7 +686,7 @@ func (h *Handler) handleApiAuthAccessExchange(
 
 	apiAuthApp, err := h.getApiAuthApp(deployment.ID, appSlug)
 	if err != nil {
-		return handler.SendInternalServerError(c, err, err.Error())
+		return handler.SendInternalServerError(c, err, "Internal server error")
 	}
 
 	redisKey := fmt.Sprintf("session:ticket:%s", ticket)
@@ -503,7 +697,7 @@ func (h *Handler) handleApiAuthAccessExchange(
 	return handler.SendSuccess(c, ExchangeTicketResponse{
 		Success:    true,
 		Message:    "API auth app session created",
-		SessionID:  ptr(strconv.FormatUint(apiAuthAppSession.ID, 10)),
+		SessionID:  ptr(apiAuthAppSession.ID),
 		ApiAuthApp: apiAuthApp,
 	})
 }

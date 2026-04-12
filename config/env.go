@@ -9,7 +9,6 @@ import (
 func Init() {
 	godotenv.Load()
 	initR2Session()
-	initAgentStorageSession()
 }
 
 func GetEnv(key, defaultValue string) string {

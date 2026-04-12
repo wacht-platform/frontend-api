@@ -114,7 +114,7 @@ func SendInternalServerError(
 	message string,
 	errors ...Error,
 ) error {
-	return SendResponse(c, 500, data, message, errors)
+	return SendResponse[any](c, 500, nil, message, errors)
 }
 
 func SendTooManyRequests(

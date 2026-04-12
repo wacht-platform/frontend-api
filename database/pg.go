@@ -68,7 +68,7 @@ func AutoMigratePg() error {
 		&model.DeploymentSmsTemplate{},
 		&model.DeploymentInvitation{},
 		&model.DeploymentWaitlistUser{},
-		&model.AgentExecutionContext{},
+		&model.AgentThread{},
 		&model.UserPasskey{},
 		&model.ApiAuthApp{},
 		&model.ApiKey{},

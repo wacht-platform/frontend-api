@@ -15,11 +15,11 @@ const (
 )
 
 type AgentSession struct {
-	ID           uint64                 `gorm:"primarykey"              json:"id,string"`
+	ID           uint64                 `gorm:"primarykey" json:"id,string"`
 	SessionID    uint64                 `json:"session_id,string" gorm:"index;not null"`
 	DeploymentID uint64                 `json:"deployment_id,string" gorm:"index;not null"`
-	Identifier   AgentSessionIdentifier `json:"identifier" gorm:"type:varchar(20);not null"`
-	ContextGroup string                 `json:"context_group" gorm:"type:varchar(255);not null"`
+	Identifier   AgentSessionIdentifier `json:"identifier" gorm:"type:varchar(32);not null"`
+	ActorID      uint64                 `json:"actor_id,string" gorm:"column:actor_id;not null"`
 	AgentIDs     pq.Int64Array          `json:"agent_ids" gorm:"type:bigint[];not null"`
 	ExpiresAt    *time.Time             `json:"expires_at,omitempty"`
 }
@@ -28,7 +28,7 @@ func NewAgentSession(
 	sessionID uint64,
 	deploymentID uint64,
 	identifier AgentSessionIdentifier,
-	contextGroup string,
+	actorID uint64,
 	agentIDs []int64,
 	expiresAt *time.Time,
 ) *AgentSession {
@@ -37,7 +37,7 @@ func NewAgentSession(
 		SessionID:    sessionID,
 		DeploymentID: deploymentID,
 		Identifier:   identifier,
-		ContextGroup: contextGroup,
+		ActorID:      actorID,
 		AgentIDs:     agentIDs,
 		ExpiresAt:    expiresAt,
 	}

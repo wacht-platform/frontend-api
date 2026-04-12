@@ -78,10 +78,6 @@ JWT_EXPIRES_IN=24h
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 
-# AWS (for file uploads)
-AWS_ACCESS_KEY_ID=your_access_key
-AWS_SECRET_ACCESS_KEY=your_secret_key
-AWS_REGION=us-east-1
 
 # Application
 PORT=3000
