@@ -705,7 +705,7 @@ func getThreadFilesystemFileBytesFromStorage(
 	}
 }
 
-func (s *Service) ListBoardItemTaskWorkspaceFiles(deploymentID, actorID, itemID uint64, relativePath string, includeArchived bool) (*TaskWorkspaceListing, error) {
+func (s *Service) ListBoardItemTaskWorkspaceFiles(deploymentID, actorID, projectID, itemID uint64, relativePath string, includeArchived bool) (*TaskWorkspaceListing, error) {
 	item, err := s.GetAuthorizedBoardItem(deploymentID, actorID, itemID, includeArchived)
 	if err != nil {
 		return nil, err
@@ -713,6 +713,9 @@ func (s *Service) ListBoardItemTaskWorkspaceFiles(deploymentID, actorID, itemID 
 	board, err := s.GetProjectBoardByID(deploymentID, actorID, item.BoardID)
 	if err != nil {
 		return nil, err
+	}
+	if board.ProjectID != projectID {
+		return nil, gorm.ErrRecordNotFound
 	}
 
 	storage, err := resolveDeploymentAgentStorage(deploymentID)
@@ -723,7 +726,7 @@ func (s *Service) ListBoardItemTaskWorkspaceFiles(deploymentID, actorID, itemID 
 	return listTaskWorkspaceFilesFromStorage(storage, deploymentID, board.ProjectID, item.TaskKey, relativePath)
 }
 
-func (s *Service) GetBoardItemTaskWorkspaceFileContent(deploymentID, actorID, itemID uint64, relativePath string, includeArchived bool) (*TaskWorkspaceFileContent, error) {
+func (s *Service) GetBoardItemTaskWorkspaceFileContent(deploymentID, actorID, projectID, itemID uint64, relativePath string, includeArchived bool) (*TaskWorkspaceFileContent, error) {
 	item, err := s.GetAuthorizedBoardItem(deploymentID, actorID, itemID, includeArchived)
 	if err != nil {
 		return nil, err
@@ -731,6 +734,9 @@ func (s *Service) GetBoardItemTaskWorkspaceFileContent(deploymentID, actorID, it
 	board, err := s.GetProjectBoardByID(deploymentID, actorID, item.BoardID)
 	if err != nil {
 		return nil, err
+	}
+	if board.ProjectID != projectID {
+		return nil, gorm.ErrRecordNotFound
 	}
 
 	storage, err := resolveDeploymentAgentStorage(deploymentID)
@@ -827,7 +833,7 @@ func uploadTaskWorkspaceFilesForTaskKey(
 }
 
 func (s *Service) uploadBoardItemTaskWorkspaceFiles(
-	deploymentID, actorID, itemID uint64,
+	deploymentID, actorID, projectID, itemID uint64,
 	files []*multipart.FileHeader,
 ) ([]UploadedTaskWorkspaceFile, error) {
 	if len(files) == 0 {
@@ -842,6 +848,9 @@ func (s *Service) uploadBoardItemTaskWorkspaceFiles(
 	if err != nil {
 		return nil, err
 	}
+	if board.ProjectID != projectID {
+		return nil, gorm.ErrRecordNotFound
+	}
 
 	return uploadTaskWorkspaceFilesForTaskKey(deploymentID, board.ProjectID, item.TaskKey, files)
 }
@@ -850,6 +859,10 @@ func (h *Handler) ListBoardItemTaskWorkspaceFiles(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
+	}
+	projectID, err := parseIDParam(c, "project_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid project_id")
 	}
 
 	itemID, err := parseIDParam(c, "item_id")
@@ -861,6 +874,7 @@ func (h *Handler) ListBoardItemTaskWorkspaceFiles(c fiber.Ctx) error {
 	listing, err := h.service.ListBoardItemTaskWorkspaceFiles(
 		deployment.ID,
 		actorID,
+		projectID,
 		itemID,
 		c.Query("path"),
 		parseBoolQuery(c.Query("include_archived")),
@@ -880,6 +894,10 @@ func (h *Handler) GetBoardItemTaskWorkspaceFileContent(c fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	projectID, err := parseIDParam(c, "project_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid project_id")
+	}
 
 	itemID, err := parseIDParam(c, "item_id")
 	if err != nil {
@@ -895,6 +913,7 @@ func (h *Handler) GetBoardItemTaskWorkspaceFileContent(c fiber.Ctx) error {
 	content, err := h.service.GetBoardItemTaskWorkspaceFileContent(
 		deployment.ID,
 		actorID,
+		projectID,
 		itemID,
 		relativePath,
 		parseBoolQuery(c.Query("include_archived")),

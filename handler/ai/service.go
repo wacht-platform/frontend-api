@@ -326,14 +326,6 @@ func (s *Service) GetActorByID(deploymentID, actorID uint64) (*model.Actor, erro
 	return &actor, nil
 }
 
-func (s *Service) ListActorsForSession(deploymentID, actorID uint64) ([]model.Actor, error) {
-	var actors []model.Actor
-	if err := s.db.Where("deployment_id = ? AND id = ?", deploymentID, actorID).Find(&actors).Error; err != nil {
-		return nil, err
-	}
-	return actors, nil
-}
-
 func (s *Service) GetAllowlistedActors(deploymentID, actorID uint64) ([]ActorSummary, error) {
 	var actors []model.Actor
 	if err := s.db.Where("deployment_id = ? AND id = ?", deploymentID, actorID).
@@ -995,16 +987,6 @@ func (s *Service) SetAgentThreadArchived(deploymentID, actorID, threadID uint64,
 	return s.GetThread(deploymentID, actorID, threadID)
 }
 
-func (s *Service) ListProjectThreads(deploymentID, actorID, projectID uint64) ([]model.AgentThread, error) {
-	var threads []model.AgentThread
-	if err := s.db.Where("deployment_id = ? AND actor_id = ? AND project_id = ? AND archived_at IS NULL", deploymentID, actorID, projectID).
-		Order("last_activity_at DESC").
-		Find(&threads).Error; err != nil {
-		return nil, err
-	}
-	return s.hydrateThreadAgentAssignments(threads)
-}
-
 func (s *Service) SearchProjectThreads(
 	deploymentID, actorID, projectID uint64,
 	query string,
@@ -1377,142 +1359,22 @@ func (s *Service) GetAuthorizedBoardItem(deploymentID, actorID, itemID uint64, i
 	return item, nil
 }
 
-func (s *Service) GetBoardItemDetail(deploymentID, actorID, itemID uint64, includeArchived bool) (*ProjectTaskBoardItemDetail, error) {
-	type boardItemDetailRow struct {
-		Item        json.RawMessage `gorm:"column:item"`
-		Events      json.RawMessage `gorm:"column:events"`
-		Assignments json.RawMessage `gorm:"column:assignments"`
-		Schedule    json.RawMessage `gorm:"column:schedule"`
-	}
-
-	var row boardItemDetailRow
-	if err := s.db.Raw(`
-		SELECT
-			row_to_json(item_row) AS item,
-			COALESCE((
-				SELECT json_agg(row_to_json(event_row) ORDER BY event_row.created_at ASC)
-				FROM (
-					SELECT
-						e.id::text AS id,
-						e.board_item_id::text AS board_item_id,
-						CASE WHEN e.thread_id IS NULL THEN NULL ELSE e.thread_id::text END AS thread_id,
-						CASE WHEN e.execution_run_id IS NULL THEN NULL ELSE e.execution_run_id::text END AS execution_run_id,
-						e.event_type,
-						e.summary,
-						e.body_markdown,
-						e.details,
-						e.created_at
-					FROM project_task_board_item_events e
-					WHERE e.board_item_id = item_row.raw_id
-					ORDER BY e.created_at ASC
-				) AS event_row
-			), '[]'::json) AS events,
-			COALESCE((
-				SELECT json_agg(row_to_json(assignment_row) ORDER BY assignment_row.assignment_order ASC, assignment_row.created_at ASC)
-				FROM (
-					SELECT
-						a.id::text AS id,
-						a.board_item_id::text AS board_item_id,
-						a.thread_id::text AS thread_id,
-						a.assignment_role,
-						a.assignment_order,
-						a.status,
-						a.instructions,
-						a.handoff_file_path,
-						a.metadata,
-						a.result_status,
-						a.result_summary,
-						a.result_payload,
-						a.claimed_at,
-						a.started_at,
-						a.completed_at,
-						a.rejected_at,
-						a.created_at,
-						a.updated_at
-					FROM project_task_board_item_assignments a
-					WHERE a.board_item_id = item_row.raw_id
-					ORDER BY a.assignment_order ASC, a.created_at ASC
-				) AS assignment_row
-			), '[]'::json) AS assignments,
-			(
-				SELECT row_to_json(schedule_row)
-				FROM (
-					SELECT
-						s.id::text AS id,
-						s.template_board_item_id::text AS template_board_item_id,
-						s.status,
-						s.schedule_kind,
-						s.interval_seconds,
-						s.next_run_at,
-						s.last_enqueued_at,
-						s.created_at,
-						s.updated_at
-					FROM project_task_schedules s
-					WHERE s.template_board_item_id = item_row.raw_id
-					LIMIT 1
-				) AS schedule_row
-			) AS schedule
-		FROM (
-			SELECT
-				i.id AS raw_id,
-				i.id::text AS id,
-				i.board_id::text AS board_id,
-				i.task_key,
-				i.title,
-				i.description,
-				i.status,
-				i.priority,
-				CASE WHEN i.assigned_thread_id IS NULL THEN NULL ELSE i.assigned_thread_id::text END AS assigned_thread_id,
-				i.metadata,
-				i.completed_at,
-				i.archived_at,
-				i.created_at,
-				i.updated_at
-			FROM project_task_board_items i
-			INNER JOIN project_task_boards b ON b.id = i.board_id
-			WHERE i.id = ?
-				AND b.deployment_id = ?
-				AND b.actor_id = ?
-				AND (? OR i.archived_at IS NULL)
-			LIMIT 1
-		) AS item_row
-	`, itemID, deploymentID, actorID, includeArchived).Scan(&row).Error; err != nil {
+func (s *Service) GetProjectBoardItem(deploymentID, actorID, projectID, itemID uint64, includeArchived bool) (*model.ProjectTaskBoardItem, error) {
+	item, err := s.GetAuthorizedBoardItem(deploymentID, actorID, itemID, includeArchived)
+	if err != nil {
 		return nil, err
 	}
-
-	if len(row.Item) == 0 {
+	board, err := s.GetProjectBoardByID(deploymentID, actorID, item.BoardID)
+	if err != nil {
+		return nil, err
+	}
+	if board.ProjectID != projectID {
 		return nil, gorm.ErrRecordNotFound
 	}
-
-	detail := &ProjectTaskBoardItemDetail{}
-	if err := json.Unmarshal(row.Item, &detail.Item); err != nil {
+	if err := s.attachProjectTaskSchedule(s.db, item); err != nil {
 		return nil, err
 	}
-	if len(row.Events) > 0 {
-		if err := json.Unmarshal(row.Events, &detail.Events); err != nil {
-			return nil, err
-		}
-	}
-	if len(row.Assignments) > 0 {
-		if err := json.Unmarshal(row.Assignments, &detail.Assignments); err != nil {
-			return nil, err
-		}
-	}
-	if len(row.Schedule) > 0 && string(row.Schedule) != "null" {
-		var schedule model.ProjectTaskSchedule
-		if err := json.Unmarshal(row.Schedule, &schedule); err != nil {
-			return nil, err
-		}
-		detail.Item.Schedule = &schedule
-	}
-	if detail.Events == nil {
-		detail.Events = []model.ProjectTaskBoardItemEvent{}
-	}
-	if detail.Assignments == nil {
-		detail.Assignments = []model.ProjectTaskBoardItemAssignment{}
-	}
-
-	return detail, nil
+	return item, nil
 }
 
 func parseOptionalUint64(value *string) (*uint64, error) {
@@ -1849,7 +1711,7 @@ func (s *Service) CreateProjectBoardItem(
 }
 
 func (s *Service) UpdateProjectBoardItem(
-	deploymentID, actorID, itemID uint64,
+	deploymentID, actorID, projectID, itemID uint64,
 	req UpdateProjectTaskBoardItemRequest,
 	files []*multipart.FileHeader,
 ) (*model.ProjectTaskBoardItem, error) {
@@ -1860,6 +1722,9 @@ func (s *Service) UpdateProjectBoardItem(
 	board, err := s.GetProjectBoardByID(deploymentID, actorID, item.BoardID)
 	if err != nil {
 		return nil, err
+	}
+	if board.ProjectID != projectID {
+		return nil, gorm.ErrRecordNotFound
 	}
 	project, err := s.GetActorProject(deploymentID, actorID, board.ProjectID)
 	if err != nil {
@@ -1971,7 +1836,7 @@ func (s *Service) UpdateProjectBoardItem(
 	return updatedItem, nil
 }
 
-func (s *Service) ArchiveProjectBoardItem(deploymentID, actorID, itemID uint64) (*model.ProjectTaskBoardItem, error) {
+func (s *Service) ArchiveProjectBoardItem(deploymentID, actorID, projectID, itemID uint64) (*model.ProjectTaskBoardItem, error) {
 	now := time.Now()
 	eventID := idgen.NextID()
 	type archiveResultRow struct {
@@ -1996,6 +1861,7 @@ func (s *Service) ArchiveProjectBoardItem(deploymentID, actorID, itemID uint64) 
 				WHERE i.id = ?
 					AND b.deployment_id = ?
 					AND b.actor_id = ?
+					AND b.project_id = ?
 					AND i.archived_at IS NULL
 				FOR UPDATE
 			),
@@ -2059,7 +1925,7 @@ func (s *Service) ArchiveProjectBoardItem(deploymentID, actorID, itemID uint64) 
 			)
 			SELECT row_to_json(u) AS item
 			FROM updated_item u
-		`, itemID, deploymentID, actorID, now, now, now, now, eventID, now).Scan(&row).Error
+		`, itemID, deploymentID, actorID, projectID, now, now, now, now, eventID, now).Scan(&row).Error
 	}); err != nil {
 		return nil, err
 	}
@@ -2075,7 +1941,7 @@ func (s *Service) ArchiveProjectBoardItem(deploymentID, actorID, itemID uint64) 
 	return &item, nil
 }
 
-func (s *Service) UnarchiveProjectBoardItem(deploymentID, actorID, itemID uint64) (*model.ProjectTaskBoardItem, error) {
+func (s *Service) UnarchiveProjectBoardItem(deploymentID, actorID, projectID, itemID uint64) (*model.ProjectTaskBoardItem, error) {
 	now := time.Now()
 	eventID := idgen.NextID()
 	type unarchiveResultRow struct {
@@ -2095,6 +1961,7 @@ func (s *Service) UnarchiveProjectBoardItem(deploymentID, actorID, itemID uint64
 				WHERE i.id = ?
 					AND b.deployment_id = ?
 					AND b.actor_id = ?
+					AND b.project_id = ?
 					AND i.archived_at IS NOT NULL
 				FOR UPDATE
 			),
@@ -2129,7 +1996,7 @@ func (s *Service) UnarchiveProjectBoardItem(deploymentID, actorID, itemID uint64
 			)
 			SELECT row_to_json(u) AS item
 			FROM updated_item u
-		`, itemID, deploymentID, actorID, now, eventID, now).Scan(&row).Error
+		`, itemID, deploymentID, actorID, projectID, now, eventID, now).Scan(&row).Error
 	}); err != nil {
 		return nil, err
 	}
@@ -2170,7 +2037,7 @@ func (s *Service) UnarchiveProjectBoardItem(deploymentID, actorID, itemID uint64
 }
 
 func (s *Service) AppendBoardItemJournalEntry(
-	deploymentID, actorID, itemID uint64,
+	deploymentID, actorID, projectID, itemID uint64,
 	summary string,
 	details *string,
 	bodyMarkdown *string,
@@ -2179,6 +2046,13 @@ func (s *Service) AppendBoardItemJournalEntry(
 	item, err := s.GetAuthorizedBoardItem(deploymentID, actorID, itemID, false)
 	if err != nil {
 		return nil, err
+	}
+	board, err := s.GetProjectBoardByID(deploymentID, actorID, item.BoardID)
+	if err != nil {
+		return nil, err
+	}
+	if board.ProjectID != projectID {
+		return nil, gorm.ErrRecordNotFound
 	}
 
 	summary = strings.TrimSpace(summary)
@@ -2206,10 +2080,6 @@ func (s *Service) AppendBoardItemJournalEntry(
 		"attachments": attachments,
 	})
 
-	board, err := s.GetProjectBoardByID(deploymentID, actorID, item.BoardID)
-	if err != nil {
-		return nil, err
-	}
 	project, err := s.GetActorProject(deploymentID, actorID, board.ProjectID)
 	if err != nil {
 		return nil, err
@@ -2252,14 +2122,6 @@ func (s *Service) AppendBoardItemJournalEntry(
 	return &event, nil
 }
 
-func (s *Service) ListBoardItemAssignments(itemID uint64) ([]model.ProjectTaskBoardItemAssignment, error) {
-	var assignments []model.ProjectTaskBoardItemAssignment
-	if err := s.db.Where("board_item_id = ?", itemID).Order("assignment_order ASC, created_at ASC").Find(&assignments).Error; err != nil {
-		return nil, err
-	}
-	return assignments, nil
-}
-
 func (s *Service) GetBoardItemAssignment(assignmentID uint64) (*model.ProjectTaskBoardItemAssignment, error) {
 	var assignment model.ProjectTaskBoardItemAssignment
 	if err := s.db.Where("id = ?", assignmentID).First(&assignment).Error; err != nil {
@@ -2297,6 +2159,55 @@ func encodeLastActivityCursor(lastActivityAt time.Time, threadID uint64) string 
 func encodeThreadAssignmentCursor(assignmentOrder int, assignmentID uint64) string {
 	raw := fmt.Sprintf("%d|%d", assignmentOrder, assignmentID)
 	return base64.RawURLEncoding.EncodeToString([]byte(raw))
+}
+
+func (s *Service) ListBoardItemAssignments(
+	itemID uint64,
+	limit int,
+	cursorAssignmentOrder *int,
+	cursorID *uint64,
+) (*BoardItemAssignmentsResponse, error) {
+	if limit <= 0 {
+		limit = 40
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	var assignments []model.ProjectTaskBoardItemAssignment
+	query := s.db.Where("board_item_id = ?", itemID)
+	if cursorAssignmentOrder != nil && cursorID != nil {
+		query = query.Where(
+			"(assignment_order > ? OR (assignment_order = ? AND id > ?))",
+			*cursorAssignmentOrder,
+			*cursorAssignmentOrder,
+			*cursorID,
+		)
+	}
+	if err := query.
+		Order("assignment_order ASC, id ASC").
+		Limit(limit + 1).
+		Find(&assignments).Error; err != nil {
+		return nil, err
+	}
+
+	hasMore := len(assignments) > limit
+	if hasMore {
+		assignments = assignments[:limit]
+	}
+
+	nextCursor := ""
+	if hasMore && len(assignments) > 0 {
+		last := assignments[len(assignments)-1]
+		nextCursor = encodeThreadAssignmentCursor(last.AssignmentOrder, last.ID)
+	}
+
+	return &BoardItemAssignmentsResponse{
+		Data:       assignments,
+		Limit:      limit,
+		HasMore:    hasMore,
+		NextCursor: nextCursor,
+	}, nil
 }
 
 func (s *Service) ListThreadAssignments(
@@ -2390,6 +2301,55 @@ func (s *Service) ListThreadEvents(
 	}
 
 	return &ThreadEventsResponse{
+		Data:       events,
+		Limit:      limit,
+		HasMore:    hasMore,
+		NextCursor: nextCursor,
+	}, nil
+}
+
+func (s *Service) ListBoardItemEvents(
+	itemID uint64,
+	limit int,
+	cursorCreatedAt *time.Time,
+	cursorID *uint64,
+) (*BoardItemEventsResponse, error) {
+	if limit <= 0 {
+		limit = 40
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	var events []model.ProjectTaskBoardItemEvent
+	query := s.db.Where("board_item_id = ?", itemID)
+	if cursorCreatedAt != nil && cursorID != nil {
+		query = query.Where(
+			"(created_at < ? OR (created_at = ? AND id < ?))",
+			*cursorCreatedAt,
+			*cursorCreatedAt,
+			*cursorID,
+		)
+	}
+	if err := query.
+		Order("created_at DESC, id DESC").
+		Limit(limit + 1).
+		Find(&events).Error; err != nil {
+		return nil, err
+	}
+
+	hasMore := len(events) > limit
+	if hasMore {
+		events = events[:limit]
+	}
+
+	nextCursor := ""
+	if hasMore && len(events) > 0 {
+		last := events[len(events)-1]
+		nextCursor = encodeThreadEventCursor(last.CreatedAt, last.ID)
+	}
+
+	return &BoardItemEventsResponse{
 		Data:       events,
 		Limit:      limit,
 		HasMore:    hasMore,

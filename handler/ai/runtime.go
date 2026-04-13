@@ -3,13 +3,10 @@ package ai
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"math"
 	"strconv"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/gofiber/fiber/v3"
 	"github.com/nats-io/nats.go"
 	"github.com/wacht-platform/frontend-api/handler"
@@ -89,59 +86,6 @@ func (h *Handler) GetThreadMessages(c fiber.Ctx) error {
 		Data:    messages,
 		HasMore: hasMore,
 	})
-}
-
-func (h *Handler) ServeFile(c fiber.Ctx) error {
-	actorID, _, err := h.getActorScope(c)
-	if err != nil {
-		return err
-	}
-
-	threadIDStr := c.Params("thread_id")
-	threadID, err := strconv.ParseUint(threadIDStr, 10, 64)
-	if err != nil {
-		return handler.SendBadRequest(c, nil, "Invalid thread ID")
-	}
-
-	filename := c.Params("filename")
-	if filename == "" {
-		return handler.SendBadRequest(c, nil, "Filename required")
-	}
-
-	deployment := handler.GetDeployment(c)
-	if _, err := h.service.GetThread(deployment.ID, actorID, threadID); err != nil {
-		return handler.SendNotFound(c, nil, "Thread not found or access denied")
-	}
-
-	storage, err := resolveDeploymentAgentStorage(deployment.ID)
-	if err != nil {
-		return handler.SendInternalServerError(c, err, "Deployment storage not configured")
-	}
-	key := storage.objectKey(fmt.Sprintf("%d/persistent/%d/uploads/%s", deployment.ID, threadID, filename))
-
-	result, err := storage.s3Client.GetObject(&s3.GetObjectInput{
-		Bucket: aws.String(storage.bucket),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		return handler.SendNotFound(c, nil, "File not found")
-	}
-	defer result.Body.Close()
-
-	if result.ContentType != nil {
-		c.Set("Content-Type", *result.ContentType)
-	}
-	if result.ContentLength != nil {
-		c.Set("Content-Length", strconv.FormatInt(*result.ContentLength, 10))
-	}
-	c.Set("Cache-Control", "private, no-store")
-
-	body, err := io.ReadAll(result.Body)
-	if err != nil {
-		return handler.SendInternalServerError(c, nil, "Failed to read file")
-	}
-
-	return c.Send(body)
 }
 
 func (h *Handler) Stream(c fiber.Ctx) error {

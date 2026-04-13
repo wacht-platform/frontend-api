@@ -106,12 +106,6 @@ type UpdateProjectTaskBoardItemRequest struct {
 	ClearSchedule   *bool   `form:"clear_schedule"`
 }
 
-type ProjectTaskBoardItemDetail struct {
-	Item        model.ProjectTaskBoardItem             `json:"item"`
-	Events      []model.ProjectTaskBoardItemEvent      `json:"events"`
-	Assignments []model.ProjectTaskBoardItemAssignment `json:"assignments"`
-}
-
 type AppendProjectTaskBoardItemJournalRequest struct {
 	Summary      string  `form:"summary"`
 	Details      *string `form:"details"`
@@ -208,6 +202,20 @@ type ThreadEventsResponse struct {
 }
 
 type ThreadAssignmentsResponse struct {
+	Data       []model.ProjectTaskBoardItemAssignment `json:"data"`
+	Limit      int                                    `json:"limit"`
+	HasMore    bool                                   `json:"has_more"`
+	NextCursor string                                 `json:"next_cursor,omitempty"`
+}
+
+type BoardItemEventsResponse struct {
+	Data       []model.ProjectTaskBoardItemEvent `json:"data"`
+	Limit      int                               `json:"limit"`
+	HasMore    bool                              `json:"has_more"`
+	NextCursor string                            `json:"next_cursor,omitempty"`
+}
+
+type BoardItemAssignmentsResponse struct {
 	Data       []model.ProjectTaskBoardItemAssignment `json:"data"`
 	Limit      int                                    `json:"limit"`
 	HasMore    bool                                   `json:"has_more"`

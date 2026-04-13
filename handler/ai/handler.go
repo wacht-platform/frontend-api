@@ -100,19 +100,6 @@ func requireMultipartFormRequest(c fiber.Ctx) error {
 	return handler.SendBadRequest(c, nil, "multipart/form-data is required")
 }
 
-func (h *Handler) ListActors(c fiber.Ctx) error {
-	_, agentSession, err := h.getActorScope(c)
-	if err != nil {
-		return err
-	}
-	deployment := handler.GetDeployment(c)
-	actors, err := h.service.ListActorsForSession(deployment.ID, agentSession.ActorID)
-	if err != nil {
-		return handler.SendInternalServerError(c, nil, "Internal server error")
-	}
-	return handler.SendSuccess(c, actors)
-}
-
 func (h *Handler) ListActorProjects(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
@@ -427,32 +414,136 @@ func (h *Handler) CreateProjectBoardItem(c fiber.Ctx) error {
 	return handler.SendSuccess(c, item)
 }
 
-func (h *Handler) GetBoardItemDetail(c fiber.Ctx) error {
+func (h *Handler) GetBoardItem(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
+	}
+	projectID, err := parseIDParam(c, "project_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid project_id")
 	}
 	itemID, err := parseIDParam(c, "item_id")
 	if err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid item_id")
 	}
 	deployment := handler.GetDeployment(c)
-	detail, err := h.service.GetBoardItemDetail(
+	item, err := h.service.GetProjectBoardItem(
 		deployment.ID,
 		actorID,
+		projectID,
 		itemID,
 		parseBoolQuery(c.Query("include_archived")),
 	)
 	if err != nil {
 		return handler.SendNotFound(c, nil, "Board item not found")
 	}
-	return handler.SendSuccess(c, detail)
+	return handler.SendSuccess(c, item)
+}
+
+func (h *Handler) ListBoardItemEvents(c fiber.Ctx) error {
+	actorID, _, err := h.getActorScope(c)
+	if err != nil {
+		return err
+	}
+	projectID, err := parseIDParam(c, "project_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid project_id")
+	}
+	itemID, err := parseIDParam(c, "item_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid item_id")
+	}
+	deployment := handler.GetDeployment(c)
+	if _, err := h.service.GetProjectBoardItem(deployment.ID, actorID, projectID, itemID, parseBoolQuery(c.Query("include_archived"))); err != nil {
+		return handler.SendNotFound(c, nil, "Board item not found")
+	}
+
+	limit := fiber.Query[int](c, "limit", 40)
+	if limit <= 0 {
+		limit = 40
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	cursorCreatedAt, cursorID, err := parseTimeIDCursor(c.Query("cursor", ""))
+	if err != nil {
+		return err
+	}
+
+	events, err := h.service.ListBoardItemEvents(itemID, limit, cursorCreatedAt, cursorID)
+	if err != nil {
+		return handler.SendInternalServerError(c, nil, "Internal server error")
+	}
+	return handler.SendSuccess(c, events)
+}
+
+func (h *Handler) ListBoardItemAssignments(c fiber.Ctx) error {
+	actorID, _, err := h.getActorScope(c)
+	if err != nil {
+		return err
+	}
+	projectID, err := parseIDParam(c, "project_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid project_id")
+	}
+	itemID, err := parseIDParam(c, "item_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid item_id")
+	}
+	deployment := handler.GetDeployment(c)
+	if _, err := h.service.GetProjectBoardItem(deployment.ID, actorID, projectID, itemID, parseBoolQuery(c.Query("include_archived"))); err != nil {
+		return handler.SendNotFound(c, nil, "Board item not found")
+	}
+
+	limit := fiber.Query[int](c, "limit", 40)
+	if limit <= 0 {
+		limit = 40
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	cursor := c.Query("cursor", "")
+	var cursorAssignmentOrder *int
+	var cursorID *uint64
+	if cursor != "" {
+		decoded, err := base64.RawURLEncoding.DecodeString(cursor)
+		if err != nil {
+			return handler.SendBadRequest(c, nil, "invalid cursor")
+		}
+		parts := strings.SplitN(string(decoded), "|", 2)
+		if len(parts) != 2 {
+			return handler.SendBadRequest(c, nil, "invalid cursor")
+		}
+		assignmentOrder, err := strconv.Atoi(parts[0])
+		if err != nil {
+			return handler.SendBadRequest(c, nil, "invalid cursor")
+		}
+		assignmentID, err := strconv.ParseUint(parts[1], 10, 64)
+		if err != nil {
+			return handler.SendBadRequest(c, nil, "invalid cursor")
+		}
+		cursorAssignmentOrder = &assignmentOrder
+		cursorID = &assignmentID
+	}
+
+	assignments, err := h.service.ListBoardItemAssignments(itemID, limit, cursorAssignmentOrder, cursorID)
+	if err != nil {
+		return handler.SendInternalServerError(c, nil, "Internal server error")
+	}
+	return handler.SendSuccess(c, assignments)
 }
 
 func (h *Handler) UpdateBoardItem(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
+	}
+	projectID, err := parseIDParam(c, "project_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid project_id")
 	}
 	itemID, err := parseIDParam(c, "item_id")
 	if err != nil {
@@ -514,7 +605,7 @@ func (h *Handler) UpdateBoardItem(c fiber.Ctx) error {
 	if form != nil {
 		files = form.File["files"]
 	}
-	item, err := h.service.UpdateProjectBoardItem(deployment.ID, actorID, itemID, req, files)
+	item, err := h.service.UpdateProjectBoardItem(deployment.ID, actorID, projectID, itemID, req, files)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, "Failed to update project task board item")
 	}
@@ -526,12 +617,16 @@ func (h *Handler) ArchiveBoardItem(c fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	projectID, err := parseIDParam(c, "project_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid project_id")
+	}
 	itemID, err := parseIDParam(c, "item_id")
 	if err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid item_id")
 	}
 	deployment := handler.GetDeployment(c)
-	item, err := h.service.ArchiveProjectBoardItem(deployment.ID, actorID, itemID)
+	item, err := h.service.ArchiveProjectBoardItem(deployment.ID, actorID, projectID, itemID)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, "Failed to archive task")
 	}
@@ -543,12 +638,16 @@ func (h *Handler) UnarchiveBoardItem(c fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	projectID, err := parseIDParam(c, "project_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid project_id")
+	}
 	itemID, err := parseIDParam(c, "item_id")
 	if err != nil {
 		return handler.SendBadRequest(c, nil, "Invalid item_id")
 	}
 	deployment := handler.GetDeployment(c)
-	item, err := h.service.UnarchiveProjectBoardItem(deployment.ID, actorID, itemID)
+	item, err := h.service.UnarchiveProjectBoardItem(deployment.ID, actorID, projectID, itemID)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, "Failed to unarchive task")
 	}
@@ -559,6 +658,10 @@ func (h *Handler) AppendBoardItemJournal(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
+	}
+	projectID, err := parseIDParam(c, "project_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid project_id")
 	}
 	itemID, err := parseIDParam(c, "item_id")
 	if err != nil {
@@ -596,7 +699,7 @@ func (h *Handler) AppendBoardItemJournal(c fiber.Ctx) error {
 	var attachments []UploadedTaskWorkspaceFile
 	if len(files) > 0 {
 		deployment := handler.GetDeployment(c)
-		attachments, err = h.service.uploadBoardItemTaskWorkspaceFiles(deployment.ID, actorID, itemID, files)
+		attachments, err = h.service.uploadBoardItemTaskWorkspaceFiles(deployment.ID, actorID, projectID, itemID, files)
 		if err != nil {
 			return handler.SendInternalServerError(c, nil, "Failed to upload task files")
 		}
@@ -606,6 +709,7 @@ func (h *Handler) AppendBoardItemJournal(c fiber.Ctx) error {
 	event, err := h.service.AppendBoardItemJournalEntry(
 		deployment.ID,
 		actorID,
+		projectID,
 		itemID,
 		summary,
 		details,
@@ -623,23 +727,6 @@ func (h *Handler) AppendBoardItemJournal(c fiber.Ctx) error {
 }
 
 func (h *Handler) ListProjectThreads(c fiber.Ctx) error {
-	actorID, _, err := h.getActorScope(c)
-	if err != nil {
-		return err
-	}
-	projectID, err := parseIDParam(c, "project_id")
-	if err != nil {
-		return handler.SendBadRequest(c, nil, "Invalid project_id")
-	}
-	deployment := handler.GetDeployment(c)
-	threads, err := h.service.ListProjectThreads(deployment.ID, actorID, projectID)
-	if err != nil {
-		return handler.SendInternalServerError(c, nil, "Internal server error")
-	}
-	return handler.SendSuccess(c, threads)
-}
-
-func (h *Handler) ListProjectThreadsPage(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
 		return err
