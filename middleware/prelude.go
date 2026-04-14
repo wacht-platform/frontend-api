@@ -154,13 +154,18 @@ func handleExistingSession(c fiber.Ctx, deployment model.Deployment, sessionToke
 
 func setSessionToken(c fiber.Ctx, token string, isProduction bool, deployment model.Deployment) {
 	if isProduction {
+		domain := deployment.BackendHost
+		if strings.HasPrefix(domain, "frontend.") {
+			domain = strings.TrimPrefix(domain, "frontend.")
+		}
+
 		c.Cookie(&fiber.Cookie{
 			Name:     sessionCookieName,
 			Value:    token,
 			Expires:  time.Now().Add(time.Duration(deployment.AuthSettings.SessionInactiveTimeout) * time.Second),
 			HTTPOnly: true,
 			Secure:   true,
-			Domain:   deployment.BackendHost,
+			Domain:   domain,
 		})
 	} else {
 		c.Set(devSessionHeader, token)
