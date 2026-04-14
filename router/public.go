@@ -10,4 +10,5 @@ func setupPublicRoutes(app *fiber.App) {
 
 	wellknown.Get("/meta", deployment.GetMetadata)
 	wellknown.Get("/jwk", deployment.GetJwk)
+	wellknown.Get("/jwks.json", deployment.GetJwks)
 }
