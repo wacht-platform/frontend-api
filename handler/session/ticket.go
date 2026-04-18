@@ -407,12 +407,12 @@ func (h *Handler) getHydratedSessionExchangeResponse(sessionID uint64, deploymen
 						)
 						ORDER BY child.name ASC
 					) AS child_agents
-					FROM ai_agents child
-					WHERE child.deployment_id = s.deployment_id
-						AND child.id IN (
-							SELECT value::bigint
-							FROM jsonb_array_elements_text(COALESCE(root.sub_agents, '[]'::jsonb))
-						)
+					FROM ai_agent_sub_agents rel
+					JOIN ai_agents child
+						ON child.deployment_id = s.deployment_id
+						AND child.id = rel.sub_agent_id
+					WHERE rel.deployment_id = s.deployment_id
+						AND rel.agent_id = root.id
 				) children ON TRUE
 				WHERE root.deployment_id = s.deployment_id
 					AND root.id = ANY(s.agent_ids)
@@ -486,7 +486,7 @@ func (h *Handler) getAllowlistedAgents(deploymentID uint64, agentIDs []int64) ([
 	var rows []allowlistedAgentRow
 	if err := database.Connection.Raw(`
 		WITH selected_agents AS (
-			SELECT a.id, a.name, a.description, COALESCE(a.sub_agents, '[]'::jsonb) AS sub_agents
+			SELECT a.id, a.name, a.description
 			FROM ai_agents a
 			WHERE a.deployment_id = ? AND a.id = ANY(?)
 		)
@@ -505,15 +505,15 @@ func (h *Handler) getAllowlistedAgents(deploymentID uint64, agentIDs []int64) ([
 				)
 				ORDER BY c.name ASC
 			) AS child_agents
-			FROM ai_agents c
-			WHERE c.deployment_id = ?
-				AND c.id IN (
-					SELECT value::bigint
-					FROM jsonb_array_elements_text(a.sub_agents)
-				)
+			FROM ai_agent_sub_agents rel
+			JOIN ai_agents c
+				ON c.deployment_id = ?
+				AND c.id = rel.sub_agent_id
+			WHERE rel.deployment_id = ?
+				AND rel.agent_id = a.id
 		) children ON TRUE
 		ORDER BY a.name ASC
-	`, deploymentID, agentIDs, deploymentID).Scan(&rows).Error; err != nil {
+	`, deploymentID, agentIDs, deploymentID, deploymentID).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("failed to fetch agents: %w", err)
 	}
 
