@@ -27,3 +27,27 @@ type WorkspaceMemberQueryResult struct {
 	PublicUserDataJSON string `gorm:"column:user_json"`
 	PublicMetadataJSON string `gorm:"column:public_metadata_json"`
 }
+
+type CreateWorkspaceResponse struct {
+	Workspace  model.Workspace            `json:"workspace"`
+	Membership *model.WorkspaceMembership `json:"membership,omitempty"`
+}
+
+type PaginationMeta struct {
+	HasMore bool `json:"has_more"`
+	Page    int  `json:"page"`
+	Limit   int  `json:"limit"`
+}
+
+type WorkspaceMembersListResponse struct {
+	Data []WorkspaceMemberQueryResult `json:"data"`
+	Meta PaginationMeta               `json:"meta"`
+}
+
+type WorkspaceResponse struct {
+	Workspace model.Workspace `json:"workspace"`
+}
+
+type MessageResponse struct {
+	Message string `json:"message"`
+}

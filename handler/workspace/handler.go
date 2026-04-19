@@ -246,7 +246,7 @@ func (h *Handler) CreateWorkspace(c fiber.Ctx) error {
 		Preload("Segments").
 		First(&finalWorkspace, workspace.ID).Error; err != nil {
 		log.Printf("Failed to fetch created workspace for response: %v", err)
-		return handler.SendSuccess(c, fiber.Map{"workspace": workspace})
+		return handler.SendSuccess(c, CreateWorkspaceResponse{Workspace: workspace})
 	}
 
 	utils.PublishWebhookEvent(deployment.ID, "workspace.created", workspace.ID, "workspace")
@@ -263,10 +263,7 @@ func (h *Handler) CreateWorkspace(c fiber.Ctx) error {
 		}
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"workspace":  finalWorkspace,
-		"membership": creatorMembership,
-	})
+	return handler.SendSuccess(c, CreateWorkspaceResponse{Workspace: finalWorkspace, Membership: creatorMembership})
 }
 
 func (h *Handler) GetWorkspaceMembers(c fiber.Ctx) error {
@@ -325,14 +322,7 @@ func (h *Handler) GetWorkspaceMembers(c fiber.Ctx) error {
 	}
 
 	if len(userIDs) == 0 {
-		return handler.SendSuccess(c, fiber.Map{
-			"data": []any{},
-			"meta": fiber.Map{
-				"has_more": false,
-				"page":     page,
-				"limit":    limit,
-			},
-		})
+		return handler.SendSuccess(c, WorkspaceMembersListResponse{Data: []WorkspaceMemberQueryResult{}, Meta: PaginationMeta{HasMore: false, Page: page, Limit: limit}})
 	}
 
 	var queryResults []WorkspaceMemberQueryResult
@@ -431,14 +421,7 @@ func (h *Handler) GetWorkspaceMembers(c fiber.Ctx) error {
 		}
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"data": members,
-		"meta": fiber.Map{
-			"has_more": hasMore,
-			"page":     page,
-			"limit":    limit,
-		},
-	})
+	return handler.SendSuccess(c, WorkspaceMembersListResponse{Data: members, Meta: PaginationMeta{HasMore: hasMore, Page: page, Limit: limit}})
 }
 
 func (h *Handler) GetWorkspaceRoles(c fiber.Ctx) error {
@@ -592,9 +575,7 @@ func (h *Handler) DeleteWorkspaceRole(c fiber.Ctx) error {
 		}
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"message": "Role deleted successfully",
-	})
+	return handler.SendSuccess(c, MessageResponse{Message: "Role deleted successfully"})
 }
 
 func (h *Handler) AddWorkspaceMemberRole(c fiber.Ctx) error {
@@ -668,7 +649,7 @@ func (h *Handler) AddWorkspaceMemberRole(c fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to enqueue API key permission sync")
 	}
 
-	return handler.SendSuccess(c, fiber.Map{"success": true})
+	return handler.SendSuccess(c, handler.SuccessResponse{Success: true})
 }
 
 func (h *Handler) RemoveWorkspaceMemberRole(c fiber.Ctx) error {
@@ -760,7 +741,7 @@ func (h *Handler) RemoveWorkspaceMemberRole(c fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to enqueue API key permission sync")
 	}
 
-	return handler.SendSuccess(c, fiber.Map{"success": true})
+	return handler.SendSuccess(c, handler.SuccessResponse{Success: true})
 }
 
 func (h *Handler) UpdateWorkspace(c fiber.Ctx) error {
@@ -838,9 +819,7 @@ func (h *Handler) UpdateWorkspace(c fiber.Ctx) error {
 
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
-	return handler.SendSuccess(c, fiber.Map{
-		"workspace": workspace,
-	})
+	return handler.SendSuccess(c, WorkspaceResponse{Workspace: workspace})
 }
 
 func (h *Handler) DeleteWorkspace(c fiber.Ctx) error {
@@ -908,9 +887,7 @@ func (h *Handler) DeleteWorkspace(c fiber.Ctx) error {
 
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
-	return handler.SendSuccess(c, fiber.Map{
-		"success": true,
-	})
+	return handler.SendSuccess(c, handler.SuccessResponse{Success: true})
 }
 
 func (h *Handler) RemoveMember(c fiber.Ctx) error {
@@ -999,7 +976,5 @@ func (h *Handler) RemoveMember(c fiber.Ctx) error {
 
 	database.SyncUserWrapper(database.Connection, targetMembership.UserID, "workspace.member.removed")
 
-	return handler.SendSuccess(c, fiber.Map{
-		"success": true,
-	})
+	return handler.SendSuccess(c, handler.SuccessResponse{Success: true})
 }

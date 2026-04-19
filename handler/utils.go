@@ -6,6 +6,15 @@ import (
 	"github.com/wacht-platform/frontend-api/utils"
 )
 
+type SuccessResponse struct {
+	Success bool   `json:"success,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+type OkResponse struct {
+	Ok bool `json:"ok"`
+}
+
 func GetDeployment(c fiber.Ctx) model.Deployment {
 	deployment := c.Locals("deployment")
 

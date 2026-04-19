@@ -133,3 +133,29 @@ type TestConnectionResult struct {
 	Checks   map[string]bool   `json:"checks"`
 	Errors   map[string]string `json:"errors,omitempty"`
 }
+
+type CreateOrganizationResponse struct {
+	Organization model.Organization           `json:"organization"`
+	Membership   model.OrganizationMembership `json:"membership"`
+}
+
+type PaginationMeta struct {
+	HasMore bool `json:"has_more"`
+	Page    int  `json:"page"`
+	Limit   int  `json:"limit"`
+}
+
+type MembersListResponse struct {
+	Data []OrganizationMemberQueryResult `json:"data"`
+	Meta PaginationMeta                  `json:"meta"`
+}
+
+type OrganizationDomainResponse struct {
+	Domain model.OrganizationDomain `json:"domain"`
+}
+
+type GetSCIMTokenResponse struct {
+	Exists      bool               `json:"exists"`
+	SCIMBaseURL string             `json:"scim_base_url,omitempty"`
+	Token       *SCIMTokenResponse `json:"token,omitempty"`
+}

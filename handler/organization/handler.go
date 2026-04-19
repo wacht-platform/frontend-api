@@ -161,9 +161,9 @@ func (h *Handler) CreateOrganization(
 
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
-	return handler.SendSuccess(c, fiber.Map{
-		"organization": org,
-		"membership":   membership,
+	return handler.SendSuccess(c, CreateOrganizationResponse{
+		Organization: org,
+		Membership:   membership,
 	})
 }
 
@@ -248,9 +248,7 @@ func (h *Handler) LeaveOrganization(
 
 	database.SyncUserWrapper(database.Connection, *session.ActiveSignin.UserID, "organization.left")
 
-	return handler.SendSuccess(c, fiber.Map{
-		"success": true,
-	})
+	return handler.SendSuccess(c, handler.SuccessResponse{Success: true})
 }
 
 func (h *Handler) UpdateOrganization(
@@ -391,9 +389,7 @@ func (h *Handler) DeleteOrganization(
 
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
-	return handler.SendSuccess(c, fiber.Map{
-		"success": true,
-	})
+	return handler.SendSuccess(c, handler.SuccessResponse{Success: true})
 }
 
 func (h *Handler) GetOrganizationInvitations(
@@ -800,9 +796,7 @@ func (h *Handler) DiscardInvitation(
 		return handler.SendInternalServerError(c, err, "Failed to dismiss invitation")
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"success": true,
-	})
+	return handler.SendSuccess(c, handler.SuccessResponse{Success: true})
 }
 
 func (h *Handler) ResendInvitation(
@@ -1218,9 +1212,7 @@ func (h *Handler) RemoveMember(
 
 	database.SyncUserWrapper(database.Connection, membershipToRemove.UserID, "organization.member.removed")
 
-	return handler.SendSuccess(c, fiber.Map{
-		"success": true,
-	})
+	return handler.SendSuccess(c, handler.SuccessResponse{Success: true})
 }
 
 func (h *Handler) AddMemberRole(
@@ -1291,9 +1283,7 @@ func (h *Handler) AddMemberRole(
 		return handler.SendInternalServerError(c, err, "Failed to enqueue API key permission sync")
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"success": true,
-	})
+	return handler.SendSuccess(c, handler.SuccessResponse{Success: true})
 }
 
 func (h *Handler) RemoveMemberRole(
@@ -1382,9 +1372,7 @@ func (h *Handler) RemoveMemberRole(
 		return handler.SendInternalServerError(c, err, "Failed to enqueue API key permission sync")
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"success": true,
-	})
+	return handler.SendSuccess(c, handler.SuccessResponse{Success: true})
 }
 
 func (h *Handler) GetOrganizationMembers(
@@ -1446,13 +1434,9 @@ func (h *Handler) GetOrganizationMembers(
 	}
 
 	if len(userIDs) == 0 {
-		return handler.SendSuccess(c, fiber.Map{
-			"data": []any{},
-			"meta": fiber.Map{
-				"has_more": false,
-				"page":     page,
-				"limit":    limit,
-			},
+		return handler.SendSuccess(c, MembersListResponse{
+			Data: []OrganizationMemberQueryResult{},
+			Meta: PaginationMeta{HasMore: false, Page: page, Limit: limit},
 		})
 	}
 
@@ -1553,13 +1537,9 @@ func (h *Handler) GetOrganizationMembers(
 		}
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"data": members,
-		"meta": fiber.Map{
-			"has_more": hasMore,
-			"page":     page,
-			"limit":    limit,
-		},
+	return handler.SendSuccess(c, MembersListResponse{
+		Data: members,
+		Meta: PaginationMeta{HasMore: hasMore, Page: page, Limit: limit},
 	})
 
 }
@@ -1687,7 +1667,7 @@ func (h *Handler) RemoveOrganizationRoles(
 		}
 	}
 
-	return handler.SendSuccess(c, fiber.Map{})
+	return handler.SendSuccess(c, handler.SuccessResponse{})
 }
 
 func (h *Handler) GetOrganizationDomains(
@@ -1806,9 +1786,7 @@ func (h *Handler) VerifyOrganizationDomain(
 	}
 
 	if domain.Verified {
-		return handler.SendSuccess(c, fiber.Map{
-			"domain": domain,
-		})
+		return handler.SendSuccess(c, OrganizationDomainResponse{Domain: domain})
 	}
 
 	domain.VerificationAttempts++
@@ -1838,9 +1816,7 @@ func (h *Handler) VerifyOrganizationDomain(
 		return handler.SendInternalServerError(c, err, "Failed to verify domain")
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"domain": domain,
-	})
+	return handler.SendSuccess(c, OrganizationDomainResponse{Domain: domain})
 }
 
 func (h *Handler) DeleteOrganizationDomain(
@@ -1874,9 +1850,7 @@ func (h *Handler) DeleteOrganizationDomain(
 		return handler.SendInternalServerError(c, err, "Failed to delete domain")
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"success": true,
-	})
+	return handler.SendSuccess(c, handler.SuccessResponse{Success: true})
 }
 
 func (h *Handler) GetEnterpriseConnections(c fiber.Ctx) error {
@@ -2104,9 +2078,7 @@ func (h *Handler) DeleteEnterpriseConnection(c fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to delete enterprise connection")
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"success": true,
-	})
+	return handler.SendSuccess(c, handler.SuccessResponse{Success: true})
 }
 
 func (h *Handler) TestEnterpriseConnectionConfig(c fiber.Ctx) error {
@@ -2400,10 +2372,7 @@ func (h *Handler) GetSCIMToken(c fiber.Ctx) error {
 	scimService := h.service.getSCIMService()
 	token, err := scimService.GetToken(connID)
 	if err != nil {
-		return handler.SendSuccess(c, fiber.Map{
-			"exists":        false,
-			"scim_base_url": fmt.Sprintf("https://%s/scim/v2/%d", d.BackendHost, connID),
-		})
+		return handler.SendSuccess(c, GetSCIMTokenResponse{Exists: false, SCIMBaseURL: fmt.Sprintf("https://%s/scim/v2/%d", d.BackendHost, connID)})
 	}
 
 	response := SCIMTokenResponse{
@@ -2417,10 +2386,7 @@ func (h *Handler) GetSCIMToken(c fiber.Ctx) error {
 		response.LastUsedAt = token.LastUsedAt.Format(time.RFC3339)
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"exists": true,
-		"token":  response,
-	})
+	return handler.SendSuccess(c, GetSCIMTokenResponse{Exists: true, Token: &response})
 }
 
 func (h *Handler) RevokeSCIMToken(c fiber.Ctx) error {
@@ -2456,7 +2422,5 @@ func (h *Handler) RevokeSCIMToken(c fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to revoke SCIM token")
 	}
 
-	return handler.SendSuccess(c, fiber.Map{
-		"success": true,
-	})
+	return handler.SendSuccess(c, handler.SuccessResponse{Success: true})
 }
