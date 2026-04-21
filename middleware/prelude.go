@@ -145,6 +145,10 @@ func handleExistingSession(c fiber.Ctx, deployment model.Deployment, sessionToke
 		return handleNewSession(c, deployment)
 	}
 
+	// Re-issue the current session token on authenticated activity so the
+	// configured inactivity timeout acts as a sliding expiration window.
+	setSessionToken(c, sessionToken, deployment.IsProduction(), deployment)
+
 	c.Locals("session", sessionID)
 
 	go utils.UpdateSessionLastActive(sessionID)
