@@ -13,6 +13,7 @@ import (
 	"github.com/wacht-platform/frontend-api/handler"
 	"github.com/wacht-platform/frontend-api/middleware"
 	"github.com/wacht-platform/frontend-api/service"
+	"golang.org/x/net/publicsuffix"
 )
 
 func Setup(app *fiber.App) {
@@ -77,12 +78,30 @@ func corsSettings(c fiber.Ctx) cors.Config {
 
 				originHost := strings.ToLower(strings.TrimSpace(parsedOrigin.Hostname()))
 				frontendHost := strings.ToLower(strings.TrimSpace(deployment.FrontendHost))
-				if originHost == "" || frontendHost == "" {
+				if originHost == "" {
 					return false
 				}
 
-				return originHost == frontendHost ||
-					strings.HasSuffix(originHost, "."+frontendHost)
+				if frontendHost != "" && (originHost == frontendHost ||
+					strings.HasSuffix(originHost, "."+frontendHost)) {
+					return true
+				}
+
+				if frontendHost == "" {
+					return false
+				}
+
+				originSite, err := publicsuffix.EffectiveTLDPlusOne(originHost)
+				if err != nil {
+					return false
+				}
+
+				frontendSite, err := publicsuffix.EffectiveTLDPlusOne(frontendHost)
+				if err != nil {
+					return false
+				}
+
+				return originSite == frontendSite
 			},
 			AllowCredentials: true,
 			AllowMethods:     []string{"GET", "POST", "HEAD", "PUT", "DELETE", "PATCH", "OPTIONS"},
