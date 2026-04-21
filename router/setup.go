@@ -2,6 +2,7 @@ package router
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -69,11 +70,19 @@ func corsSettings(c fiber.Ctx) cors.Config {
 	if deployment.IsProduction() {
 		return cors.Config{
 			AllowOriginsFunc: func(origin string) bool {
-				parts := strings.Split(deployment.FrontendHost, ".")
-				if len(parts) < 2 {
+				parsedOrigin, err := url.Parse(origin)
+				if err != nil {
 					return false
 				}
-				return strings.HasSuffix(origin, strings.Join(parts[len(parts)-2:], "."))
+
+				originHost := strings.ToLower(strings.TrimSpace(parsedOrigin.Hostname()))
+				frontendHost := strings.ToLower(strings.TrimSpace(deployment.FrontendHost))
+				if originHost == "" || frontendHost == "" {
+					return false
+				}
+
+				return originHost == frontendHost ||
+					strings.HasSuffix(originHost, "."+frontendHost)
 			},
 			AllowCredentials: true,
 			AllowMethods:     []string{"GET", "POST", "HEAD", "PUT", "DELETE", "PATCH", "OPTIONS"},
