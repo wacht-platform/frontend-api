@@ -1439,7 +1439,7 @@ func (h *Handler) GetOrganizationMembers(
 
 	if len(userIDs) == 0 {
 		return handler.SendSuccess(c, MembersListResponse{
-			Data: []OrganizationMemberQueryResult{},
+			Data: []model.OrganizationMembership{},
 			Meta: PaginationMeta{HasMore: false, Page: page, Limit: limit},
 		})
 	}
@@ -1504,14 +1504,17 @@ func (h *Handler) GetOrganizationMembers(
 		return handler.SendInternalServerError(c, err, "Failed to fetch organization members details")
 	}
 
+	memberships := make([]model.OrganizationMembership, len(queryResults))
 	for i, result := range queryResults {
+		memberships[i] = result.OrganizationMembership
+
 		if result.UserJSON != "" {
 			var userData model.PublicUserData
 			if err := json.Unmarshal([]byte(result.UserJSON), &userData); err != nil {
 				log.Printf("Error parsing user data for member %d: %v", queryResults[i].ID, err)
 				log.Printf("UserJSON: %s", result.UserJSON)
 			} else {
-				queryResults[i].User = &userData
+				memberships[i].User = &userData
 			}
 		} else {
 			log.Printf("No user data JSON for member %d", queryResults[i].ID)
@@ -1523,24 +1526,24 @@ func (h *Handler) GetOrganizationMembers(
 				log.Printf("Error parsing roles for member %d: %v", queryResults[i].ID, err)
 				log.Printf("RolesJSON: %s", result.RolesJSON)
 			} else {
-				queryResults[i].Roles = roles
+				memberships[i].Roles = roles
 			}
 		}
 
 		if result.PublicMetadataJSON != "" && result.PublicMetadataJSON != "{}" && result.PublicMetadataJSON != "null" {
 			var metadata datatypes.JSONMap
 			if err := json.Unmarshal([]byte(result.PublicMetadataJSON), &metadata); err == nil {
-				queryResults[i].PublicMetadata = metadata
+				memberships[i].PublicMetadata = metadata
 			} else {
-				queryResults[i].PublicMetadata = make(datatypes.JSONMap)
+				memberships[i].PublicMetadata = make(datatypes.JSONMap)
 			}
 		} else {
-			queryResults[i].PublicMetadata = make(datatypes.JSONMap)
+			memberships[i].PublicMetadata = make(datatypes.JSONMap)
 		}
 	}
 
 	return handler.SendSuccess(c, MembersListResponse{
-		Data: queryResults,
+		Data: memberships,
 		Meta: PaginationMeta{HasMore: hasMore, Page: page, Limit: limit},
 	})
 

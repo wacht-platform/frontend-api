@@ -146,8 +146,8 @@ type PaginationMeta struct {
 }
 
 type MembersListResponse struct {
-	Data []OrganizationMemberQueryResult `json:"data"`
-	Meta PaginationMeta                  `json:"meta"`
+	Data []model.OrganizationMembership `json:"data"`
+	Meta PaginationMeta                 `json:"meta"`
 }
 
 type OrganizationDomainResponse struct {

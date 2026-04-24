@@ -40,8 +40,8 @@ type PaginationMeta struct {
 }
 
 type WorkspaceMembersListResponse struct {
-	Data []WorkspaceMemberQueryResult `json:"data"`
-	Meta PaginationMeta               `json:"meta"`
+	Data []model.WorkspaceMembership `json:"data"`
+	Meta PaginationMeta              `json:"meta"`
 }
 
 type WorkspaceResponse struct {

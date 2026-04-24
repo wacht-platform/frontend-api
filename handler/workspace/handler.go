@@ -322,7 +322,7 @@ func (h *Handler) GetWorkspaceMembers(c fiber.Ctx) error {
 	}
 
 	if len(userIDs) == 0 {
-		return handler.SendSuccess(c, WorkspaceMembersListResponse{Data: []WorkspaceMemberQueryResult{}, Meta: PaginationMeta{HasMore: false, Page: page, Limit: limit}})
+		return handler.SendSuccess(c, WorkspaceMembersListResponse{Data: []model.WorkspaceMembership{}, Meta: PaginationMeta{HasMore: false, Page: page, Limit: limit}})
 	}
 
 	var queryResults []WorkspaceMemberQueryResult
@@ -389,36 +389,39 @@ func (h *Handler) GetWorkspaceMembers(c fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to get workspace members")
 	}
 
+	memberships := make([]model.WorkspaceMembership, len(queryResults))
 	for i, result := range queryResults {
+		memberships[i] = result.WorkspaceMembership
+
 		if result.PublicUserDataJSON != "" && result.PublicUserDataJSON != "null" {
 			var userData model.PublicUserData
 			if err := json.Unmarshal([]byte(result.PublicUserDataJSON), &userData); err != nil {
 				log.Printf("Error parsing user data for member %d: %v", queryResults[i].ID, err)
 			} else {
-				queryResults[i].User = userData
+				memberships[i].User = userData
 			}
 		}
 
 		var roles []*model.WorkspaceRole
 		if result.RolesJSON != "" && result.RolesJSON != "[]" {
 			if err := json.Unmarshal([]byte(result.RolesJSON), &roles); err == nil {
-				queryResults[i].Roles = roles
+				memberships[i].Roles = roles
 			}
 		}
 
 		if result.PublicMetadataJSON != "" && result.PublicMetadataJSON != "{}" && result.PublicMetadataJSON != "null" {
 			var metadata datatypes.JSONMap
 			if err := json.Unmarshal([]byte(result.PublicMetadataJSON), &metadata); err == nil {
-				queryResults[i].PublicMetadata = metadata
+				memberships[i].PublicMetadata = metadata
 			} else {
-				queryResults[i].PublicMetadata = make(datatypes.JSONMap)
+				memberships[i].PublicMetadata = make(datatypes.JSONMap)
 			}
 		} else {
-			queryResults[i].PublicMetadata = make(datatypes.JSONMap)
+			memberships[i].PublicMetadata = make(datatypes.JSONMap)
 		}
 	}
 
-	return handler.SendSuccess(c, WorkspaceMembersListResponse{Data: queryResults, Meta: PaginationMeta{HasMore: hasMore, Page: page, Limit: limit}})
+	return handler.SendSuccess(c, WorkspaceMembersListResponse{Data: memberships, Meta: PaginationMeta{HasMore: hasMore, Page: page, Limit: limit}})
 }
 
 func (h *Handler) GetWorkspaceRoles(c fiber.Ctx) error {
