@@ -15,6 +15,7 @@ func setupWorkspaceRoutes(app *fiber.App) {
 	workspaceContext.Use(middleware.SetWorkspaceContext)
 	workspaceContext.Post("/update", workspaceHandler.UpdateWorkspace)
 	workspaceContext.Post("/delete", workspaceHandler.DeleteWorkspace)
+	workspaceContext.Post("/leave", workspaceHandler.LeaveWorkspace)
 	workspaceContext.Get("/members", workspaceHandler.GetWorkspaceMembers)
 	workspaceContext.Post("/members/:memberId/remove", workspaceHandler.RemoveMember)
 	workspaceContext.Get("/roles", workspaceHandler.GetWorkspaceRoles)

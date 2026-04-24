@@ -205,7 +205,7 @@ func (h *Handler) LeaveOrganization(
 			return handler.SendForbidden(
 				c,
 				nil,
-				"Cannot leave organization as the sole admin. Please transfer ownership or assign this role to another member first.",
+				"Cannot leave organization as the sole admin.",
 			)
 		}
 	}

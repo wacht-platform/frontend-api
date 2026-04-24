@@ -73,5 +73,6 @@ func AutoMigratePg() error {
 		&model.ApiAuthApp{},
 		&model.ApiKey{},
 		&model.ApiAuthAppSession{},
+		&model.ActorExternalConnection{},
 	)
 }

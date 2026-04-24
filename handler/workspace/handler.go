@@ -890,6 +890,88 @@ func (h *Handler) DeleteWorkspace(c fiber.Ctx) error {
 	return handler.SendSuccess(c, handler.SuccessResponse{Success: true})
 }
 
+func (h *Handler) LeaveWorkspace(c fiber.Ctx) error {
+	workspaceID, err := getuint64Param(c, "id")
+	if err != nil {
+		return handler.SendBadRequest(c, err, "Invalid workspace ID: "+err.Error())
+	}
+
+	session := handler.GetSession(c)
+	if session.ActiveSignin == nil {
+		return handler.SendUnauthorized(c, nil, "No active sign in")
+	}
+
+	membership, ok := c.Locals("workspace_membership").(model.WorkspaceMembership)
+	if !ok {
+		return handler.SendForbidden(c, nil, "Access denied: Not a member of this workspace")
+	}
+
+	d := handler.GetDeployment(c)
+	isOwner := h.service.hasWorkspacePermission(membership, workspaceDeletePermissions)
+	if isOwner {
+		var ownerCount int64
+		if err := database.Connection.Table("workspace_membership_roles").
+			Where(
+				"workspace_id = ? AND workspace_role_id = ? AND workspace_membership_id != ?",
+				workspaceID,
+				d.B2BSettings.DefaultWorkspaceCreatorRoleID,
+				membership.ID,
+			).
+			Count(&ownerCount).Error; err != nil {
+			log.Printf("Error counting other workspace owners for workspace %d: %v", workspaceID, err)
+			return handler.SendInternalServerError(c, err, "Failed to verify workspace owner status.")
+		}
+
+		if ownerCount == 0 {
+			return handler.SendForbidden(
+				c,
+				nil,
+				"Cannot leave workspace as the sole owner.",
+			)
+		}
+	}
+
+	err = database.Connection.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("workspace_membership_id = ?", membership.ID).
+			Delete(&model.WorkspaceMembershipRoleAssoc{}).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Delete(&membership).Error; err != nil {
+			return err
+		}
+
+		if session.ActiveSignin.ActiveWorkspaceMembershipID != nil &&
+			*session.ActiveSignin.ActiveWorkspaceMembershipID == membership.ID {
+			session.ActiveSignin.ActiveWorkspaceMembershipID = nil
+			if errDb := tx.Model(&model.Signin{}).Where("id = ?", session.ActiveSignin.ID).Update(
+				"active_workspace_membership_id",
+				nil,
+			).Error; errDb != nil {
+				log.Printf(
+					"Failed to clear active workspace ID for user %d: %v",
+					session.ActiveSignin.UserID,
+					errDb,
+				)
+				return errDb
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to leave workspace")
+	}
+
+	utils.PublishWebhookEvent(d.ID, "workspace.member.removed", membership.ID, "workspace_membership")
+
+	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
+
+	database.SyncUserWrapper(database.Connection, *session.ActiveSignin.UserID, "workspace.left")
+
+	return handler.SendSuccess(c, handler.SuccessResponse{Success: true})
+}
+
 func (h *Handler) RemoveMember(c fiber.Ctx) error {
 	workspaceID, err := getuint64Param(c, "id")
 	if err != nil {
@@ -933,7 +1015,7 @@ func (h *Handler) RemoveMember(c fiber.Ctx) error {
 		Where("workspace_membership_id = ? AND workspace_role_id = ?", targetMembership.ID, d.B2BSettings.DefaultWorkspaceCreatorRoleID).
 		Count(&ownerRoleCountForTarget)
 
-	if ownerRoleCountForTarget > 0 { // Target user has the owner role
+	if ownerRoleCountForTarget > 0 {
 		var totalOwnerCountInWorkspace int64
 		database.Connection.Table("workspace_membership_roles").
 			Where("workspace_id = ? AND workspace_role_id = ?", workspaceID, d.B2BSettings.DefaultWorkspaceCreatorRoleID).
