@@ -22,7 +22,7 @@ func SetOrganizationContext(c fiber.Ctx) error {
 	}
 
 	session := handler.GetSession(c)
-	if session.ActiveSignin == nil {
+	if session == nil || session.ActiveSignin == nil || session.ActiveSignin.UserID == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 

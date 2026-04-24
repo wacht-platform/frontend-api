@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/lib/pq"
 
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
@@ -1378,10 +1379,13 @@ func (h *Handler) RemoveMemberRole(
 func (h *Handler) GetOrganizationMembers(
 	c fiber.Ctx,
 ) error {
-	orgID := c.Params("id")
+	orgID, err := strconv.ParseUint(c.Params("id"), 10, 64)
+	if err != nil {
+		return handler.SendBadRequest(c, err, "Invalid organization ID")
+	}
 	session := handler.GetSession(c)
 
-	if session.ActiveSignin == nil {
+	if session == nil || session.ActiveSignin == nil || session.ActiveSignin.UserID == nil {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
@@ -1406,7 +1410,7 @@ func (h *Handler) GetOrganizationMembers(
 	searchQuery := strings.TrimSpace(c.Query("search"))
 
 	baseWhere := "WHERE search_users.deployment_id = ? AND search_users.organization_ids @> ?::jsonb"
-	args := []interface{}{d.ID, fmt.Sprintf("[%d]", getuint64(orgID))}
+	args := []interface{}{d.ID, fmt.Sprintf("[%d]", orgID)}
 
 	if searchQuery != "" {
 		baseWhere += ` AND (
@@ -1488,14 +1492,15 @@ func (h *Handler) GetOrganizationMembers(
 			) as roles_json,
 			COALESCE(organization_memberships.public_metadata::text, '{}') as public_metadata_json
 		FROM organization_memberships
-		JOIN users ON organization_memberships.user_id = users.id
+		JOIN users ON organization_memberships.user_id = users.id AND users.deleted_at IS NULL
 		LEFT JOIN user_email_addresses primary_email ON users.primary_email_address_id = primary_email.id
 		WHERE organization_memberships.organization_id = ?
-		AND organization_memberships.user_id IN (?)
+		AND organization_memberships.user_id = ANY(?)
 		AND organization_memberships.deleted_at IS NULL
+		ORDER BY organization_memberships.created_at ASC
 	`
 
-	if err := database.Connection.Raw(rawSQL, orgID, userIDs).Scan(&queryResults).Error; err != nil {
+	if err := database.Connection.Raw(rawSQL, orgID, pq.Array(userIDs)).Scan(&queryResults).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to fetch organization members details")
 	}
 
