@@ -87,8 +87,6 @@ func (s *Service) List(deploymentID, actorID uint64) ([]ConnectionView, error) {
 	return views, nil
 }
 
-// Connect initiates an OAuth flow for the given provider/slug and returns the
-// redirect URL to send the user to.
 func (s *Service) Connect(deploymentID, actorID uint64, provider, slug, callbackURL, returnURL string) (string, error) {
 	provider = strings.ToLower(strings.TrimSpace(provider))
 	slug = strings.ToLower(strings.TrimSpace(slug))

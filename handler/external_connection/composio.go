@@ -20,10 +20,11 @@ const composioAPIBase = "https://backend.composio.dev"
 // EnabledApp captures the deployment-level enabled-app snapshot stored as JSONB
 // on deployment_ai_settings.composio_enabled_apps.
 type EnabledApp struct {
-	Slug          string `json:"slug"`
-	AuthConfigID  string `json:"auth_config_id"`
-	DisplayName   string `json:"display_name,omitempty"`
-	LogoURL       string `json:"logo_url,omitempty"`
+	Slug         string `json:"slug"`
+	AuthConfigID string `json:"auth_config_id"`
+	DisplayName  string `json:"display_name,omitempty"`
+	LogoURL      string `json:"logo_url,omitempty"`
+	AuthScheme   string `json:"auth_scheme,omitempty"`
 }
 
 type composioSettingsRow struct {
@@ -94,7 +95,6 @@ func findEnabledApp(apps []EnabledApp, slug string) *EnabledApp {
 	return nil
 }
 
-// composioInitiate calls Composio's POST /connected_accounts/link.
 type composioInitiateRequest struct {
 	AuthConfigID string `json:"auth_config_id"`
 	UserID       string `json:"user_id"`
@@ -118,15 +118,15 @@ func composioInitiate(apiKey, authConfigID, userID, callbackURL string) (redirec
 		return "", "", err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, composioAPIBase+"/api/v3/connected_accounts/link", bytes.NewReader(body))
+	httpReq, err := http.NewRequest(http.MethodPost, composioAPIBase+"/api/v3/connected_accounts/link", bytes.NewReader(body))
 	if err != nil {
 		return "", "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", apiKey)
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("x-api-key", apiKey)
 
 	client := &http.Client{Timeout: 20 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		return "", "", err
 	}
