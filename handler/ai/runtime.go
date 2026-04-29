@@ -118,6 +118,8 @@ func (h *Handler) Stream(c fiber.Ctx) error {
 	c.Set("Connection", "keep-alive")
 	c.Set("X-Accel-Buffering", "no")
 
+	ctx := c.Context()
+
 	c.RequestCtx().SetBodyStreamWriter(func(w *bufio.Writer) {
 		defer func() {
 			_ = sub.Unsubscribe()
@@ -129,6 +131,8 @@ func (h *Handler) Stream(c fiber.Ctx) error {
 
 		for {
 			select {
+			case <-ctx.Done():
+				return
 			case msg, ok := <-msgCh:
 				if !ok {
 					return
@@ -145,7 +149,7 @@ func (h *Handler) Stream(c fiber.Ctx) error {
 				if err := w.Flush(); err != nil {
 					return
 				}
-			case <-time.After(25 * time.Second):
+			case <-time.After(10 * time.Second):
 				_, _ = fmt.Fprint(w, ": keep-alive\n\n")
 				if err := w.Flush(); err != nil {
 					return
