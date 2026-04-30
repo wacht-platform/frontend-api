@@ -535,83 +535,11 @@ type ToolApprovalSelection struct {
 	Mode     string `json:"mode"`
 }
 
-type AgentExecutionPayload struct {
-	DeploymentID     string                  `json:"deployment_id"`
-	ThreadID         string                  `json:"thread_id"`
-	ThreadEventID    *string                 `json:"thread_event_id,omitempty"`
-	AgentID          *string                 `json:"agent_id,omitempty"`
-	Type             string                  `json:"type"`
-	ConversationID   *string                 `json:"conversation_id,omitempty"`
-	RequestMessageID *string                 `json:"request_message_id,omitempty"`
-	Approvals        []ToolApprovalSelection `json:"approvals"`
-	EventID          *string                 `json:"event_id,omitempty"`
-}
+const dispatcherWakeSubject = "agent.outbox.wake"
 
-type ThreadSchedulePayload struct {
-	DeploymentID string `json:"deployment_id"`
-	ThreadID     string `json:"thread_id"`
-}
-
-func (s *NatsService) PublishAgentExecution(
-	ctx context.Context,
-	deploymentID, contextID uint64,
-	agentID *int64,
-	conversationID uint64,
-	executionType string,
-) error {
-	var agentIDStr *string
-	if agentID != nil {
-		str := fmt.Sprintf("%d", *agentID)
-		agentIDStr = &str
-	}
-	conversationIDStr := fmt.Sprintf("%d", conversationID)
-
-	req := AgentExecutionPayload{
-		DeploymentID:   fmt.Sprintf("%d", deploymentID),
-		ThreadID:       fmt.Sprintf("%d", contextID),
-		AgentID:        agentIDStr,
-		Type:           executionType,
-		ConversationID: &conversationIDStr,
-	}
-
-	return s.publishTask(ctx, "agent.execution_request", req)
-}
-
-func (s *NatsService) PublishAgentApprovalResponse(
-	ctx context.Context,
-	deploymentID, contextID uint64,
-	agentID *int64,
-	requestMessageID string,
-	approvals []ToolApprovalSelection,
-) error {
-	var agentIDStr *string
-	if agentID != nil {
-		str := fmt.Sprintf("%d", *agentID)
-		agentIDStr = &str
-	}
-
-	req := AgentExecutionPayload{
-		DeploymentID:     fmt.Sprintf("%d", deploymentID),
-		ThreadID:         fmt.Sprintf("%d", contextID),
-		AgentID:          agentIDStr,
-		Type:             "approval_response",
-		RequestMessageID: &requestMessageID,
-		Approvals:        approvals,
-	}
-
-	return s.publishTask(ctx, "agent.execution_request", req)
-}
-
-func (s *NatsService) PublishThreadSchedule(
-	ctx context.Context,
-	deploymentID, threadID uint64,
-) error {
-	req := ThreadSchedulePayload{
-		DeploymentID: fmt.Sprintf("%d", deploymentID),
-		ThreadID:     fmt.Sprintf("%d", threadID),
-	}
-
-	return s.publishTask(ctx, "agent.thread_schedule", req)
+func (s *NatsService) NudgeEventLogDispatcher(ctx context.Context) {
+	_ = s.nc.Publish(dispatcherWakeSubject, nil)
+	_ = ctx
 }
 
 func (s *NatsService) PublishRateLimit(payload []byte) error {

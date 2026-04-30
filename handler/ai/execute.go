@@ -335,16 +335,15 @@ func (h *Handler) handleNewMessage(
 		}
 	}
 
-	if err := natsService.PublishAgentExecution(
-		context.Background(),
+	if err := h.service.EnqueueUserMessageWork(
 		deploymentID,
 		threadID,
 		agentID,
 		conversationID,
-		"new_message",
 	); err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to publish execution request")
 	}
+	natsService.NudgeEventLogDispatcher(context.Background())
 
 	return handler.SendSuccess(c, ExecuteAgentResponse{
 		Status:         "queued",
@@ -463,8 +462,7 @@ func (h *Handler) handleApprovalResponse(
 		return handler.SendInternalServerError(c, err, "Failed to create conversation")
 	}
 
-	if err := natsService.PublishAgentApprovalResponse(
-		context.Background(),
+	if err := h.service.EnqueueApprovalResponseWork(
 		deploymentID,
 		threadID,
 		agentID,
@@ -473,6 +471,7 @@ func (h *Handler) handleApprovalResponse(
 	); err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to publish execution request")
 	}
+	natsService.NudgeEventLogDispatcher(context.Background())
 
 	return handler.SendSuccess(c, ExecuteAgentResponse{
 		Status:         "queued",

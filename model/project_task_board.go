@@ -31,23 +31,10 @@ type ProjectTaskBoardItem struct {
 	Schedule         *ProjectTaskSchedule `json:"schedule,omitempty" gorm:"-"`
 	CompletedAt      *time.Time           `json:"completed_at,omitempty"`
 	ArchivedAt       *time.Time           `json:"archived_at,omitempty"`
+	StateVersion     int64                `json:"state_version,string" gorm:"column:state_version;not null;default:1"`
 }
 
 func (ProjectTaskBoardItem) TableName() string { return "project_task_board_items" }
-
-type ProjectTaskBoardItemEvent struct {
-	ID             uint64          `json:"id,string" gorm:"primaryKey;autoIncrement"`
-	BoardItemID    uint64          `json:"board_item_id,string" gorm:"column:board_item_id;not null;index"`
-	ThreadID       *uint64         `json:"thread_id,omitempty,string" gorm:"column:thread_id"`
-	ExecutionRunID *uint64         `json:"execution_run_id,omitempty,string" gorm:"column:execution_run_id"`
-	EventType      string          `json:"event_type" gorm:"not null"`
-	Summary        string          `json:"summary" gorm:"not null"`
-	BodyMarkdown   *string         `json:"body_markdown,omitempty" gorm:"column:body_markdown"`
-	Details        json.RawMessage `json:"details" gorm:"type:jsonb;not null"`
-	CreatedAt      time.Time       `json:"created_at"`
-}
-
-func (ProjectTaskBoardItemEvent) TableName() string { return "project_task_board_item_events" }
 
 type ProjectTaskBoardItemAssignment struct {
 	Model

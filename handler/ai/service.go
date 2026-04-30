@@ -1508,112 +1508,157 @@ func matchesStatus(status string, values ...string) bool {
 	return false
 }
 
-func assignmentEventDetailsJSON(assignment *model.ProjectTaskBoardItemAssignment, note *string) json.RawMessage {
-	details, _ := json.Marshal(map[string]any{
-		"assignment_id":     assignment.ID,
-		"board_item_id":     assignment.BoardItemID,
-		"thread_id":         assignment.ThreadID,
-		"assignment_role":   assignment.AssignmentRole,
-		"assignment_order":  assignment.AssignmentOrder,
-		"status":            assignment.Status,
-		"result_status":     assignment.ResultStatus,
-		"result_summary":    assignment.ResultSummary,
-		"result_payload":    json.RawMessage(assignment.ResultPayload),
-		"note":              note,
-		"instructions":      assignment.Instructions,
-		"handoff_file_path": assignment.HandoffFilePath,
-		"metadata":          json.RawMessage(assignment.Metadata),
+
+const eventLogWorkSubject = "worker.tasks.agent.event_log_work"
+
+func (s *Service) enqueueTaskRoutingEvent(tx *gorm.DB, deploymentID, coordinatorThreadID uint64, item *model.ProjectTaskBoardItem) error {
+	eventLogID := idgen.NextID()
+	summary := fmt.Sprintf(
+		"Coordinator received routing signal for task #%d '%s' (status=%s, priority=%s).",
+		item.ID, item.Title, item.Status, item.Priority,
+	)
+	payload, err := json.Marshal(map[string]any{
+		"event_log_id":   fmt.Sprintf("%d", eventLogID),
+		"deployment_id":  fmt.Sprintf("%d", deploymentID),
+		"thread_id":      fmt.Sprintf("%d", coordinatorThreadID),
+		"board_item_id":  fmt.Sprintf("%d", item.ID),
+		"kind":           "task_routing",
+		"summary":        summary,
 	})
-	return normalizeJSON(details, "{}")
-}
-
-func (s *Service) createBoardItemEvent(tx *gorm.DB, boardItemID uint64, threadID *uint64, eventType, summary string, bodyMarkdown *string, details json.RawMessage) error {
-	event := model.ProjectTaskBoardItemEvent{
-		ID:           idgen.NextID(),
-		BoardItemID:  boardItemID,
-		ThreadID:     threadID,
-		EventType:    eventType,
-		Summary:      summary,
-		BodyMarkdown: bodyMarkdown,
-		Details:      normalizeJSON(details, "{}"),
-		CreatedAt:    time.Now(),
+	if err != nil {
+		return err
 	}
-	return tx.Create(&event).Error
-}
 
-func (s *Service) upsertThreadWorkEvent(tx *gorm.DB, deploymentID, threadID uint64, boardItemID *uint64, eventType string, priority int, payload json.RawMessage, causedByThreadID *uint64) (*model.ThreadEvent, error) {
-	now := time.Now()
-	var event model.ThreadEvent
-	if err := tx.Raw(`
-		INSERT INTO thread_events (
-			id, deployment_id, thread_id, board_item_id, event_type, status,
-			priority, payload, available_at, claimed_at, completed_at, failed_at,
-			caused_by_conversation_id, caused_by_run_id, caused_by_thread_id, created_at, updated_at
+	idempotencyKey := fmt.Sprintf("task_routing_%d_%d", item.ID, item.StateVersion)
+
+	return tx.Exec(`
+		INSERT INTO event_log (
+			id, deployment_id,
+			aggregate_type, aggregate_id, event_type, payload, priority,
+			publish_subject, publish_status, idempotency_key
 		) VALUES (
-			?, ?, ?, ?, ?, 'pending',
-			?, ?, ?, NULL, NULL, NULL,
-			NULL, NULL, ?, ?, ?
+			?, ?,
+			'board_item', ?, 'task_routing', ?::jsonb, 15,
+			?, 'pending', ?
 		)
-		ON CONFLICT (thread_id, event_type, board_item_id)
-		WHERE board_item_id IS NOT NULL
-			AND status = 'pending'
-			AND event_type IN ('task_routing', 'assignment_execution', 'assignment_outcome_review')
-		DO UPDATE SET
-			priority = LEAST(thread_events.priority, EXCLUDED.priority),
-			payload = EXCLUDED.payload,
-			available_at = LEAST(thread_events.available_at, EXCLUDED.available_at),
-			updated_at = EXCLUDED.updated_at
-		RETURNING
-			id, deployment_id, thread_id, board_item_id, event_type, status,
-			priority, payload, available_at, claimed_at, completed_at, failed_at,
-			caused_by_conversation_id, caused_by_run_id, caused_by_thread_id, created_at, updated_at
-	`, idgen.NextID(), deploymentID, threadID, boardItemID, eventType, priority, normalizeJSON(payload, "{}"), now, causedByThreadID, now, now).Scan(&event).Error; err != nil {
-		return nil, err
-	}
-	return &event, nil
+		ON CONFLICT (idempotency_key) DO NOTHING
+	`, eventLogID, deploymentID, item.ID, payload, eventLogWorkSubject, idempotencyKey).Error
 }
 
-func (s *Service) enqueueAssignmentExecutionEvent(tx *gorm.DB, deploymentID uint64, assignment *model.ProjectTaskBoardItemAssignment) (*model.ThreadEvent, error) {
-	return s.upsertThreadWorkEvent(
-		tx,
-		deploymentID,
-		assignment.ThreadID,
-		&assignment.BoardItemID,
-		"assignment_execution",
-		20,
-		assignmentEventDetailsJSON(assignment, nil),
-		nil,
-	)
-}
-
-func (s *Service) enqueueTaskRoutingEvent(tx *gorm.DB, deploymentID, threadID uint64, item *model.ProjectTaskBoardItem) (*model.ThreadEvent, error) {
-	payload, _ := json.Marshal(map[string]any{
-		"board_item_id":      item.ID,
-		"task_key":           item.TaskKey,
-		"title":              item.Title,
-		"description":        item.Description,
-		"status":             item.Status,
-		"priority":           item.Priority,
-		"assigned_thread_id": item.AssignedThreadID,
-	})
-	return s.upsertThreadWorkEvent(
-		tx,
-		deploymentID,
-		threadID,
-		&item.ID,
-		"task_routing",
-		30,
-		normalizeJSON(payload, "{}"),
-		nil,
-	)
-}
-
-func (s *Service) maybePublishThreadEventExecution(event *model.ThreadEvent) error {
+func (s *Service) nudgeEventLogDispatcher() {
 	natsService := service.GetNATS()
 	if natsService == nil {
-		return nil
+		return
 	}
-	return natsService.PublishThreadSchedule(context.Background(), event.DeploymentID, event.ThreadID)
+	natsService.NudgeEventLogDispatcher(context.Background())
+}
+
+func (s *Service) insertThreadWorkEventLog(
+	deploymentID, threadID uint64,
+	eventType string,
+	priority int,
+	agentID *int64,
+	conversationID *uint64,
+	executionRequest map[string]any,
+	idempotencyKey string,
+) error {
+	eventLogID := idgen.NextID()
+	var agentIDStr any
+	if agentID != nil {
+		agentIDStr = fmt.Sprintf("%d", *agentID)
+	}
+	var conversationIDStr any
+	if conversationID != nil {
+		conversationIDStr = fmt.Sprintf("%d", *conversationID)
+	}
+	payload, err := json.Marshal(map[string]any{
+		"event_log_id":      fmt.Sprintf("%d", eventLogID),
+		"deployment_id":     fmt.Sprintf("%d", deploymentID),
+		"thread_id":         fmt.Sprintf("%d", threadID),
+		"kind":              eventType,
+		"agent_id":          agentIDStr,
+		"conversation_id":   conversationIDStr,
+		"execution_payload": executionRequest,
+	})
+	if err != nil {
+		return err
+	}
+
+	return s.db.Exec(`
+		INSERT INTO event_log (
+			id, deployment_id,
+			aggregate_type, aggregate_id, event_type, payload, priority,
+			publish_subject, publish_status, idempotency_key
+		) VALUES (
+			?, ?,
+			'thread', ?, ?, ?::jsonb, ?,
+			?, 'pending', ?
+		)
+		ON CONFLICT (idempotency_key) DO NOTHING
+	`, eventLogID, deploymentID, threadID, eventType, payload, priority, eventLogWorkSubject, idempotencyKey).Error
+}
+
+func (s *Service) EnqueueUserMessageWork(
+	deploymentID, threadID uint64,
+	agentID *int64,
+	conversationID uint64,
+) error {
+	var agentIDStr *string
+	if agentID != nil {
+		str := fmt.Sprintf("%d", *agentID)
+		agentIDStr = &str
+	}
+	conversationIDStr := fmt.Sprintf("%d", conversationID)
+	executionRequest := map[string]any{
+		"deployment_id":   fmt.Sprintf("%d", deploymentID),
+		"thread_id":       fmt.Sprintf("%d", threadID),
+		"agent_id":        agentIDStr,
+		"type":            "new_message",
+		"conversation_id": conversationIDStr,
+	}
+	idempotencyKey := fmt.Sprintf("user_message_received_%d_%d", threadID, conversationID)
+	return s.insertThreadWorkEventLog(
+		deploymentID,
+		threadID,
+		"user_message_received",
+		70,
+		agentID,
+		&conversationID,
+		executionRequest,
+		idempotencyKey,
+	)
+}
+
+func (s *Service) EnqueueApprovalResponseWork(
+	deploymentID, threadID uint64,
+	agentID *int64,
+	requestMessageID string,
+	approvals []service.ToolApprovalSelection,
+) error {
+	var agentIDStr *string
+	if agentID != nil {
+		str := fmt.Sprintf("%d", *agentID)
+		agentIDStr = &str
+	}
+	executionRequest := map[string]any{
+		"deployment_id":      fmt.Sprintf("%d", deploymentID),
+		"thread_id":          fmt.Sprintf("%d", threadID),
+		"agent_id":           agentIDStr,
+		"type":               "approval_response",
+		"request_message_id": requestMessageID,
+		"approvals":          approvals,
+	}
+	idempotencyKey := fmt.Sprintf("approval_response_received_%d_%s", threadID, requestMessageID)
+	return s.insertThreadWorkEventLog(
+		deploymentID,
+		threadID,
+		"approval_response_received",
+		10,
+		agentID,
+		nil,
+		executionRequest,
+		idempotencyKey,
+	)
 }
 
 func (s *Service) CreateProjectBoardItem(
@@ -1671,7 +1716,6 @@ func (s *Service) CreateProjectBoardItem(
 		item.CompletedAt = &now
 	}
 
-	var threadEvent *model.ThreadEvent
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(item).Error; err != nil {
 			return err
@@ -1679,29 +1723,12 @@ func (s *Service) CreateProjectBoardItem(
 		if err := s.reconcileProjectTaskSchedule(tx, item.ID, schedule, false); err != nil {
 			return err
 		}
-		details, _ := json.Marshal(map[string]any{
-			"board_id":           item.BoardID,
-			"task_key":           item.TaskKey,
-			"status":             item.Status,
-			"assigned_thread_id": item.AssignedThreadID,
-			"priority":           item.Priority,
-			"attachments":        attachments,
-		})
-		bodyMarkdown := buildTaskAttachmentEventBody("Task created with workspace uploads.", attachments)
-		if err := s.createBoardItemEvent(tx, item.ID, item.AssignedThreadID, "task_created", "Task created", bodyMarkdown, details); err != nil {
-			return err
-		}
-		threadEvent, err = s.enqueueTaskRoutingEvent(tx, deploymentID, *assignedThreadID, item)
-		return err
+		return s.enqueueTaskRoutingEvent(tx, deploymentID, *assignedThreadID, item)
 	}); err != nil {
 		return nil, err
 	}
 
-	if threadEvent != nil {
-		if err := s.maybePublishThreadEventExecution(threadEvent); err != nil {
-			return nil, err
-		}
-	}
+	s.nudgeEventLogDispatcher()
 
 	if err := s.attachProjectTaskSchedule(s.db, item); err != nil {
 		return nil, err
@@ -1745,23 +1772,19 @@ func (s *Service) UpdateProjectBoardItem(
 	}
 
 	updates := map[string]any{}
-	details := map[string]any{}
 
 	if req.Title != nil {
 		title := strings.TrimSpace(*req.Title)
 		updates["title"] = title
-		details["title"] = title
 		item.Title = title
 	}
 	if req.Description != nil {
 		updates["description"] = req.Description
-		details["description"] = req.Description
 		item.Description = req.Description
 	}
 	if req.Status != nil && strings.TrimSpace(*req.Status) != "" {
 		status := strings.TrimSpace(*req.Status)
 		updates["status"] = status
-		details["status"] = status
 		item.Status = status
 		if status == "completed" {
 			now := time.Now()
@@ -1775,7 +1798,6 @@ func (s *Service) UpdateProjectBoardItem(
 	if req.Priority != nil {
 		priority := normalizeTaskPriority(req.Priority)
 		updates["priority"] = priority
-		details["priority"] = priority
 		item.Priority = priority
 	}
 	if len(attachments) > 0 {
@@ -1784,11 +1806,7 @@ func (s *Service) UpdateProjectBoardItem(
 			return nil, err
 		}
 		updates["metadata"] = metadata
-		details["metadata"] = json.RawMessage(metadata)
 		item.Metadata = metadata
-	}
-	if len(attachments) > 0 {
-		details["attachments"] = attachments
 	}
 
 	if len(updates) == 0 && schedule == nil && !clearSchedule {
@@ -1798,7 +1816,7 @@ func (s *Service) UpdateProjectBoardItem(
 		return item, nil
 	}
 
-	var threadEvent *model.ThreadEvent
+	enqueuedRouting := false
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&model.ProjectTaskBoardItem{}).Where("id = ?", itemID).Updates(updates).Error; err != nil {
 			return err
@@ -1806,24 +1824,19 @@ func (s *Service) UpdateProjectBoardItem(
 		if err := s.reconcileProjectTaskSchedule(tx, item.ID, schedule, clearSchedule); err != nil {
 			return err
 		}
-		detailsJSON, _ := json.Marshal(details)
-		bodyMarkdown := buildTaskAttachmentEventBody("Task updated with workspace uploads.", attachments)
-		if err := s.createBoardItemEvent(tx, itemID, item.AssignedThreadID, "task_updated", "Task updated", bodyMarkdown, detailsJSON); err != nil {
-			return err
-		}
 		if project.CoordinatorThreadID != nil {
-			threadEvent, err = s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, item)
-			return err
+			if err := s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, item); err != nil {
+				return err
+			}
+			enqueuedRouting = true
 		}
 		return nil
 	}); err != nil {
 		return nil, err
 	}
 
-	if threadEvent != nil {
-		if err := s.maybePublishThreadEventExecution(threadEvent); err != nil {
-			return nil, err
-		}
+	if enqueuedRouting {
+		s.nudgeEventLogDispatcher()
 	}
 
 	updatedItem, err := s.GetAuthorizedBoardItem(deploymentID, actorID, itemID, true)
@@ -1838,7 +1851,6 @@ func (s *Service) UpdateProjectBoardItem(
 
 func (s *Service) ArchiveProjectBoardItem(deploymentID, actorID, projectID, itemID uint64) (*model.ProjectTaskBoardItem, error) {
 	now := time.Now()
-	eventID := idgen.NextID()
 	type archiveResultRow struct {
 		Item json.RawMessage `gorm:"column:item"`
 	}
@@ -1886,46 +1898,10 @@ func (s *Service) ArchiveProjectBoardItem(deploymentID, actorID, projectID, item
 					AND NOT (SELECT picked FROM target)
 					AND a.status IN ('pending', 'available')
 				RETURNING 1
-			),
-			cancelled_events AS (
-				UPDATE thread_events e
-				SET
-					status = 'cancelled',
-					updated_at = ?
-				WHERE e.board_item_id = (SELECT id FROM target)
-					AND NOT (SELECT picked FROM target)
-					AND e.status = 'pending'
-					AND e.event_type IN ('task_routing', 'assignment_execution', 'assignment_outcome_review')
-				RETURNING 1
-			),
-			inserted_event AS (
-				INSERT INTO project_task_board_item_events (
-					id,
-					board_item_id,
-					thread_id,
-					event_type,
-					summary,
-					details,
-					created_at
-				)
-				SELECT
-					?,
-					t.id,
-					t.assigned_thread_id,
-					'task_archived',
-					'Task archived',
-					json_build_object(
-						'picked', t.picked,
-						'cancelled_assignments', COALESCE((SELECT COUNT(*) FROM cancelled_assignments), 0),
-						'cancelled_thread_events', COALESCE((SELECT COUNT(*) FROM cancelled_events), 0)
-					),
-					?
-				FROM target t
-				RETURNING 1
 			)
 			SELECT row_to_json(u) AS item
 			FROM updated_item u
-		`, itemID, deploymentID, actorID, projectID, now, now, now, now, eventID, now).Scan(&row).Error
+		`, itemID, deploymentID, actorID, projectID, now, now, now).Scan(&row).Error
 	}); err != nil {
 		return nil, err
 	}
@@ -1942,15 +1918,20 @@ func (s *Service) ArchiveProjectBoardItem(deploymentID, actorID, projectID, item
 }
 
 func (s *Service) UnarchiveProjectBoardItem(deploymentID, actorID, projectID, itemID uint64) (*model.ProjectTaskBoardItem, error) {
+	project, err := s.GetActorProject(deploymentID, actorID, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("project not found or access denied")
+	}
+
 	now := time.Now()
-	eventID := idgen.NextID()
 	type unarchiveResultRow struct {
 		Item json.RawMessage `gorm:"column:item"`
 	}
 	var row unarchiveResultRow
+	enqueuedRouting := false
 
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		return tx.Raw(`
+		if err := tx.Raw(`
 			WITH target AS (
 				SELECT
 					i.id,
@@ -1972,154 +1953,39 @@ func (s *Service) UnarchiveProjectBoardItem(deploymentID, actorID, projectID, it
 					updated_at = ?
 				WHERE i.id = (SELECT id FROM target)
 				RETURNING i.*
-			),
-			inserted_event AS (
-				INSERT INTO project_task_board_item_events (
-					id,
-					board_item_id,
-					thread_id,
-					event_type,
-					summary,
-					details,
-					created_at
-				)
-				SELECT
-					?,
-					t.id,
-					t.assigned_thread_id,
-					'task_unarchived',
-					'Task unarchived',
-					json_build_object('previous_archived_at', t.archived_at),
-					?
-				FROM target t
-				RETURNING 1
 			)
 			SELECT row_to_json(u) AS item
 			FROM updated_item u
-		`, itemID, deploymentID, actorID, projectID, now, eventID, now).Scan(&row).Error
+		`, itemID, deploymentID, actorID, projectID, now).Scan(&row).Error; err != nil {
+			return err
+		}
+		if len(row.Item) == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		var item model.ProjectTaskBoardItem
+		if err := json.Unmarshal(row.Item, &item); err != nil {
+			return err
+		}
+		if project.CoordinatorThreadID != nil {
+			if err := s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, &item); err != nil {
+				return err
+			}
+			enqueuedRouting = true
+		}
+		return nil
 	}); err != nil {
 		return nil, err
 	}
 
-	if len(row.Item) == 0 {
-		return nil, gorm.ErrRecordNotFound
+	if enqueuedRouting {
+		s.nudgeEventLogDispatcher()
 	}
 
 	var item model.ProjectTaskBoardItem
 	if err := json.Unmarshal(row.Item, &item); err != nil {
 		return nil, err
 	}
-
-	board, err := s.GetProjectBoardByID(deploymentID, actorID, item.BoardID)
-	if err != nil {
-		return nil, err
-	}
-	project, err := s.GetActorProject(deploymentID, actorID, board.ProjectID)
-	if err != nil {
-		return nil, fmt.Errorf("project not found or access denied")
-	}
-	if project.CoordinatorThreadID != nil {
-		var threadEvent *model.ThreadEvent
-		if err := s.db.Transaction(func(tx *gorm.DB) error {
-			var enqueueErr error
-			threadEvent, enqueueErr = s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, &item)
-			return enqueueErr
-		}); err != nil {
-			return nil, err
-		}
-		if threadEvent != nil {
-			if err := s.maybePublishThreadEventExecution(threadEvent); err != nil {
-				return nil, err
-			}
-		}
-	}
 	return &item, nil
-}
-
-func (s *Service) AppendBoardItemJournalEntry(
-	deploymentID, actorID, projectID, itemID uint64,
-	summary string,
-	details *string,
-	bodyMarkdown *string,
-	attachments []UploadedTaskWorkspaceFile,
-) (*model.ProjectTaskBoardItemEvent, error) {
-	item, err := s.GetAuthorizedBoardItem(deploymentID, actorID, itemID, false)
-	if err != nil {
-		return nil, err
-	}
-	board, err := s.GetProjectBoardByID(deploymentID, actorID, item.BoardID)
-	if err != nil {
-		return nil, err
-	}
-	if board.ProjectID != projectID {
-		return nil, gorm.ErrRecordNotFound
-	}
-
-	summary = strings.TrimSpace(summary)
-	if summary == "" {
-		return nil, fmt.Errorf("summary must not be empty")
-	}
-
-	var normalizedBody *string
-	if bodyMarkdown != nil {
-		trimmed := strings.TrimSpace(*bodyMarkdown)
-		if trimmed != "" {
-			normalizedBody = &trimmed
-		}
-	}
-	if normalizedBody == nil && details != nil {
-		trimmed := strings.TrimSpace(*details)
-		if trimmed != "" {
-			normalizedBody = &trimmed
-		}
-	}
-
-	detailsJSON, _ := json.Marshal(map[string]any{
-		"task_key":    item.TaskKey,
-		"details":     normalizedBody,
-		"attachments": attachments,
-	})
-
-	project, err := s.GetActorProject(deploymentID, actorID, board.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-
-	var event model.ProjectTaskBoardItemEvent
-	var threadEvent *model.ThreadEvent
-	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		event = model.ProjectTaskBoardItemEvent{
-			ID:           idgen.NextID(),
-			BoardItemID:  item.ID,
-			EventType:    "task_journal_entry",
-			Summary:      summary,
-			BodyMarkdown: normalizedBody,
-			Details:      normalizeJSON(detailsJSON, "{}"),
-			CreatedAt:    time.Now(),
-		}
-		if err := tx.Create(&event).Error; err != nil {
-			return err
-		}
-
-		if (item.Status == "blocked" || item.Status == "needs_clarification") && project.CoordinatorThreadID != nil {
-			threadEvent, err = s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, item)
-			if err != nil {
-				return err
-			}
-		}
-
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-
-	if threadEvent != nil {
-		if err := s.maybePublishThreadEventExecution(threadEvent); err != nil {
-			return nil, err
-		}
-	}
-
-	return &event, nil
 }
 
 func (s *Service) GetBoardItemAssignment(assignmentID uint64) (*model.ProjectTaskBoardItemAssignment, error) {
@@ -2139,11 +2005,6 @@ func (s *Service) GetAuthorizedBoardItemAssignment(deploymentID, actorID, assign
 		return nil, err
 	}
 	return assignment, nil
-}
-
-func encodeThreadEventCursor(createdAt time.Time, eventID uint64) string {
-	raw := fmt.Sprintf("%d|%d", createdAt.UnixNano(), eventID)
-	return base64.RawURLEncoding.EncodeToString([]byte(raw))
 }
 
 func encodeUpdatedAtCursor(updatedAt time.Time, id uint64) string {
@@ -2253,104 +2114,6 @@ func (s *Service) ListThreadAssignments(
 
 	return &ThreadAssignmentsResponse{
 		Data:       assignments,
-		Limit:      limit,
-		HasMore:    hasMore,
-		NextCursor: nextCursor,
-	}, nil
-}
-
-func (s *Service) ListThreadEvents(
-	threadID uint64,
-	limit int,
-	cursorCreatedAt *time.Time,
-	cursorID *uint64,
-) (*ThreadEventsResponse, error) {
-	if limit <= 0 {
-		limit = 40
-	}
-	if limit > 200 {
-		limit = 200
-	}
-
-	var events []model.ThreadEvent
-	query := s.db.Where("thread_id = ?", threadID)
-	if cursorCreatedAt != nil && cursorID != nil {
-		query = query.Where(
-			"(created_at < ? OR (created_at = ? AND id < ?))",
-			*cursorCreatedAt,
-			*cursorCreatedAt,
-			*cursorID,
-		)
-	}
-	if err := query.
-		Order("created_at DESC, id DESC").
-		Limit(limit + 1).
-		Find(&events).Error; err != nil {
-		return nil, err
-	}
-
-	hasMore := len(events) > limit
-	if hasMore {
-		events = events[:limit]
-	}
-
-	nextCursor := ""
-	if hasMore && len(events) > 0 {
-		last := events[len(events)-1]
-		nextCursor = encodeThreadEventCursor(last.CreatedAt, last.ID)
-	}
-
-	return &ThreadEventsResponse{
-		Data:       events,
-		Limit:      limit,
-		HasMore:    hasMore,
-		NextCursor: nextCursor,
-	}, nil
-}
-
-func (s *Service) ListBoardItemEvents(
-	itemID uint64,
-	limit int,
-	cursorCreatedAt *time.Time,
-	cursorID *uint64,
-) (*BoardItemEventsResponse, error) {
-	if limit <= 0 {
-		limit = 40
-	}
-	if limit > 200 {
-		limit = 200
-	}
-
-	var events []model.ProjectTaskBoardItemEvent
-	query := s.db.Where("board_item_id = ?", itemID)
-	if cursorCreatedAt != nil && cursorID != nil {
-		query = query.Where(
-			"(created_at < ? OR (created_at = ? AND id < ?))",
-			*cursorCreatedAt,
-			*cursorCreatedAt,
-			*cursorID,
-		)
-	}
-	if err := query.
-		Order("created_at DESC, id DESC").
-		Limit(limit + 1).
-		Find(&events).Error; err != nil {
-		return nil, err
-	}
-
-	hasMore := len(events) > limit
-	if hasMore {
-		events = events[:limit]
-	}
-
-	nextCursor := ""
-	if hasMore && len(events) > 0 {
-		last := events[len(events)-1]
-		nextCursor = encodeThreadEventCursor(last.CreatedAt, last.ID)
-	}
-
-	return &BoardItemEventsResponse{
-		Data:       events,
 		Limit:      limit,
 		HasMore:    hasMore,
 		NextCursor: nextCursor,

@@ -441,44 +441,6 @@ func (h *Handler) GetBoardItem(c fiber.Ctx) error {
 	return handler.SendSuccess(c, item)
 }
 
-func (h *Handler) ListBoardItemEvents(c fiber.Ctx) error {
-	actorID, _, err := h.getActorScope(c)
-	if err != nil {
-		return err
-	}
-	projectID, err := parseIDParam(c, "project_id")
-	if err != nil {
-		return handler.SendBadRequest(c, nil, "Invalid project_id")
-	}
-	itemID, err := parseIDParam(c, "item_id")
-	if err != nil {
-		return handler.SendBadRequest(c, nil, "Invalid item_id")
-	}
-	deployment := handler.GetDeployment(c)
-	if _, err := h.service.GetProjectBoardItem(deployment.ID, actorID, projectID, itemID, parseBoolQuery(c.Query("include_archived"))); err != nil {
-		return handler.SendNotFound(c, nil, "Board item not found")
-	}
-
-	limit := fiber.Query[int](c, "limit", 40)
-	if limit <= 0 {
-		limit = 40
-	}
-	if limit > 200 {
-		limit = 200
-	}
-
-	cursorCreatedAt, cursorID, err := parseTimeIDCursor(c.Query("cursor", ""))
-	if err != nil {
-		return err
-	}
-
-	events, err := h.service.ListBoardItemEvents(itemID, limit, cursorCreatedAt, cursorID)
-	if err != nil {
-		return handler.SendInternalServerError(c, nil, "Internal server error")
-	}
-	return handler.SendSuccess(c, events)
-}
-
 func (h *Handler) ListBoardItemAssignments(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
@@ -652,78 +614,6 @@ func (h *Handler) UnarchiveBoardItem(c fiber.Ctx) error {
 		return handler.SendInternalServerError(c, nil, "Failed to unarchive task")
 	}
 	return handler.SendSuccess(c, item)
-}
-
-func (h *Handler) AppendBoardItemJournal(c fiber.Ctx) error {
-	actorID, _, err := h.getActorScope(c)
-	if err != nil {
-		return err
-	}
-	projectID, err := parseIDParam(c, "project_id")
-	if err != nil {
-		return handler.SendBadRequest(c, nil, "Invalid project_id")
-	}
-	itemID, err := parseIDParam(c, "item_id")
-	if err != nil {
-		return handler.SendBadRequest(c, nil, "Invalid item_id")
-	}
-	if err := requireMultipartFormRequest(c); err != nil {
-		return err
-	}
-
-	form, err := c.MultipartForm()
-	if err != nil {
-		return handler.SendBadRequest(c, nil, "Invalid multipart form")
-	}
-
-	summary := strings.TrimSpace(c.FormValue("summary"))
-	if summary == "" {
-		return handler.SendBadRequest(c, nil, "summary must not be empty")
-	}
-
-	var bodyMarkdown *string
-	if value := strings.TrimSpace(c.FormValue("body_markdown")); value != "" {
-		bodyMarkdown = &value
-	}
-
-	var details *string
-	if value := strings.TrimSpace(c.FormValue("details")); value != "" {
-		details = &value
-	}
-
-	var files []*multipart.FileHeader
-	if form != nil {
-		files = form.File["files"]
-	}
-
-	var attachments []UploadedTaskWorkspaceFile
-	if len(files) > 0 {
-		deployment := handler.GetDeployment(c)
-		attachments, err = h.service.uploadBoardItemTaskWorkspaceFiles(deployment.ID, actorID, projectID, itemID, files)
-		if err != nil {
-			return handler.SendInternalServerError(c, nil, "Failed to upload task files")
-		}
-	}
-
-	deployment := handler.GetDeployment(c)
-	event, err := h.service.AppendBoardItemJournalEntry(
-		deployment.ID,
-		actorID,
-		projectID,
-		itemID,
-		summary,
-		details,
-		bodyMarkdown,
-		attachments,
-	)
-	if err != nil {
-		if strings.Contains(err.Error(), "summary must not be empty") {
-			return handler.SendBadRequest(c, nil, err.Error())
-		}
-		return handler.SendInternalServerError(c, nil, "Failed to append journal entry")
-	}
-
-	return handler.SendSuccess(c, event)
 }
 
 func (h *Handler) ListProjectThreads(c fiber.Ctx) error {
@@ -907,60 +797,6 @@ func (h *Handler) GetThread(c fiber.Ctx) error {
 		return handler.SendNotFound(c, nil, "Thread not found")
 	}
 	return handler.SendSuccess(c, thread)
-}
-
-func (h *Handler) ListThreadEvents(c fiber.Ctx) error {
-	actorID, _, err := h.getActorScope(c)
-	if err != nil {
-		return err
-	}
-	threadID, err := parseIDParam(c, "thread_id")
-	if err != nil {
-		return handler.SendBadRequest(c, nil, "Invalid thread_id")
-	}
-	deployment := handler.GetDeployment(c)
-	if _, err := h.service.GetThread(deployment.ID, actorID, threadID); err != nil {
-		return handler.SendForbidden(c, nil, "Forbidden")
-	}
-
-	limit := fiber.Query[int](c, "limit", 40)
-	if limit <= 0 {
-		limit = 40
-	}
-	if limit > 200 {
-		limit = 200
-	}
-
-	cursor := c.Query("cursor", "")
-	var cursorCreatedAt *time.Time
-	var cursorID *uint64
-	if cursor != "" {
-		decoded, err := base64.RawURLEncoding.DecodeString(cursor)
-		if err != nil {
-			return handler.SendBadRequest(c, nil, "invalid cursor")
-		}
-		parts := strings.SplitN(string(decoded), "|", 2)
-		if len(parts) != 2 {
-			return handler.SendBadRequest(c, nil, "invalid cursor")
-		}
-		nanos, err := strconv.ParseInt(parts[0], 10, 64)
-		if err != nil {
-			return handler.SendBadRequest(c, nil, "invalid cursor")
-		}
-		eventID, err := strconv.ParseUint(parts[1], 10, 64)
-		if err != nil {
-			return handler.SendBadRequest(c, nil, "invalid cursor")
-		}
-		cursorTime := time.Unix(0, nanos).UTC()
-		cursorCreatedAt = &cursorTime
-		cursorID = &eventID
-	}
-
-	events, err := h.service.ListThreadEvents(threadID, limit, cursorCreatedAt, cursorID)
-	if err != nil {
-		return handler.SendInternalServerError(c, nil, "Internal server error")
-	}
-	return handler.SendSuccess(c, events)
 }
 
 func (h *Handler) ListThreadAssignments(c fiber.Ctx) error {

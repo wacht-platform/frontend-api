@@ -194,25 +194,11 @@ type ThreadTaskGraphsResponse struct {
 	NextCursor string                  `json:"next_cursor,omitempty"`
 }
 
-type ThreadEventsResponse struct {
-	Data       []model.ThreadEvent `json:"data"`
-	Limit      int                 `json:"limit"`
-	HasMore    bool                `json:"has_more"`
-	NextCursor string              `json:"next_cursor,omitempty"`
-}
-
 type ThreadAssignmentsResponse struct {
 	Data       []model.ProjectTaskBoardItemAssignment `json:"data"`
 	Limit      int                                    `json:"limit"`
 	HasMore    bool                                   `json:"has_more"`
 	NextCursor string                                 `json:"next_cursor,omitempty"`
-}
-
-type BoardItemEventsResponse struct {
-	Data       []model.ProjectTaskBoardItemEvent `json:"data"`
-	Limit      int                               `json:"limit"`
-	HasMore    bool                              `json:"has_more"`
-	NextCursor string                            `json:"next_cursor,omitempty"`
 }
 
 type BoardItemAssignmentsResponse struct {
