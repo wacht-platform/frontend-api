@@ -1544,6 +1544,7 @@ const (
 	taskRoutingReasonAssignmentPreempted = "assignment_preempted"
 	taskRoutingReasonAssignmentCompleted = "assignment_completed"
 	taskRoutingReasonCancelled           = "task_cancelled"
+	taskRoutingReasonUserResponded       = "user_responded"
 )
 
 type taskRoutingFieldChange struct {
@@ -2057,18 +2058,36 @@ func (s *Service) CancelProjectBoardItem(deploymentID, actorID, projectID, itemI
 	originalStatus := item.Status
 	now := time.Now()
 
+	var pendingAskerThreadID uint64
+	if len(item.PendingQuestion) > 0 {
+		var pending PendingQuestion
+		if err := json.Unmarshal(item.PendingQuestion, &pending); err == nil {
+			if _, scanErr := fmt.Sscanf(pending.AskedByThreadID, "%d", &pendingAskerThreadID); scanErr != nil {
+				pendingAskerThreadID = 0
+			}
+		}
+	}
+
 	enqueuedRouting := false
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&model.ProjectTaskBoardItem{}).
 			Where("id = ?", itemID).
 			Updates(map[string]any{
-				"status":       "cancelled",
-				"completed_at": &now,
+				"status":           "cancelled",
+				"completed_at":     &now,
+				"pending_question": nil,
 			}).Error; err != nil {
 			return err
 		}
 		item.Status = "cancelled"
 		item.CompletedAt = &now
+		item.PendingQuestion = nil
+
+		if pendingAskerThreadID != 0 {
+			if err := s.clearThreadPendingQuestion(tx, pendingAskerThreadID); err != nil {
+				return err
+			}
+		}
 
 		if _, err := s.preemptActiveBoardItemAssignment(tx, item.ID); err != nil {
 			return err
@@ -2111,6 +2130,293 @@ func (s *Service) CancelProjectBoardItem(deploymentID, actorID, projectID, itemI
 		return nil, err
 	}
 	return item, nil
+}
+
+func (s *Service) AnswerThreadQuestion(
+	deploymentID, actorID, threadID uint64,
+	submission *AnswerSubmission,
+) error {
+	if _, err := s.GetThread(deploymentID, actorID, threadID); err != nil {
+		return err
+	}
+
+	type clarRow struct {
+		ID      uint64          `gorm:"column:id"`
+		Content json.RawMessage `gorm:"column:content"`
+	}
+	var pending clarRow
+	err := s.db.Raw(`
+		SELECT id, content
+		FROM conversations
+		WHERE thread_id = ?
+		  AND message_type = 'clarification_request'
+		  AND id > COALESCE((
+		      SELECT MAX(id) FROM conversations
+		      WHERE thread_id = ? AND message_type = 'clarification_response'
+		  ), 0)
+		ORDER BY id DESC
+		LIMIT 1
+	`, threadID, threadID).Scan(&pending).Error
+	if err != nil {
+		return err
+	}
+	if pending.ID == 0 {
+		return fmt.Errorf("no pending clarification on this thread")
+	}
+
+	var content struct {
+		Questions []Question `json:"questions"`
+		Context   *string    `json:"context,omitempty"`
+	}
+	if err := json.Unmarshal(pending.Content, &content); err != nil {
+		return fmt.Errorf("malformed pending clarification content: %w", err)
+	}
+	pq := PendingQuestion{Questions: content.Questions, Context: content.Context}
+	if err := validateAnswers(&pq, submission); err != nil {
+		return err
+	}
+
+	answersJSON, err := json.Marshal(submission.Answers)
+	if err != nil {
+		return err
+	}
+	requestID := pending.ID
+
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		responseContent, err := json.Marshal(map[string]any{
+			"type":               "clarification_response",
+			"request_message_id": fmt.Sprintf("%d", requestID),
+			"answers":            json.RawMessage(answersJSON),
+		})
+		if err != nil {
+			return err
+		}
+		responseID := idgen.NextID()
+		now := time.Now()
+		if err := tx.Exec(`
+			INSERT INTO conversations (
+				id, thread_id, board_item_id, execution_run_id, timestamp, content, message_type,
+				created_at, updated_at, metadata
+			) VALUES (?, ?, NULL, NULL, ?, ?::jsonb, 'clarification_response', ?, ?, NULL)
+		`, responseID, threadID, now, string(responseContent), now, now).Error; err != nil {
+			return err
+		}
+		if err := s.clearThreadPendingQuestion(tx, threadID); err != nil {
+			return err
+		}
+		idempotencyKey := fmt.Sprintf("user_message_received_%d_%d", threadID, responseID)
+		executionRequest := map[string]any{
+			"deployment_id":   fmt.Sprintf("%d", deploymentID),
+			"thread_id":       fmt.Sprintf("%d", threadID),
+			"type":            "new_message",
+			"conversation_id": fmt.Sprintf("%d", responseID),
+		}
+		eventLogID := idgen.NextID()
+		payload, err := json.Marshal(map[string]any{
+			"event_log_id":      fmt.Sprintf("%d", eventLogID),
+			"deployment_id":     fmt.Sprintf("%d", deploymentID),
+			"thread_id":         fmt.Sprintf("%d", threadID),
+			"kind":              "user_message_received",
+			"conversation_id":   fmt.Sprintf("%d", responseID),
+			"execution_payload": executionRequest,
+		})
+		if err != nil {
+			return err
+		}
+		return tx.Exec(`
+			INSERT INTO event_log (
+				id, deployment_id,
+				aggregate_type, aggregate_id, event_type, payload, priority,
+				publish_subject, publish_status, idempotency_key
+			) VALUES (
+				?, ?,
+				'thread', ?, 'user_message_received', ?::jsonb, 70,
+				?, 'pending', ?
+			)
+			ON CONFLICT (idempotency_key) DO NOTHING
+		`, eventLogID, deploymentID, threadID, payload, eventLogWorkSubject, idempotencyKey).Error
+	}); err != nil {
+		return err
+	}
+
+	s.nudgeEventLogDispatcher()
+	return nil
+}
+
+func (s *Service) AnswerProjectBoardItemQuestion(
+	deploymentID, actorID, projectID, itemID uint64,
+	submission *AnswerSubmission,
+) (*model.ProjectTaskBoardItem, error) {
+	item, err := s.GetAuthorizedBoardItem(deploymentID, actorID, itemID, false)
+	if err != nil {
+		return nil, err
+	}
+	board, err := s.GetProjectBoardByID(deploymentID, actorID, item.BoardID)
+	if err != nil {
+		return nil, err
+	}
+	if board.ProjectID != projectID {
+		return nil, gorm.ErrRecordNotFound
+	}
+	project, err := s.GetActorProject(deploymentID, actorID, board.ProjectID)
+	if err != nil {
+		return nil, fmt.Errorf("project not found or access denied")
+	}
+
+	if item.PendingQuestion == nil {
+		return nil, fmt.Errorf("no pending question on this task")
+	}
+	var pending PendingQuestion
+	if err := json.Unmarshal(item.PendingQuestion, &pending); err != nil {
+		return nil, fmt.Errorf("malformed pending_question: %w", err)
+	}
+	if err := validateAnswers(&pending, submission); err != nil {
+		return nil, err
+	}
+
+	answersJSON, err := json.Marshal(submission.Answers)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+
+	enqueuedRouting := false
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.ProjectTaskBoardItem{}).
+			Where("id = ?", item.ID).
+			Updates(map[string]any{
+				"pending_question": nil,
+				"updated_at":       &now,
+			}).Error; err != nil {
+			return err
+		}
+
+		var askerThreadID uint64
+		if _, err := fmt.Sscanf(pending.AskedByThreadID, "%d", &askerThreadID); err != nil {
+			return fmt.Errorf("invalid asked_by_thread_id: %w", err)
+		}
+		if err := s.clearThreadPendingQuestion(tx, askerThreadID); err != nil {
+			return err
+		}
+
+		if pending.AskedByAssignmentID != nil {
+			var assignmentID uint64
+			if _, err := fmt.Sscanf(*pending.AskedByAssignmentID, "%d", &assignmentID); err != nil {
+				return fmt.Errorf("invalid asked_by_assignment_id: %w", err)
+			}
+			if err := s.enqueueAssignmentResumeEvent(tx, deploymentID, assignmentID, answersJSON); err != nil {
+				return err
+			}
+			enqueuedRouting = true
+		} else if project.CoordinatorThreadID != nil {
+			if err := s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, item, taskRoutingContext{
+				Reason: taskRoutingReasonUserResponded,
+			}); err != nil {
+				return err
+			}
+			enqueuedRouting = true
+		}
+
+		return s.appendClarificationResponseConversation(
+			tx,
+			pending.AskedByThreadID,
+			item.ID,
+			answersJSON,
+		)
+	}); err != nil {
+		return nil, err
+	}
+
+	if enqueuedRouting {
+		s.nudgeEventLogDispatcher()
+	}
+
+	if err := s.attachProjectTaskSchedule(s.db, item); err != nil {
+		return nil, err
+	}
+	item.PendingQuestion = nil
+	return item, nil
+}
+
+func (s *Service) clearThreadPendingQuestion(tx *gorm.DB, threadID uint64) error {
+	return tx.Exec(`
+		UPDATE agent_threads
+		SET execution_state = jsonb_set(
+		    COALESCE(execution_state, '{}'::jsonb),
+		    '{pending_question}',
+		    'null'::jsonb,
+		    true
+		)
+		WHERE id = ?
+	`, threadID).Error
+}
+
+func (s *Service) appendClarificationResponseConversation(
+	tx *gorm.DB,
+	askedByThreadIDStr string,
+	boardItemID uint64,
+	answersJSON []byte,
+) error {
+	var threadID uint64
+	if _, err := fmt.Sscanf(askedByThreadIDStr, "%d", &threadID); err != nil {
+		return fmt.Errorf("invalid asked_by_thread_id: %w", err)
+	}
+	id := idgen.NextID()
+	now := time.Now()
+	content, err := json.Marshal(map[string]any{
+		"type":    "clarification_response",
+		"answers": json.RawMessage(answersJSON),
+	})
+	if err != nil {
+		return err
+	}
+	return tx.Exec(`
+		INSERT INTO conversations (
+			id, thread_id, board_item_id, execution_run_id, timestamp, content, message_type,
+			created_at, updated_at, metadata
+		) VALUES (
+			?, ?, ?, NULL, ?, ?::jsonb, 'clarification_response',
+			?, ?, NULL
+		)
+	`, id, threadID, boardItemID, now, string(content), now, now).Error
+}
+
+func (s *Service) enqueueAssignmentResumeEvent(
+	tx *gorm.DB,
+	deploymentID, assignmentID uint64,
+	answersJSON []byte,
+) error {
+	var assignment model.ProjectTaskBoardItemAssignment
+	if err := tx.Where("id = ?", assignmentID).First(&assignment).Error; err != nil {
+		return err
+	}
+	eventLogID := idgen.NextID()
+	payload, err := json.Marshal(map[string]any{
+		"event_log_id":  fmt.Sprintf("%d", eventLogID),
+		"deployment_id": fmt.Sprintf("%d", deploymentID),
+		"thread_id":     fmt.Sprintf("%d", assignment.ThreadID),
+		"assignment_id": fmt.Sprintf("%d", assignment.ID),
+		"board_item_id": fmt.Sprintf("%d", assignment.BoardItemID),
+		"kind":          "assignment_execution",
+		"summary":       "User answered the pending clarification; resume the assignment.",
+		"answers":       json.RawMessage(answersJSON),
+	})
+	if err != nil {
+		return err
+	}
+	idempotencyKey := fmt.Sprintf("assignment_execution_%d_resume_%d", assignment.ID, eventLogID)
+	return tx.Exec(`
+		INSERT INTO event_log (
+			id, deployment_id,
+			aggregate_type, aggregate_id, event_type, payload, priority,
+			publish_subject, publish_status, idempotency_key
+		) VALUES (
+			?, ?,
+			'assignment', ?, 'assignment_execution', ?::jsonb, 20,
+			?, 'pending', ?
+		)
+		ON CONFLICT (idempotency_key) DO NOTHING
+	`, eventLogID, deploymentID, assignment.ID, payload, eventLogWorkSubject, idempotencyKey).Error
 }
 
 func (s *Service) ArchiveProjectBoardItem(deploymentID, actorID, projectID, itemID uint64) (*model.ProjectTaskBoardItem, error) {

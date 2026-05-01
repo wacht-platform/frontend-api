@@ -600,6 +600,53 @@ func (h *Handler) CancelBoardItem(c fiber.Ctx) error {
 	return handler.SendSuccess(c, item)
 }
 
+func (h *Handler) AnswerThreadQuestion(c fiber.Ctx) error {
+	actorID, _, err := h.getActorScope(c)
+	if err != nil {
+		return err
+	}
+	threadID, err := parseIDParam(c, "thread_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid thread_id")
+	}
+	deployment := handler.GetDeployment(c)
+	var submission AnswerSubmission
+	if err := c.Bind().Body(&submission); err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid request body")
+	}
+	if err := h.service.AnswerThreadQuestion(deployment.ID, actorID, threadID, &submission); err != nil {
+		return handler.SendBadRequest(c, nil, err.Error())
+	}
+	return handler.SendSuccess(c, fiber.Map{"ok": true})
+}
+
+func (h *Handler) AnswerBoardItemQuestion(c fiber.Ctx) error {
+	actorID, _, err := h.getActorScope(c)
+	if err != nil {
+		return err
+	}
+	projectID, err := parseIDParam(c, "project_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid project_id")
+	}
+	itemID, err := parseIDParam(c, "item_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid item_id")
+	}
+	deployment := handler.GetDeployment(c)
+	var submission AnswerSubmission
+	if err := c.Bind().Body(&submission); err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid request body")
+	}
+	item, err := h.service.AnswerProjectBoardItemQuestion(
+		deployment.ID, actorID, projectID, itemID, &submission,
+	)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, err.Error())
+	}
+	return handler.SendSuccess(c, item)
+}
+
 func (h *Handler) UnarchiveBoardItem(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
