@@ -43,7 +43,6 @@ type ProjectTaskBoardItemAssignment struct {
 	BoardItemID     uint64          `json:"board_item_id,string" gorm:"column:board_item_id;not null;index"`
 	ThreadID        uint64          `json:"thread_id,string" gorm:"column:thread_id;not null;index"`
 	AssignmentRole  string          `json:"assignment_role" gorm:"column:assignment_role;not null"`
-	AssignmentOrder int             `json:"assignment_order" gorm:"column:assignment_order;not null"`
 	Status          string          `json:"status" gorm:"not null"`
 	Instructions    *string         `json:"instructions,omitempty"`
 	HandoffFilePath *string         `json:"handoff_file_path,omitempty" gorm:"column:handoff_file_path"`

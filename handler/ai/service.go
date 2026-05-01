@@ -1597,7 +1597,23 @@ func (s *Service) enqueueTaskRoutingEvent(
 		return err
 	}
 
-	idempotencyKey := fmt.Sprintf("task_routing_%d_%d", item.ID, item.StateVersion)
+	updateResult := tx.Exec(`
+		UPDATE event_log
+		SET payload = ?::jsonb,
+		    next_publish_at = NOW()
+		WHERE aggregate_type = 'board_item'
+		  AND aggregate_id = ?
+		  AND event_type = 'task_routing'
+		  AND publish_status = 'pending'
+	`, payload, item.ID)
+	if updateResult.Error != nil {
+		return updateResult.Error
+	}
+	if updateResult.RowsAffected > 0 {
+		return nil
+	}
+
+	idempotencyKey := fmt.Sprintf("task_routing_%d_%d", item.ID, eventLogID)
 
 	return tx.Exec(`
 		INSERT INTO event_log (
@@ -2256,15 +2272,13 @@ func encodeLastActivityCursor(lastActivityAt time.Time, threadID uint64) string 
 	return base64.RawURLEncoding.EncodeToString([]byte(raw))
 }
 
-func encodeThreadAssignmentCursor(assignmentOrder int, assignmentID uint64) string {
-	raw := fmt.Sprintf("%d|%d", assignmentOrder, assignmentID)
-	return base64.RawURLEncoding.EncodeToString([]byte(raw))
+func encodeAssignmentCursor(assignmentID uint64) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%d", assignmentID)))
 }
 
 func (s *Service) ListBoardItemAssignments(
 	itemID uint64,
 	limit int,
-	cursorAssignmentOrder *int,
 	cursorID *uint64,
 ) (*BoardItemAssignmentsResponse, error) {
 	if limit <= 0 {
@@ -2276,16 +2290,11 @@ func (s *Service) ListBoardItemAssignments(
 
 	var assignments []model.ProjectTaskBoardItemAssignment
 	query := s.db.Where("board_item_id = ?", itemID)
-	if cursorAssignmentOrder != nil && cursorID != nil {
-		query = query.Where(
-			"(assignment_order > ? OR (assignment_order = ? AND id > ?))",
-			*cursorAssignmentOrder,
-			*cursorAssignmentOrder,
-			*cursorID,
-		)
+	if cursorID != nil {
+		query = query.Where("id > ?", *cursorID)
 	}
 	if err := query.
-		Order("assignment_order ASC, id ASC").
+		Order("id ASC").
 		Limit(limit + 1).
 		Find(&assignments).Error; err != nil {
 		return nil, err
@@ -2299,7 +2308,7 @@ func (s *Service) ListBoardItemAssignments(
 	nextCursor := ""
 	if hasMore && len(assignments) > 0 {
 		last := assignments[len(assignments)-1]
-		nextCursor = encodeThreadAssignmentCursor(last.AssignmentOrder, last.ID)
+		nextCursor = encodeAssignmentCursor(last.ID)
 	}
 
 	return &BoardItemAssignmentsResponse{
@@ -2313,7 +2322,6 @@ func (s *Service) ListBoardItemAssignments(
 func (s *Service) ListThreadAssignments(
 	threadID uint64,
 	limit int,
-	cursorAssignmentOrder *int,
 	cursorID *uint64,
 ) (*ThreadAssignmentsResponse, error) {
 	if limit <= 0 {
@@ -2325,16 +2333,11 @@ func (s *Service) ListThreadAssignments(
 
 	var assignments []model.ProjectTaskBoardItemAssignment
 	query := s.db.Where("thread_id = ?", threadID)
-	if cursorAssignmentOrder != nil && cursorID != nil {
-		query = query.Where(
-			"(assignment_order > ? OR (assignment_order = ? AND id > ?))",
-			*cursorAssignmentOrder,
-			*cursorAssignmentOrder,
-			*cursorID,
-		)
+	if cursorID != nil {
+		query = query.Where("id > ?", *cursorID)
 	}
 	if err := query.
-		Order("assignment_order ASC, id ASC").
+		Order("id ASC").
 		Limit(limit + 1).
 		Find(&assignments).Error; err != nil {
 		return nil, err
@@ -2348,7 +2351,7 @@ func (s *Service) ListThreadAssignments(
 	nextCursor := ""
 	if hasMore && len(assignments) > 0 {
 		last := assignments[len(assignments)-1]
-		nextCursor = encodeThreadAssignmentCursor(last.AssignmentOrder, last.ID)
+		nextCursor = encodeAssignmentCursor(last.ID)
 	}
 
 	return &ThreadAssignmentsResponse{

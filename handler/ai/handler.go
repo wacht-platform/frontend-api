@@ -465,30 +465,20 @@ func (h *Handler) ListBoardItemAssignments(c fiber.Ctx) error {
 	}
 
 	cursor := c.Query("cursor", "")
-	var cursorAssignmentOrder *int
 	var cursorID *uint64
 	if cursor != "" {
 		decoded, err := base64.RawURLEncoding.DecodeString(cursor)
 		if err != nil {
 			return handler.SendBadRequest(c, nil, "invalid cursor")
 		}
-		parts := strings.SplitN(string(decoded), "|", 2)
-		if len(parts) != 2 {
-			return handler.SendBadRequest(c, nil, "invalid cursor")
-		}
-		assignmentOrder, err := strconv.Atoi(parts[0])
+		assignmentID, err := strconv.ParseUint(string(decoded), 10, 64)
 		if err != nil {
 			return handler.SendBadRequest(c, nil, "invalid cursor")
 		}
-		assignmentID, err := strconv.ParseUint(parts[1], 10, 64)
-		if err != nil {
-			return handler.SendBadRequest(c, nil, "invalid cursor")
-		}
-		cursorAssignmentOrder = &assignmentOrder
 		cursorID = &assignmentID
 	}
 
-	assignments, err := h.service.ListBoardItemAssignments(itemID, limit, cursorAssignmentOrder, cursorID)
+	assignments, err := h.service.ListBoardItemAssignments(itemID, limit, cursorID)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
@@ -837,30 +827,20 @@ func (h *Handler) ListThreadAssignments(c fiber.Ctx) error {
 	}
 
 	cursor := c.Query("cursor", "")
-	var cursorAssignmentOrder *int
 	var cursorID *uint64
 	if cursor != "" {
 		decoded, err := base64.RawURLEncoding.DecodeString(cursor)
 		if err != nil {
 			return handler.SendBadRequest(c, nil, "invalid cursor")
 		}
-		parts := strings.SplitN(string(decoded), "|", 2)
-		if len(parts) != 2 {
-			return handler.SendBadRequest(c, nil, "invalid cursor")
-		}
-		assignmentOrder, err := strconv.Atoi(parts[0])
+		assignmentID, err := strconv.ParseUint(string(decoded), 10, 64)
 		if err != nil {
 			return handler.SendBadRequest(c, nil, "invalid cursor")
 		}
-		assignmentID, err := strconv.ParseUint(parts[1], 10, 64)
-		if err != nil {
-			return handler.SendBadRequest(c, nil, "invalid cursor")
-		}
-		cursorAssignmentOrder = &assignmentOrder
 		cursorID = &assignmentID
 	}
 
-	assignments, err := h.service.ListThreadAssignments(threadID, limit, cursorAssignmentOrder, cursorID)
+	assignments, err := h.service.ListThreadAssignments(threadID, limit, cursorID)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
