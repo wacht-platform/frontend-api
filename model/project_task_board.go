@@ -25,10 +25,12 @@ type ProjectTaskBoardItem struct {
 	Title            string               `json:"title" gorm:"not null"`
 	Description      *string              `json:"description,omitempty"`
 	Status           string               `json:"status" gorm:"not null"`
-	Priority         string               `json:"priority" gorm:"not null"`
 	AssignedThreadID *uint64              `json:"assigned_thread_id,omitempty,string" gorm:"column:assigned_thread_id"`
 	Metadata         json.RawMessage      `json:"metadata" gorm:"type:jsonb;not null"`
 	Schedule         *ProjectTaskSchedule `json:"schedule,omitempty" gorm:"-"`
+	ScheduleID       *uint64              `json:"schedule_id,omitempty,string" gorm:"column:schedule_id"`
+	ScheduledFor     *time.Time           `json:"scheduled_for,omitempty" gorm:"column:scheduled_for"`
+	FiredAt          *time.Time           `json:"fired_at,omitempty" gorm:"column:fired_at"`
 	CompletedAt      *time.Time           `json:"completed_at,omitempty"`
 	ArchivedAt       *time.Time           `json:"archived_at,omitempty"`
 	StateVersion     int64                `json:"state_version,string" gorm:"column:state_version;not null;default:1"`
@@ -61,12 +63,17 @@ func (ProjectTaskBoardItemAssignment) TableName() string {
 
 type ProjectTaskSchedule struct {
 	Model
-	TemplateBoardItemID uint64     `json:"template_board_item_id,string" gorm:"column:template_board_item_id;not null;uniqueIndex"`
-	Status              string     `json:"status" gorm:"not null"`
-	ScheduleKind        string     `json:"schedule_kind" gorm:"column:schedule_kind;not null"`
-	IntervalSeconds     *int64     `json:"interval_seconds,omitempty" gorm:"column:interval_seconds"`
-	NextRunAt           time.Time  `json:"next_run_at" gorm:"column:next_run_at;not null"`
-	LastEnqueuedAt      *time.Time `json:"last_enqueued_at,omitempty" gorm:"column:last_enqueued_at"`
+	BoardID         uint64          `json:"board_id,string" gorm:"column:board_id;not null;index"`
+	TaskKey         string          `json:"task_key" gorm:"column:task_key;not null"`
+	TemplatePayload json.RawMessage `json:"template_payload" gorm:"type:jsonb;column:template_payload;not null"`
+	State           json.RawMessage `json:"state" gorm:"type:jsonb;column:state;not null;default:'{}'"`
+	StateVersion    int64           `json:"state_version" gorm:"column:state_version;not null;default:0"`
+	Status          string          `json:"status" gorm:"not null"`
+	ScheduleKind    string          `json:"schedule_kind" gorm:"column:schedule_kind;not null"`
+	IntervalSeconds *int64          `json:"interval_seconds,omitempty" gorm:"column:interval_seconds"`
+	NextRunAt       time.Time       `json:"next_run_at" gorm:"column:next_run_at;not null"`
+	LastFiredAt     *time.Time      `json:"last_fired_at,omitempty" gorm:"column:last_fired_at"`
+	OverlapPolicy   string          `json:"overlap_policy" gorm:"column:overlap_policy;not null;default:skip"`
 }
 
 func (ProjectTaskSchedule) TableName() string { return "project_task_schedules" }

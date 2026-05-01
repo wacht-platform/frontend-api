@@ -386,9 +386,6 @@ func (h *Handler) CreateProjectBoardItem(c fiber.Ctx) error {
 	if value := strings.TrimSpace(c.FormValue("status")); value != "" {
 		req.Status = &value
 	}
-	if value := strings.TrimSpace(c.FormValue("priority")); value != "" {
-		req.Priority = &value
-	}
 	if value := strings.TrimSpace(c.FormValue("schedule_kind")); value != "" {
 		req.ScheduleKind = &value
 	}
@@ -539,9 +536,6 @@ func (h *Handler) UpdateBoardItem(c fiber.Ctx) error {
 	if value := strings.TrimSpace(c.FormValue("status")); value != "" {
 		req.Status = &value
 	}
-	if value := strings.TrimSpace(c.FormValue("priority")); value != "" {
-		req.Priority = &value
-	}
 	if value := strings.TrimSpace(c.FormValue("schedule_kind")); value != "" {
 		req.ScheduleKind = &value
 	}
@@ -591,6 +585,27 @@ func (h *Handler) ArchiveBoardItem(c fiber.Ctx) error {
 	item, err := h.service.ArchiveProjectBoardItem(deployment.ID, actorID, projectID, itemID)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, "Failed to archive task")
+	}
+	return handler.SendSuccess(c, item)
+}
+
+func (h *Handler) CancelBoardItem(c fiber.Ctx) error {
+	actorID, _, err := h.getActorScope(c)
+	if err != nil {
+		return err
+	}
+	projectID, err := parseIDParam(c, "project_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid project_id")
+	}
+	itemID, err := parseIDParam(c, "item_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid item_id")
+	}
+	deployment := handler.GetDeployment(c)
+	item, err := h.service.CancelProjectBoardItem(deployment.ID, actorID, projectID, itemID)
+	if err != nil {
+		return handler.SendInternalServerError(c, nil, "Failed to cancel task")
 	}
 	return handler.SendSuccess(c, item)
 }

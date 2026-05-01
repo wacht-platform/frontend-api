@@ -31,6 +31,7 @@ func setupAiRoutes(app *fiber.App) {
 	aiGroup.Get("/projects/:project_id/board/items/:item_id/filesystem/file", h.GetBoardItemTaskWorkspaceFileContent)
 	aiGroup.Post("/projects/:project_id/board/items/:item_id/update", h.UpdateBoardItem)
 	aiGroup.Post("/projects/:project_id/board/items/:item_id/archive", h.ArchiveBoardItem)
+	aiGroup.Post("/projects/:project_id/board/items/:item_id/cancel", h.CancelBoardItem)
 	aiGroup.Post("/projects/:project_id/board/items/:item_id/unarchive", h.UnarchiveBoardItem)
 	aiGroup.Get("/projects/:project_id/threads", h.ListProjectThreads)
 	aiGroup.Post("/projects/:project_id/threads", h.CreateProjectThread)

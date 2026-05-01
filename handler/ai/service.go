@@ -45,10 +45,6 @@ const (
 	threadPurposeCoordinator  = "coordinator"
 	threadPurposeExecution    = "execution"
 	threadPurposeReview       = "review"
-	taskPriorityUrgent        = "urgent"
-	taskPriorityHigh          = "high"
-	taskPriorityNeutral       = "neutral"
-	taskPriorityLow           = "low"
 	taskScheduleKindOnce      = "once"
 	taskScheduleKindInterval  = "interval"
 )
@@ -92,36 +88,40 @@ func parseTaskScheduleRequest(
 		return nil, nil
 	}
 	if scheduleKind == nil || nextRunAt == nil {
-		return nil, fmt.Errorf("schedule_kind and next_run_at are required together")
+		return nil, fmt.Errorf("Pick a schedule type and choose when the task should run.")
 	}
 	kind := strings.TrimSpace(*scheduleKind)
 	parsedNextRunAt, err := time.Parse(time.RFC3339, strings.TrimSpace(*nextRunAt))
 	if err != nil {
-		return nil, fmt.Errorf("invalid next_run_at: %w", err)
+		return nil, fmt.Errorf("The scheduled time isn't a valid date. Pick a date and time and try again.")
 	}
 	switch kind {
 	case taskScheduleKindOnce:
 		if intervalSeconds != nil {
-			return nil, fmt.Errorf("once schedules must not set interval_seconds")
+			return nil, fmt.Errorf("A one-off task can't have a repeat interval. Remove the interval to schedule a single run.")
 		}
 	case taskScheduleKindInterval:
 		if intervalSeconds == nil || *intervalSeconds <= 0 {
-			return nil, fmt.Errorf("interval schedules require interval_seconds > 0")
+			return nil, fmt.Errorf("A recurring task needs a repeat interval. Pick how often it should run.")
+		}
+		if *intervalSeconds < 600 {
+			return nil, fmt.Errorf("Recurring tasks must repeat at least every 10 minutes.")
 		}
 	default:
-		return nil, fmt.Errorf("unsupported schedule_kind")
+		return nil, fmt.Errorf("Pick either a one-off run or a recurring interval for this task.")
 	}
 	return &model.ProjectTaskSchedule{
 		Status:          "active",
 		ScheduleKind:    kind,
 		IntervalSeconds: intervalSeconds,
 		NextRunAt:       parsedNextRunAt,
+		OverlapPolicy:   "skip",
 	}, nil
 }
 
-func (s *Service) getProjectTaskSchedule(tx *gorm.DB, templateBoardItemID uint64) (*model.ProjectTaskSchedule, error) {
+func (s *Service) getProjectTaskSchedule(tx *gorm.DB, boardID uint64, taskKey string) (*model.ProjectTaskSchedule, error) {
 	var schedule model.ProjectTaskSchedule
-	err := tx.Where("template_board_item_id = ?", templateBoardItemID).First(&schedule).Error
+	err := tx.Where("board_id = ? AND task_key = ?", boardID, taskKey).First(&schedule).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
@@ -135,7 +135,7 @@ func (s *Service) attachProjectTaskSchedule(tx *gorm.DB, item *model.ProjectTask
 	if item == nil {
 		return nil
 	}
-	schedule, err := s.getProjectTaskSchedule(tx, item.ID)
+	schedule, err := s.getProjectTaskSchedule(tx, item.BoardID, item.TaskKey)
 	if err != nil {
 		return err
 	}
@@ -143,56 +143,100 @@ func (s *Service) attachProjectTaskSchedule(tx *gorm.DB, item *model.ProjectTask
 	return nil
 }
 
+type scheduleLookupKey struct {
+	boardID uint64
+	taskKey string
+}
+
 func (s *Service) attachProjectTaskSchedules(tx *gorm.DB, items []model.ProjectTaskBoardItem) error {
 	if len(items) == 0 {
 		return nil
 	}
 
-	ids := make([]uint64, 0, len(items))
+	boardIDSet := make(map[uint64]struct{})
+	taskKeys := make([]string, 0, len(items))
+	seenTaskKey := make(map[string]struct{})
 	for _, item := range items {
-		ids = append(ids, item.ID)
+		boardIDSet[item.BoardID] = struct{}{}
+		if _, seen := seenTaskKey[item.TaskKey]; !seen {
+			taskKeys = append(taskKeys, item.TaskKey)
+			seenTaskKey[item.TaskKey] = struct{}{}
+		}
+	}
+	boardIDs := make([]uint64, 0, len(boardIDSet))
+	for id := range boardIDSet {
+		boardIDs = append(boardIDs, id)
 	}
 
 	var schedules []model.ProjectTaskSchedule
-	if err := tx.Where("template_board_item_id IN ?", ids).Find(&schedules).Error; err != nil {
+	if err := tx.Where("board_id IN ? AND task_key IN ?", boardIDs, taskKeys).Find(&schedules).Error; err != nil {
 		return err
 	}
 
-	scheduleByTemplateID := make(map[uint64]*model.ProjectTaskSchedule, len(schedules))
+	scheduleByKey := make(map[scheduleLookupKey]*model.ProjectTaskSchedule, len(schedules))
 	for index := range schedules {
-		schedule := &schedules[index]
-		scheduleByTemplateID[schedule.TemplateBoardItemID] = schedule
+		sched := &schedules[index]
+		scheduleByKey[scheduleLookupKey{sched.BoardID, sched.TaskKey}] = sched
 	}
 
 	for index := range items {
-		items[index].Schedule = scheduleByTemplateID[items[index].ID]
+		items[index].Schedule = scheduleByKey[scheduleLookupKey{items[index].BoardID, items[index].TaskKey}]
 	}
 
 	return nil
 }
 
+func buildScheduleTemplatePayload(item *model.ProjectTaskBoardItem) (json.RawMessage, error) {
+	payload := map[string]any{
+		"title": item.Title,
+	}
+	if item.Description != nil {
+		payload["description"] = *item.Description
+	}
+	if len(item.Metadata) > 0 {
+		var metadata any
+		if err := json.Unmarshal(item.Metadata, &metadata); err == nil {
+			payload["metadata"] = metadata
+		}
+	}
+	return json.Marshal(payload)
+}
+
 func (s *Service) reconcileProjectTaskSchedule(
 	tx *gorm.DB,
-	templateBoardItemID uint64,
+	item *model.ProjectTaskBoardItem,
 	schedule *model.ProjectTaskSchedule,
 	clear bool,
 ) error {
 	if clear {
-		return tx.Where("template_board_item_id = ?", templateBoardItemID).
+		return tx.Where("board_id = ? AND task_key = ?", item.BoardID, item.TaskKey).
 			Delete(&model.ProjectTaskSchedule{}).Error
 	}
 	if schedule == nil {
 		return nil
 	}
 
-	existing, err := s.getProjectTaskSchedule(tx, templateBoardItemID)
+	payloadBytes, err := buildScheduleTemplatePayload(item)
+	if err != nil {
+		return err
+	}
+	schedule.BoardID = item.BoardID
+	schedule.TaskKey = item.TaskKey
+	schedule.TemplatePayload = payloadBytes
+
+	existing, err := s.getProjectTaskSchedule(tx, item.BoardID, item.TaskKey)
 	if err != nil {
 		return err
 	}
 
-	schedule.TemplateBoardItemID = templateBoardItemID
 	if existing == nil {
 		schedule.ID = idgen.NextID()
+		if schedule.OverlapPolicy == "" {
+			schedule.OverlapPolicy = "skip"
+		}
+		if len(schedule.State) == 0 {
+			schedule.State = json.RawMessage("{}")
+		}
 		return tx.Create(schedule).Error
 	}
 
@@ -203,6 +247,7 @@ func (s *Service) reconcileProjectTaskSchedule(
 			"schedule_kind":    schedule.ScheduleKind,
 			"interval_seconds": schedule.IntervalSeconds,
 			"next_run_at":      schedule.NextRunAt,
+			"template_payload": payloadBytes,
 		}).Error
 }
 
@@ -1482,23 +1527,6 @@ func buildTaskAttachmentEventBody(prefix string, attachments []UploadedTaskWorks
 	return &body
 }
 
-func normalizeTaskPriority(value *string) string {
-	if value == nil {
-		return taskPriorityNeutral
-	}
-
-	switch strings.ToLower(strings.TrimSpace(*value)) {
-	case taskPriorityUrgent:
-		return taskPriorityUrgent
-	case taskPriorityHigh:
-		return taskPriorityHigh
-	case taskPriorityLow:
-		return taskPriorityLow
-	default:
-		return taskPriorityNeutral
-	}
-}
-
 func matchesStatus(status string, values ...string) bool {
 	for _, value := range values {
 		if status == value {
@@ -1511,20 +1539,60 @@ func matchesStatus(status string, values ...string) bool {
 
 const eventLogWorkSubject = "worker.tasks.agent.event_log_work"
 
-func (s *Service) enqueueTaskRoutingEvent(tx *gorm.DB, deploymentID, coordinatorThreadID uint64, item *model.ProjectTaskBoardItem) error {
+const (
+	taskRoutingReasonCreated             = "task_created"
+	taskRoutingReasonUpdated             = "task_updated"
+	taskRoutingReasonAssignmentPreempted = "assignment_preempted"
+	taskRoutingReasonAssignmentCompleted = "assignment_completed"
+	taskRoutingReasonCancelled           = "task_cancelled"
+)
+
+type taskRoutingFieldChange struct {
+	Field string `json:"field"`
+	From  string `json:"from"`
+	To    string `json:"to"`
+}
+
+type taskRoutingContext struct {
+	Reason                     string
+	PreviousStatus             string
+	ChangedFields              []taskRoutingFieldChange
+	LastAssignmentResultStatus string
+}
+
+func (s *Service) enqueueTaskRoutingEvent(
+	tx *gorm.DB,
+	deploymentID, coordinatorThreadID uint64,
+	item *model.ProjectTaskBoardItem,
+	routing taskRoutingContext,
+) error {
 	eventLogID := idgen.NextID()
+	if routing.Reason == "" {
+		routing.Reason = taskRoutingReasonUpdated
+	}
 	summary := fmt.Sprintf(
-		"Coordinator received routing signal for task #%d '%s' (status=%s, priority=%s).",
-		item.ID, item.Title, item.Status, item.Priority,
+		"Coordinator received %s signal for task #%d '%s' (status=%s).",
+		routing.Reason, item.ID, item.Title, item.Status,
 	)
-	payload, err := json.Marshal(map[string]any{
+	payloadMap := map[string]any{
 		"event_log_id":   fmt.Sprintf("%d", eventLogID),
 		"deployment_id":  fmt.Sprintf("%d", deploymentID),
 		"thread_id":      fmt.Sprintf("%d", coordinatorThreadID),
 		"board_item_id":  fmt.Sprintf("%d", item.ID),
 		"kind":           "task_routing",
+		"routing_reason": routing.Reason,
 		"summary":        summary,
-	})
+	}
+	if routing.PreviousStatus != "" && routing.PreviousStatus != item.Status {
+		payloadMap["previous_status"] = routing.PreviousStatus
+	}
+	if len(routing.ChangedFields) > 0 {
+		payloadMap["changed_fields"] = routing.ChangedFields
+	}
+	if routing.LastAssignmentResultStatus != "" {
+		payloadMap["last_assignment_result_status"] = routing.LastAssignmentResultStatus
+	}
+	payload, err := json.Marshal(payloadMap)
 	if err != nil {
 		return err
 	}
@@ -1543,6 +1611,57 @@ func (s *Service) enqueueTaskRoutingEvent(tx *gorm.DB, deploymentID, coordinator
 		)
 		ON CONFLICT (idempotency_key) DO NOTHING
 	`, eventLogID, deploymentID, item.ID, payload, eventLogWorkSubject, idempotencyKey).Error
+}
+
+func (s *Service) preemptActiveBoardItemAssignment(tx *gorm.DB, boardItemID uint64) (bool, error) {
+	var assignment model.ProjectTaskBoardItemAssignment
+	err := tx.Where("board_item_id = ? AND status IN ?", boardItemID,
+		[]string{"claimed", "in_progress"}).
+		Order("created_at DESC").
+		First(&assignment).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	var eventLogIDStr string
+	if err := tx.Raw(`
+		SELECT id::text
+		FROM event_log
+		WHERE aggregate_type = 'assignment'
+		  AND aggregate_id = ?
+		  AND event_type = 'assignment_execution'
+		ORDER BY id DESC
+		LIMIT 1
+	`, assignment.ID).Scan(&eventLogIDStr).Error; err != nil {
+		return false, err
+	}
+
+	if eventLogIDStr != "" {
+		var eventLogID uint64
+		if _, err := fmt.Sscanf(eventLogIDStr, "%d", &eventLogID); err == nil {
+			if natsService := service.GetNATS(); natsService != nil {
+				_ = natsService.AdvanceEventLogWatchKey(context.Background(), eventLogID)
+			}
+		}
+	}
+
+	now := time.Now()
+	preemptedStatus := "preempted"
+	if err := tx.Model(&model.ProjectTaskBoardItemAssignment{}).
+		Where("id = ?", assignment.ID).
+		Updates(map[string]any{
+			"status":         "cancelled",
+			"result_status":  &preemptedStatus,
+			"completed_at":   &now,
+			"result_summary": stringPtr("Preempted by user edit/cancel."),
+		}).Error; err != nil {
+		return true, err
+	}
+
+	return true, nil
 }
 
 func (s *Service) nudgeEventLogDispatcher() {
@@ -1690,7 +1809,6 @@ func (s *Service) CreateProjectBoardItem(
 	if req.Status != nil && strings.TrimSpace(*req.Status) != "" {
 		status = strings.TrimSpace(*req.Status)
 	}
-	priority := normalizeTaskPriority(req.Priority)
 	schedule, err := parseTaskScheduleRequest(req.ScheduleKind, req.NextRunAt, req.IntervalSeconds)
 	if err != nil {
 		return nil, err
@@ -1707,7 +1825,6 @@ func (s *Service) CreateProjectBoardItem(
 		Title:            strings.TrimSpace(req.Title),
 		Description:      req.Description,
 		Status:           status,
-		Priority:         priority,
 		AssignedThreadID: assignedThreadID,
 		Metadata:         metadata,
 	}
@@ -1720,10 +1837,12 @@ func (s *Service) CreateProjectBoardItem(
 		if err := tx.Create(item).Error; err != nil {
 			return err
 		}
-		if err := s.reconcileProjectTaskSchedule(tx, item.ID, schedule, false); err != nil {
+		if err := s.reconcileProjectTaskSchedule(tx, item, schedule, false); err != nil {
 			return err
 		}
-		return s.enqueueTaskRoutingEvent(tx, deploymentID, *assignedThreadID, item)
+		return s.enqueueTaskRoutingEvent(tx, deploymentID, *assignedThreadID, item, taskRoutingContext{
+			Reason: taskRoutingReasonCreated,
+		})
 	}); err != nil {
 		return nil, err
 	}
@@ -1771,34 +1890,56 @@ func (s *Service) UpdateProjectBoardItem(
 		return nil, fmt.Errorf("clear_schedule cannot be combined with schedule fields")
 	}
 
+	originalStatus := item.Status
+	originalTitle := item.Title
+	var originalDescription string
+	if item.Description != nil {
+		originalDescription = *item.Description
+	}
+
 	updates := map[string]any{}
+	var changedFields []taskRoutingFieldChange
 
 	if req.Title != nil {
 		title := strings.TrimSpace(*req.Title)
-		updates["title"] = title
-		item.Title = title
+		if title != originalTitle {
+			updates["title"] = title
+			item.Title = title
+			changedFields = append(changedFields, taskRoutingFieldChange{
+				Field: "title", From: originalTitle, To: title,
+			})
+		}
 	}
 	if req.Description != nil {
-		updates["description"] = req.Description
-		item.Description = req.Description
+		newDescription := ""
+		if *req.Description != "" {
+			newDescription = *req.Description
+		}
+		if newDescription != originalDescription {
+			updates["description"] = req.Description
+			item.Description = req.Description
+			changedFields = append(changedFields, taskRoutingFieldChange{
+				Field: "description", From: originalDescription, To: newDescription,
+			})
+		}
 	}
 	if req.Status != nil && strings.TrimSpace(*req.Status) != "" {
 		status := strings.TrimSpace(*req.Status)
-		updates["status"] = status
-		item.Status = status
-		if status == "completed" {
-			now := time.Now()
-			updates["completed_at"] = &now
-			item.CompletedAt = &now
-		} else {
-			updates["completed_at"] = nil
-			item.CompletedAt = nil
+		if status != originalStatus {
+			updates["status"] = status
+			item.Status = status
+			if status == "completed" {
+				now := time.Now()
+				updates["completed_at"] = &now
+				item.CompletedAt = &now
+			} else {
+				updates["completed_at"] = nil
+				item.CompletedAt = nil
+			}
+			changedFields = append(changedFields, taskRoutingFieldChange{
+				Field: "status", From: originalStatus, To: status,
+			})
 		}
-	}
-	if req.Priority != nil {
-		priority := normalizeTaskPriority(req.Priority)
-		updates["priority"] = priority
-		item.Priority = priority
 	}
 	if len(attachments) > 0 {
 		metadata, err := mergeTaskBoardItemMetadata(item.Metadata, nil, attachments)
@@ -1816,16 +1957,44 @@ func (s *Service) UpdateProjectBoardItem(
 		return item, nil
 	}
 
+	contentChanged := false
+	for _, change := range changedFields {
+		if change.Field == "title" || change.Field == "description" {
+			contentChanged = true
+			break
+		}
+	}
+
 	enqueuedRouting := false
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&model.ProjectTaskBoardItem{}).Where("id = ?", itemID).Updates(updates).Error; err != nil {
 			return err
 		}
-		if err := s.reconcileProjectTaskSchedule(tx, item.ID, schedule, clearSchedule); err != nil {
+		if err := s.reconcileProjectTaskSchedule(tx, item, schedule, clearSchedule); err != nil {
 			return err
 		}
+
+		preempted := false
+		if contentChanged || (item.Status == "cancelled" && originalStatus != "cancelled") {
+			ok, err := s.preemptActiveBoardItemAssignment(tx, item.ID)
+			if err != nil {
+				return err
+			}
+			preempted = ok
+		}
+
 		if project.CoordinatorThreadID != nil {
-			if err := s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, item); err != nil {
+			reason := taskRoutingReasonUpdated
+			if item.Status == "cancelled" && originalStatus != "cancelled" {
+				reason = taskRoutingReasonCancelled
+			} else if preempted {
+				reason = taskRoutingReasonAssignmentPreempted
+			}
+			if err := s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, item, taskRoutingContext{
+				Reason:         reason,
+				PreviousStatus: originalStatus,
+				ChangedFields:  changedFields,
+			}); err != nil {
 				return err
 			}
 			enqueuedRouting = true
@@ -1847,6 +2016,74 @@ func (s *Service) UpdateProjectBoardItem(
 		return nil, err
 	}
 	return updatedItem, nil
+}
+
+func (s *Service) CancelProjectBoardItem(deploymentID, actorID, projectID, itemID uint64) (*model.ProjectTaskBoardItem, error) {
+	item, err := s.GetAuthorizedBoardItem(deploymentID, actorID, itemID, false)
+	if err != nil {
+		return nil, err
+	}
+	board, err := s.GetProjectBoardByID(deploymentID, actorID, item.BoardID)
+	if err != nil {
+		return nil, err
+	}
+	if board.ProjectID != projectID {
+		return nil, gorm.ErrRecordNotFound
+	}
+	project, err := s.GetActorProject(deploymentID, actorID, board.ProjectID)
+	if err != nil {
+		return nil, fmt.Errorf("project not found or access denied")
+	}
+
+	if item.Status == "cancelled" || item.Status == "completed" {
+		return item, nil
+	}
+
+	originalStatus := item.Status
+	now := time.Now()
+
+	enqueuedRouting := false
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.ProjectTaskBoardItem{}).
+			Where("id = ?", itemID).
+			Updates(map[string]any{
+				"status":       "cancelled",
+				"completed_at": &now,
+			}).Error; err != nil {
+			return err
+		}
+		item.Status = "cancelled"
+		item.CompletedAt = &now
+
+		if _, err := s.preemptActiveBoardItemAssignment(tx, item.ID); err != nil {
+			return err
+		}
+
+		if project.CoordinatorThreadID != nil {
+			if err := s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, item, taskRoutingContext{
+				Reason:         taskRoutingReasonCancelled,
+				PreviousStatus: originalStatus,
+				ChangedFields: []taskRoutingFieldChange{
+					{Field: "status", From: originalStatus, To: "cancelled"},
+				},
+			}); err != nil {
+				return err
+			}
+			enqueuedRouting = true
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	if enqueuedRouting {
+		s.nudgeEventLogDispatcher()
+	}
+
+	if err := s.attachProjectTaskSchedule(s.db, item); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 
 func (s *Service) ArchiveProjectBoardItem(deploymentID, actorID, projectID, itemID uint64) (*model.ProjectTaskBoardItem, error) {
@@ -1967,7 +2204,9 @@ func (s *Service) UnarchiveProjectBoardItem(deploymentID, actorID, projectID, it
 			return err
 		}
 		if project.CoordinatorThreadID != nil {
-			if err := s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, &item); err != nil {
+			if err := s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, &item, taskRoutingContext{
+				Reason: taskRoutingReasonUpdated,
+			}); err != nil {
 				return err
 			}
 			enqueuedRouting = true

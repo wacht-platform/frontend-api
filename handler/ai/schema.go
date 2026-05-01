@@ -89,7 +89,6 @@ type CreateProjectTaskBoardItemRequest struct {
 	Title           string  `form:"title"`
 	Description     *string `form:"description"`
 	Status          *string `form:"status"`
-	Priority        *string `form:"priority"`
 	ScheduleKind    *string `form:"schedule_kind"`
 	NextRunAt       *string `form:"next_run_at"`
 	IntervalSeconds *int64  `form:"interval_seconds"`
@@ -99,7 +98,6 @@ type UpdateProjectTaskBoardItemRequest struct {
 	Title           *string `form:"title"`
 	Description     *string `form:"description"`
 	Status          *string `form:"status"`
-	Priority        *string `form:"priority"`
 	ScheduleKind    *string `form:"schedule_kind"`
 	NextRunAt       *string `form:"next_run_at"`
 	IntervalSeconds *int64  `form:"interval_seconds"`

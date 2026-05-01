@@ -593,6 +593,25 @@ func (s *NatsService) AdvanceAgentExecutionToken(ctx context.Context, contextID 
 	return nil
 }
 
+// AdvanceEventLogWatchKey supersedes the watch key for a service-thread run
+// keyed by event_log_id. The platform-api executor reads from
+// `event_log_{eventLogID}` in the agent_execution_kv bucket; advancing it
+// preempts the in-flight run.
+func (s *NatsService) AdvanceEventLogWatchKey(ctx context.Context, eventLogID uint64) error {
+	kv, err := s.getAgentExecutionKV(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get execution token kv: %w", err)
+	}
+
+	token := fmt.Sprintf("%d", idgen.NextID())
+	key := fmt.Sprintf("event_log_%d", eventLogID)
+	if _, err := kv.Put(ctx, key, []byte(token)); err != nil {
+		return fmt.Errorf("failed to advance event_log watch key: %w", err)
+	}
+
+	return nil
+}
+
 func (s *NatsService) PublishWebhookDelivery(ctx context.Context, deliveryID, deploymentID uint64) error {
 	taskPayload := map[string]interface{}{
 		"delivery_id":   deliveryID,
