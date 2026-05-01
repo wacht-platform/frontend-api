@@ -2075,6 +2075,18 @@ func (s *Service) CancelProjectBoardItem(deploymentID, actorID, projectID, itemI
 			return err
 		}
 
+		if err := tx.Model(&model.ProjectTaskBoardItemAssignment{}).
+			Where("board_item_id = ? AND status IN ?", item.ID,
+				[]string{"pending", "available", "blocked"}).
+			Updates(map[string]any{
+				"status":         "cancelled",
+				"result_status":  stringPtr("task_cancelled"),
+				"result_summary": stringPtr("Task cancelled by user."),
+				"completed_at":   &now,
+			}).Error; err != nil {
+			return err
+		}
+
 		if project.CoordinatorThreadID != nil {
 			if err := s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, item, taskRoutingContext{
 				Reason:         taskRoutingReasonCancelled,
