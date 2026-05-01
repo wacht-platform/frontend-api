@@ -1536,7 +1536,6 @@ func matchesStatus(status string, values ...string) bool {
 	return false
 }
 
-
 const eventLogWorkSubject = "worker.tasks.agent.event_log_work"
 
 const (
@@ -2399,7 +2398,7 @@ func (s *Service) ListTaskGraphBundles(
 	}
 
 	if err := query.
-		Order("version DESC, created_at DESC").
+		Order("created_at DESC").
 		Limit(limit + 1).
 		Find(&graphs).Error; err != nil {
 		return nil, err
