@@ -1629,6 +1629,18 @@ func (s *Service) enqueueTaskRoutingEvent(
 	`, eventLogID, deploymentID, item.ID, payload, eventLogWorkSubject, idempotencyKey).Error
 }
 
+func (s *Service) suppressPendingRoutingForBoardItem(tx *gorm.DB, boardItemID uint64) error {
+	return tx.Exec(`
+		UPDATE event_log
+		SET publish_status = 'published',
+		    next_publish_at = NULL
+		WHERE aggregate_type = 'board_item'
+		  AND aggregate_id = ?
+		  AND event_type = 'task_routing'
+		  AND publish_status = 'pending'
+	`, boardItemID).Error
+}
+
 func (s *Service) preemptActiveBoardItemAssignment(tx *gorm.DB, boardItemID uint64) (bool, error) {
 	var assignment model.ProjectTaskBoardItemAssignment
 	err := tx.Where("board_item_id = ? AND status IN ?", boardItemID,
@@ -1999,11 +2011,13 @@ func (s *Service) UpdateProjectBoardItem(
 			preempted = ok
 		}
 
+		if item.Status == "cancelled" && originalStatus != "cancelled" {
+			return s.suppressPendingRoutingForBoardItem(tx, item.ID)
+		}
+
 		if project.CoordinatorThreadID != nil {
 			reason := taskRoutingReasonUpdated
-			if item.Status == "cancelled" && originalStatus != "cancelled" {
-				reason = taskRoutingReasonCancelled
-			} else if preempted {
+			if preempted {
 				reason = taskRoutingReasonAssignmentPreempted
 			}
 			if err := s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, item, taskRoutingContext{
@@ -2046,8 +2060,7 @@ func (s *Service) CancelProjectBoardItem(deploymentID, actorID, projectID, itemI
 	if board.ProjectID != projectID {
 		return nil, gorm.ErrRecordNotFound
 	}
-	project, err := s.GetActorProject(deploymentID, actorID, board.ProjectID)
-	if err != nil {
+	if _, err := s.GetActorProject(deploymentID, actorID, board.ProjectID); err != nil {
 		return nil, fmt.Errorf("project not found or access denied")
 	}
 
@@ -2055,7 +2068,6 @@ func (s *Service) CancelProjectBoardItem(deploymentID, actorID, projectID, itemI
 		return item, nil
 	}
 
-	originalStatus := item.Status
 	now := time.Now()
 
 	var pendingAskerThreadID uint64
@@ -2068,7 +2080,6 @@ func (s *Service) CancelProjectBoardItem(deploymentID, actorID, projectID, itemI
 		}
 	}
 
-	enqueuedRouting := false
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&model.ProjectTaskBoardItem{}).
 			Where("id = ?", itemID).
@@ -2105,25 +2116,9 @@ func (s *Service) CancelProjectBoardItem(deploymentID, actorID, projectID, itemI
 			return err
 		}
 
-		if project.CoordinatorThreadID != nil {
-			if err := s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, item, taskRoutingContext{
-				Reason:         taskRoutingReasonCancelled,
-				PreviousStatus: originalStatus,
-				ChangedFields: []taskRoutingFieldChange{
-					{Field: "status", From: originalStatus, To: "cancelled"},
-				},
-			}); err != nil {
-				return err
-			}
-			enqueuedRouting = true
-		}
-		return nil
+		return s.suppressPendingRoutingForBoardItem(tx, item.ID)
 	}); err != nil {
 		return nil, err
-	}
-
-	if enqueuedRouting {
-		s.nudgeEventLogDispatcher()
 	}
 
 	if err := s.attachProjectTaskSchedule(s.db, item); err != nil {
