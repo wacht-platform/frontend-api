@@ -77,3 +77,17 @@ type ProjectTaskSchedule struct {
 }
 
 func (ProjectTaskSchedule) TableName() string { return "project_task_schedules" }
+
+type ProjectTaskBoardItemComment struct {
+	Model
+	DeploymentID uint64          `json:"deployment_id,string" gorm:"not null;index"`
+	BoardItemID  uint64          `json:"board_item_id,string" gorm:"column:board_item_id;not null;index"`
+	ActorID      uint64          `json:"actor_id,string" gorm:"not null;index"`
+	Body         string          `json:"body" gorm:"not null"`
+	Metadata     json.RawMessage `json:"metadata" gorm:"type:jsonb;not null"`
+	ArchivedAt   *time.Time      `json:"archived_at,omitempty"`
+}
+
+func (ProjectTaskBoardItemComment) TableName() string {
+	return "project_task_board_item_comments"
+}

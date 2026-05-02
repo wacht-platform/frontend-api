@@ -1545,6 +1545,7 @@ const (
 	taskRoutingReasonAssignmentCompleted = "assignment_completed"
 	taskRoutingReasonCancelled           = "task_cancelled"
 	taskRoutingReasonUserResponded       = "user_responded"
+	taskRoutingReasonUserFeedback        = "user_feedback"
 )
 
 type taskRoutingFieldChange struct {
@@ -2557,6 +2558,117 @@ func (s *Service) UnarchiveProjectBoardItem(deploymentID, actorID, projectID, it
 		return nil, err
 	}
 	return &item, nil
+}
+
+func (s *Service) ListProjectBoardItemComments(
+	deploymentID, actorID, projectID, itemID uint64,
+) ([]model.ProjectTaskBoardItemComment, error) {
+	item, err := s.GetAuthorizedBoardItem(deploymentID, actorID, itemID, true)
+	if err != nil {
+		return nil, err
+	}
+	board, err := s.GetProjectBoardByID(deploymentID, actorID, item.BoardID)
+	if err != nil {
+		return nil, err
+	}
+	if board.ProjectID != projectID {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	var comments []model.ProjectTaskBoardItemComment
+	if err := s.db.
+		Where("board_item_id = ? AND archived_at IS NULL", item.ID).
+		Order("created_at ASC, id ASC").
+		Find(&comments).Error; err != nil {
+		return nil, err
+	}
+	return comments, nil
+}
+
+func (s *Service) CreateProjectBoardItemComment(
+	deploymentID, actorID, projectID, itemID uint64,
+	body string,
+	files []*multipart.FileHeader,
+) (*model.ProjectTaskBoardItemComment, error) {
+	body = strings.TrimSpace(body)
+	if body == "" && len(files) == 0 {
+		return nil, fmt.Errorf("comment body or attachments required")
+	}
+
+	item, err := s.GetAuthorizedBoardItem(deploymentID, actorID, itemID, false)
+	if err != nil {
+		return nil, err
+	}
+	board, err := s.GetProjectBoardByID(deploymentID, actorID, item.BoardID)
+	if err != nil {
+		return nil, err
+	}
+	if board.ProjectID != projectID {
+		return nil, gorm.ErrRecordNotFound
+	}
+	project, err := s.GetActorProject(deploymentID, actorID, board.ProjectID)
+	if err != nil {
+		return nil, fmt.Errorf("project not found or access denied")
+	}
+	if item.Status == "cancelled" || item.Status == "completed" {
+		return nil, fmt.Errorf("cannot comment on a %s task", item.Status)
+	}
+
+	attachments, err := uploadTaskWorkspaceFilesForTaskKey(deploymentID, board.ProjectID, item.TaskKey, files)
+	if err != nil {
+		return nil, err
+	}
+
+	metadata := json.RawMessage("{}")
+	if len(attachments) > 0 {
+		metaBytes, err := json.Marshal(map[string]any{"attachments": attachments})
+		if err != nil {
+			return nil, err
+		}
+		metadata = metaBytes
+	}
+
+	now := time.Now()
+	comment := &model.ProjectTaskBoardItemComment{
+		Model: model.Model{
+			ID:        idgen.NextID(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		DeploymentID: deploymentID,
+		BoardItemID:  item.ID,
+		ActorID:      actorID,
+		Body:         body,
+		Metadata:     metadata,
+	}
+
+	enqueuedRouting := false
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(comment).Error; err != nil {
+			return err
+		}
+
+		if _, err := s.preemptActiveBoardItemAssignment(tx, item.ID); err != nil {
+			return err
+		}
+
+		if project.CoordinatorThreadID != nil {
+			if err := s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, item, taskRoutingContext{
+				Reason: taskRoutingReasonUserFeedback,
+			}); err != nil {
+				return err
+			}
+			enqueuedRouting = true
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	if enqueuedRouting {
+		s.nudgeEventLogDispatcher()
+	}
+	return comment, nil
 }
 
 func (s *Service) GetBoardItemAssignment(assignmentID uint64) (*model.ProjectTaskBoardItemAssignment, error) {

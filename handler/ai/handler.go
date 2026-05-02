@@ -668,6 +668,56 @@ func (h *Handler) UnarchiveBoardItem(c fiber.Ctx) error {
 	return handler.SendSuccess(c, item)
 }
 
+func (h *Handler) ListBoardItemComments(c fiber.Ctx) error {
+	actorID, _, err := h.getActorScope(c)
+	if err != nil {
+		return err
+	}
+	projectID, err := parseIDParam(c, "project_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid project_id")
+	}
+	itemID, err := parseIDParam(c, "item_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid item_id")
+	}
+	deployment := handler.GetDeployment(c)
+	comments, err := h.service.ListProjectBoardItemComments(deployment.ID, actorID, projectID, itemID)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, err.Error())
+	}
+	return handler.SendSuccess(c, comments)
+}
+
+func (h *Handler) CreateBoardItemComment(c fiber.Ctx) error {
+	actorID, _, err := h.getActorScope(c)
+	if err != nil {
+		return err
+	}
+	projectID, err := parseIDParam(c, "project_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid project_id")
+	}
+	itemID, err := parseIDParam(c, "item_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid item_id")
+	}
+	body := strings.TrimSpace(c.FormValue("body"))
+	form, _ := c.MultipartForm()
+	var files []*multipart.FileHeader
+	if form != nil {
+		files = form.File["attachments"]
+	}
+	deployment := handler.GetDeployment(c)
+	comment, err := h.service.CreateProjectBoardItemComment(
+		deployment.ID, actorID, projectID, itemID, body, files,
+	)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, err.Error())
+	}
+	return handler.SendSuccess(c, comment)
+}
+
 func (h *Handler) ListProjectThreads(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
