@@ -2610,10 +2610,6 @@ func (s *Service) CreateProjectBoardItemComment(
 	if err != nil {
 		return nil, fmt.Errorf("project not found or access denied")
 	}
-	if item.Status == "cancelled" || item.Status == "completed" {
-		return nil, fmt.Errorf("cannot comment on a %s task", item.Status)
-	}
-
 	attachments, err := uploadTaskWorkspaceFilesForTaskKey(deploymentID, board.ProjectID, item.TaskKey, files)
 	if err != nil {
 		return nil, err
