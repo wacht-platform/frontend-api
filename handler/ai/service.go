@@ -2277,12 +2277,16 @@ func (s *Service) AnswerProjectBoardItemQuestion(
 
 	enqueuedRouting := false
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.ProjectTaskBoardItem{}).
-			Where("id = ?", item.ID).
-			Updates(map[string]any{
-				"pending_question": nil,
-				"updated_at":       &now,
-			}).Error; err != nil {
+		if err := tx.Exec(`
+			UPDATE project_task_board_items
+			SET pending_question = NULL,
+			    status = CASE
+			        WHEN status = 'needs_clarification' THEN 'in_progress'
+			        ELSE status
+			    END,
+			    updated_at = ?
+			WHERE id = ?
+		`, &now, item.ID).Error; err != nil {
 			return err
 		}
 
