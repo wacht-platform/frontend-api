@@ -80,12 +80,15 @@ func (ProjectTaskSchedule) TableName() string { return "project_task_schedules" 
 
 type ProjectTaskBoardItemComment struct {
 	Model
-	DeploymentID uint64          `json:"deployment_id,string" gorm:"not null;index"`
-	BoardItemID  uint64          `json:"board_item_id,string" gorm:"column:board_item_id;not null;index"`
-	ActorID      uint64          `json:"actor_id,string" gorm:"not null;index"`
-	Body         string          `json:"body" gorm:"not null"`
-	Metadata     json.RawMessage `json:"metadata" gorm:"type:jsonb;not null"`
-	ArchivedAt   *time.Time      `json:"archived_at,omitempty"`
+	DeploymentID         uint64          `json:"deployment_id,string" gorm:"not null;index"`
+	BoardItemID          uint64          `json:"board_item_id,string" gorm:"column:board_item_id;not null;index"`
+	ActorID              uint64          `json:"actor_id,string" gorm:"not null;index"`
+	Body                 string          `json:"body" gorm:"not null"`
+	Metadata             json.RawMessage `json:"metadata" gorm:"type:jsonb;not null"`
+	ArchivedAt           *time.Time      `json:"archived_at,omitempty"`
+	ResolvedAt           *time.Time      `json:"resolved_at,omitempty"`
+	ResolvedByThreadID   *uint64         `json:"resolved_by_thread_id,omitempty,string" gorm:"column:resolved_by_thread_id"`
+	ResolutionSummary    *string         `json:"resolution_summary,omitempty" gorm:"column:resolution_summary"`
 }
 
 func (ProjectTaskBoardItemComment) TableName() string {
