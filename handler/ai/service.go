@@ -119,9 +119,9 @@ func parseTaskScheduleRequest(
 	}, nil
 }
 
-func (s *Service) getProjectTaskSchedule(tx *gorm.DB, boardID uint64, taskKey string) (*model.ProjectTaskSchedule, error) {
+func (s *Service) getProjectTaskScheduleByID(tx *gorm.DB, scheduleID uint64) (*model.ProjectTaskSchedule, error) {
 	var schedule model.ProjectTaskSchedule
-	err := tx.Where("board_id = ? AND task_key = ?", boardID, taskKey).First(&schedule).Error
+	err := tx.Where("id = ?", scheduleID).First(&schedule).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
@@ -131,11 +131,18 @@ func (s *Service) getProjectTaskSchedule(tx *gorm.DB, boardID uint64, taskKey st
 	return &schedule, nil
 }
 
+func (s *Service) getProjectTaskScheduleForBoardItem(tx *gorm.DB, item *model.ProjectTaskBoardItem) (*model.ProjectTaskSchedule, error) {
+	if item == nil || item.ScheduleID == nil {
+		return nil, nil
+	}
+	return s.getProjectTaskScheduleByID(tx, *item.ScheduleID)
+}
+
 func (s *Service) attachProjectTaskSchedule(tx *gorm.DB, item *model.ProjectTaskBoardItem) error {
 	if item == nil {
 		return nil
 	}
-	schedule, err := s.getProjectTaskSchedule(tx, item.BoardID, item.TaskKey)
+	schedule, err := s.getProjectTaskScheduleForBoardItem(tx, item)
 	if err != nil {
 		return err
 	}
@@ -143,44 +150,41 @@ func (s *Service) attachProjectTaskSchedule(tx *gorm.DB, item *model.ProjectTask
 	return nil
 }
 
-type scheduleLookupKey struct {
-	boardID uint64
-	taskKey string
-}
-
 func (s *Service) attachProjectTaskSchedules(tx *gorm.DB, items []model.ProjectTaskBoardItem) error {
 	if len(items) == 0 {
 		return nil
 	}
 
-	boardIDSet := make(map[uint64]struct{})
-	taskKeys := make([]string, 0, len(items))
-	seenTaskKey := make(map[string]struct{})
+	scheduleIDSet := make(map[uint64]struct{})
 	for _, item := range items {
-		boardIDSet[item.BoardID] = struct{}{}
-		if _, seen := seenTaskKey[item.TaskKey]; !seen {
-			taskKeys = append(taskKeys, item.TaskKey)
-			seenTaskKey[item.TaskKey] = struct{}{}
+		if item.ScheduleID != nil {
+			scheduleIDSet[*item.ScheduleID] = struct{}{}
 		}
 	}
-	boardIDs := make([]uint64, 0, len(boardIDSet))
-	for id := range boardIDSet {
-		boardIDs = append(boardIDs, id)
+	if len(scheduleIDSet) == 0 {
+		return nil
+	}
+	scheduleIDs := make([]uint64, 0, len(scheduleIDSet))
+	for id := range scheduleIDSet {
+		scheduleIDs = append(scheduleIDs, id)
 	}
 
 	var schedules []model.ProjectTaskSchedule
-	if err := tx.Where("board_id IN ? AND task_key IN ?", boardIDs, taskKeys).Find(&schedules).Error; err != nil {
+	if err := tx.Where("id IN ?", scheduleIDs).Find(&schedules).Error; err != nil {
 		return err
 	}
 
-	scheduleByKey := make(map[scheduleLookupKey]*model.ProjectTaskSchedule, len(schedules))
+	scheduleByID := make(map[uint64]*model.ProjectTaskSchedule, len(schedules))
 	for index := range schedules {
 		sched := &schedules[index]
-		scheduleByKey[scheduleLookupKey{sched.BoardID, sched.TaskKey}] = sched
+		scheduleByID[sched.ID] = sched
 	}
 
 	for index := range items {
-		items[index].Schedule = scheduleByKey[scheduleLookupKey{items[index].BoardID, items[index].TaskKey}]
+		if items[index].ScheduleID == nil {
+			continue
+		}
+		items[index].Schedule = scheduleByID[*items[index].ScheduleID]
 	}
 
 	return nil
@@ -208,9 +212,21 @@ func (s *Service) reconcileProjectTaskSchedule(
 	schedule *model.ProjectTaskSchedule,
 	clear bool,
 ) error {
+	existing, err := s.getProjectTaskScheduleForBoardItem(tx, item)
+	if err != nil {
+		return err
+	}
+
 	if clear {
-		return tx.Where("board_id = ? AND task_key = ?", item.BoardID, item.TaskKey).
-			Delete(&model.ProjectTaskSchedule{}).Error
+		if existing == nil {
+			return nil
+		}
+		if err := tx.Where("id = ?", existing.ID).
+			Delete(&model.ProjectTaskSchedule{}).Error; err != nil {
+			return err
+		}
+		item.ScheduleID = nil
+		return nil
 	}
 	if schedule == nil {
 		return nil
@@ -224,11 +240,6 @@ func (s *Service) reconcileProjectTaskSchedule(
 	schedule.TaskKey = item.TaskKey
 	schedule.TemplatePayload = payloadBytes
 
-	existing, err := s.getProjectTaskSchedule(tx, item.BoardID, item.TaskKey)
-	if err != nil {
-		return err
-	}
-
 	if existing == nil {
 		schedule.ID = idgen.NextID()
 		if schedule.OverlapPolicy == "" {
@@ -237,7 +248,14 @@ func (s *Service) reconcileProjectTaskSchedule(
 		if len(schedule.State) == 0 {
 			schedule.State = json.RawMessage("{}")
 		}
-		return tx.Create(schedule).Error
+		if err := tx.Create(schedule).Error; err != nil {
+			return err
+		}
+		scheduleID := schedule.ID
+		item.ScheduleID = &scheduleID
+		return tx.Model(&model.ProjectTaskBoardItem{}).
+			Where("id = ?", item.ID).
+			Update("schedule_id", scheduleID).Error
 	}
 
 	return tx.Model(&model.ProjectTaskSchedule{}).
