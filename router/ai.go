@@ -33,6 +33,7 @@ func setupAiRoutes(app *fiber.App) {
 	aiGroup.Post("/projects/:project_id/board/items/:item_id/archive", h.ArchiveBoardItem)
 	aiGroup.Post("/projects/:project_id/board/items/:item_id/cancel", h.CancelBoardItem)
 	aiGroup.Post("/projects/:project_id/board/items/:item_id/answer", h.AnswerBoardItemQuestion)
+	aiGroup.Post("/projects/:project_id/board/items/:item_id/approval", h.ApproveBoardItemTool)
 	aiGroup.Post("/projects/:project_id/board/items/:item_id/unarchive", h.UnarchiveBoardItem)
 	aiGroup.Get("/projects/:project_id/board/items/:item_id/comments", h.ListBoardItemComments)
 	aiGroup.Post("/projects/:project_id/board/items/:item_id/comments", h.CreateBoardItemComment)

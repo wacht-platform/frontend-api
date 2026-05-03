@@ -2,6 +2,7 @@ package ai
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"mime/multipart"
 	"strconv"
@@ -620,6 +621,55 @@ func (h *Handler) AnswerThreadQuestion(c fiber.Ctx) error {
 	return handler.SendSuccess(c, fiber.Map{"ok": true})
 }
 
+func (h *Handler) ApproveBoardItemTool(c fiber.Ctx) error {
+	actorID, _, err := h.getActorScope(c)
+	if err != nil {
+		return err
+	}
+	projectID, err := parseIDParam(c, "project_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid project_id")
+	}
+	itemID, err := parseIDParam(c, "item_id")
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid item_id")
+	}
+	deployment := handler.GetDeployment(c)
+
+	requestMessageID := strings.TrimSpace(c.FormValue("request_message_id"))
+	if requestMessageID == "" {
+		return handler.SendBadRequest(c, nil, "request_message_id is required")
+	}
+	form, err := c.MultipartForm()
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid multipart body")
+	}
+	toolNames := form.Value["approval_tool_name"]
+	modes := form.Value["approval_mode"]
+	if len(toolNames) != len(modes) {
+		return handler.SendBadRequest(c, nil, "approval_tool_name and approval_mode counts must match")
+	}
+	approvals := make([]ApprovalSubmissionItem, 0, len(toolNames))
+	for i := range toolNames {
+		approvals = append(approvals, ApprovalSubmissionItem{
+			ToolName: strings.TrimSpace(toolNames[i]),
+			Mode:     strings.TrimSpace(modes[i]),
+		})
+	}
+	submission := ApprovalSubmission{
+		RequestMessageID: requestMessageID,
+		Approvals:        approvals,
+	}
+
+	item, err := h.service.ApproveProjectBoardItemTool(
+		deployment.ID, actorID, projectID, itemID, &submission,
+	)
+	if err != nil {
+		return handler.SendBadRequest(c, nil, err.Error())
+	}
+	return handler.SendSuccess(c, item)
+}
+
 func (h *Handler) AnswerBoardItemQuestion(c fiber.Ctx) error {
 	actorID, _, err := h.getActorScope(c)
 	if err != nil {
@@ -634,10 +684,32 @@ func (h *Handler) AnswerBoardItemQuestion(c fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Invalid item_id")
 	}
 	deployment := handler.GetDeployment(c)
-	var submission AnswerSubmission
-	if err := c.Bind().Body(&submission); err != nil {
-		return handler.SendBadRequest(c, nil, "Invalid request body")
+
+	form, err := c.MultipartForm()
+	if err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid multipart body")
 	}
+	questionIDs := form.Value["answer_question_id"]
+	values := form.Value["answer_value"]
+	if len(questionIDs) != len(values) {
+		return handler.SendBadRequest(c, nil, "answer_question_id and answer_value counts must match")
+	}
+	answers := make([]QuestionAnswer, 0, len(questionIDs))
+	for i := range questionIDs {
+		raw := strings.TrimSpace(values[i])
+		if raw == "" {
+			return handler.SendBadRequest(c, nil, "answer_value must not be empty")
+		}
+		if !json.Valid([]byte(raw)) {
+			return handler.SendBadRequest(c, nil, "answer_value must be a JSON-encoded value")
+		}
+		answers = append(answers, QuestionAnswer{
+			QuestionID: strings.TrimSpace(questionIDs[i]),
+			Value:      json.RawMessage(raw),
+		})
+	}
+	submission := AnswerSubmission{Answers: answers}
+
 	item, err := h.service.AnswerProjectBoardItemQuestion(
 		deployment.ID, actorID, projectID, itemID, &submission,
 	)

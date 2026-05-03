@@ -35,6 +35,7 @@ type ProjectTaskBoardItem struct {
 	ArchivedAt       *time.Time           `json:"archived_at,omitempty"`
 	StateVersion     int64                `json:"state_version,string" gorm:"column:state_version;not null;default:1"`
 	PendingQuestion  json.RawMessage      `json:"pending_question,omitempty" gorm:"type:jsonb;column:pending_question"`
+	PendingApproval  json.RawMessage      `json:"pending_approval,omitempty" gorm:"type:jsonb;column:pending_approval"`
 }
 
 func (ProjectTaskBoardItem) TableName() string { return "project_task_board_items" }

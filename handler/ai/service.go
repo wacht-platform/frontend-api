@@ -2666,6 +2666,15 @@ func (s *Service) CreateProjectBoardItemComment(
 			return err
 		}
 
+		if err := tx.Exec(`
+			UPDATE project_task_board_items
+			SET pending_approval = NULL,
+			    updated_at = ?
+			WHERE id = ?
+		`, &now, item.ID).Error; err != nil {
+			return err
+		}
+
 		if project.CoordinatorThreadID != nil {
 			if err := s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, item, taskRoutingContext{
 				Reason: taskRoutingReasonUserFeedback,
