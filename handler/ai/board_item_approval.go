@@ -158,7 +158,7 @@ func (s *Service) ApproveProjectBoardItemTool(
 		if err != nil {
 			return err
 		}
-		if err := s.enqueueAssignmentResumeEventForApproval(tx, deploymentID, assignment.ID, approvalsJSON); err != nil {
+		if err := s.enqueueAssignmentResumeEventForApproval(tx, deploymentID, assignment.ID, submission.RequestMessageID, approvalsJSON); err != nil {
 			return err
 		}
 		enqueuedRouting = true
@@ -221,6 +221,7 @@ func (s *Service) clearThreadPendingApproval(tx *gorm.DB, threadID uint64) error
 func (s *Service) enqueueAssignmentResumeEventForApproval(
 	tx *gorm.DB,
 	deploymentID, assignmentID uint64,
+	requestMessageID string,
 	approvalsJSON []byte,
 ) error {
 	var assignment model.ProjectTaskBoardItemAssignment
@@ -241,7 +242,7 @@ func (s *Service) enqueueAssignmentResumeEventForApproval(
 	if err != nil {
 		return err
 	}
-	idempotencyKey := fmt.Sprintf("assignment_execution_%d_resume_approval_%d", assignment.ID, eventLogID)
+	idempotencyKey := fmt.Sprintf("assignment_execution_%d_resume_approval_%s", assignment.ID, requestMessageID)
 	return tx.Exec(`
 		INSERT INTO event_log (
 			id, deployment_id,

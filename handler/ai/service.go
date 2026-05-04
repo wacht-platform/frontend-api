@@ -2439,17 +2439,13 @@ func (s *Service) enqueueAssignmentResumeEvent(
 
 func (s *Service) ArchiveProjectBoardItem(deploymentID, actorID, projectID, itemID uint64) (*model.ProjectTaskBoardItem, error) {
 	now := time.Now()
-	type archiveResultRow struct {
-		Item json.RawMessage `gorm:"column:item"`
-	}
-	var row archiveResultRow
+	var item model.ProjectTaskBoardItem
 
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		return tx.Raw(`
+		result := tx.Exec(`
 			WITH target AS (
 				SELECT
 					i.id,
-					i.assigned_thread_id,
 					EXISTS (
 						SELECT 1
 						FROM project_task_board_item_assignments a
@@ -2475,33 +2471,31 @@ func (s *Service) ArchiveProjectBoardItem(deploymentID, actorID, projectID, item
 						ELSE NULL
 					END
 				WHERE i.id = (SELECT id FROM target)
-				RETURNING i.*
-			),
-			cancelled_assignments AS (
-				UPDATE project_task_board_item_assignments a
-				SET
-					status = 'cancelled',
-					updated_at = ?
-				WHERE a.board_item_id = (SELECT id FROM target)
-					AND NOT (SELECT picked FROM target)
-					AND a.status IN ('pending', 'available')
-				RETURNING 1
+				RETURNING i.id
 			)
-			SELECT row_to_json(u) AS item
-			FROM updated_item u
-		`, itemID, deploymentID, actorID, projectID, now, now, now).Scan(&row).Error
+			UPDATE project_task_board_item_assignments a
+			SET
+				status = 'cancelled',
+				updated_at = ?
+			WHERE a.board_item_id = (SELECT id FROM target)
+				AND NOT (SELECT picked FROM target)
+				AND a.status IN ('pending', 'available')
+				AND EXISTS (SELECT 1 FROM updated_item)
+		`, itemID, deploymentID, actorID, projectID, now, now, now)
+		if result.Error != nil {
+			return result.Error
+		}
+		if err := tx.Where("id = ?", itemID).First(&item).Error; err != nil {
+			return err
+		}
+		if item.ArchivedAt == nil {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
 	}); err != nil {
 		return nil, err
 	}
 
-	if len(row.Item) == 0 {
-		return nil, gorm.ErrRecordNotFound
-	}
-
-	var item model.ProjectTaskBoardItem
-	if err := json.Unmarshal(row.Item, &item); err != nil {
-		return nil, err
-	}
 	return &item, nil
 }
 
@@ -2512,19 +2506,13 @@ func (s *Service) UnarchiveProjectBoardItem(deploymentID, actorID, projectID, it
 	}
 
 	now := time.Now()
-	type unarchiveResultRow struct {
-		Item json.RawMessage `gorm:"column:item"`
-	}
-	var row unarchiveResultRow
+	var item model.ProjectTaskBoardItem
 	enqueuedRouting := false
 
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Raw(`
+		result := tx.Exec(`
 			WITH target AS (
-				SELECT
-					i.id,
-					i.assigned_thread_id,
-					i.archived_at
+				SELECT i.id
 				FROM project_task_board_items i
 				INNER JOIN project_task_boards b ON b.id = i.board_id
 				WHERE i.id = ?
@@ -2533,25 +2521,20 @@ func (s *Service) UnarchiveProjectBoardItem(deploymentID, actorID, projectID, it
 					AND b.project_id = ?
 					AND i.archived_at IS NOT NULL
 				FOR UPDATE
-			),
-			updated_item AS (
-				UPDATE project_task_board_items i
-				SET
-					archived_at = NULL,
-					updated_at = ?
-				WHERE i.id = (SELECT id FROM target)
-				RETURNING i.*
 			)
-			SELECT row_to_json(u) AS item
-			FROM updated_item u
-		`, itemID, deploymentID, actorID, projectID, now).Scan(&row).Error; err != nil {
-			return err
+			UPDATE project_task_board_items i
+			SET
+				archived_at = NULL,
+				updated_at = ?
+			WHERE i.id = (SELECT id FROM target)
+		`, itemID, deploymentID, actorID, projectID, now)
+		if result.Error != nil {
+			return result.Error
 		}
-		if len(row.Item) == 0 {
+		if result.RowsAffected == 0 {
 			return gorm.ErrRecordNotFound
 		}
-		var item model.ProjectTaskBoardItem
-		if err := json.Unmarshal(row.Item, &item); err != nil {
+		if err := tx.Where("id = ?", itemID).First(&item).Error; err != nil {
 			return err
 		}
 		if project.CoordinatorThreadID != nil {
@@ -2571,10 +2554,6 @@ func (s *Service) UnarchiveProjectBoardItem(deploymentID, actorID, projectID, it
 		s.nudgeEventLogDispatcher()
 	}
 
-	var item model.ProjectTaskBoardItem
-	if err := json.Unmarshal(row.Item, &item); err != nil {
-		return nil, err
-	}
 	return &item, nil
 }
 
@@ -2613,7 +2592,7 @@ func (s *Service) CreateProjectBoardItemComment(
 		return nil, fmt.Errorf("comment body or attachments required")
 	}
 
-	item, err := s.GetAuthorizedBoardItem(deploymentID, actorID, itemID, false)
+	item, err := s.GetAuthorizedBoardItem(deploymentID, actorID, itemID, true)
 	if err != nil {
 		return nil, err
 	}
@@ -2675,7 +2654,7 @@ func (s *Service) CreateProjectBoardItemComment(
 			return err
 		}
 
-		if project.CoordinatorThreadID != nil {
+		if item.ArchivedAt == nil && project.CoordinatorThreadID != nil {
 			if err := s.enqueueTaskRoutingEvent(tx, deploymentID, *project.CoordinatorThreadID, item, taskRoutingContext{
 				Reason: taskRoutingReasonUserFeedback,
 			}); err != nil {
