@@ -38,7 +38,7 @@ func GetDeploymentByHost(host string) (*model.Deployment, error) {
 						'id', sc.id::text,
 						'created_at', to_char(sc.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
 						'updated_at', to_char(sc.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
-						'deployment_id', sc.deployment_id,
+						'deployment_id', sc.deployment_id::text,
 						'provider', sc.provider,
 						'enabled', sc.enabled
 					))
