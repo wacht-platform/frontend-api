@@ -160,7 +160,7 @@ type UITokenOverrides struct {
 
 type DeploymentUISettings struct {
 	Model
-	DeploymentID                           uint64            `json:"deployment_id"                               gorm:"not null;index"`
+	DeploymentID                           uint64            `json:"deployment_id,string"                        gorm:"not null;index"`
 	AppName                                string            `json:"app_name"                                    gorm:"not null"`
 	PrivacyPolicyURL                       string            `json:"privacy_policy_url"                          gorm:"not null"`
 	TosPageURL                             string            `json:"tos_page_url"                                gorm:"not null"`

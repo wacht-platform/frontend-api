@@ -551,7 +551,7 @@ type AuditAnalyticsResponse struct {
 }
 
 type KeyStatsItem struct {
-	KeyID         int64  `json:"key_id"`
+	KeyID         int64  `json:"key_id,string"`
 	KeyName       string `json:"key_name"`
 	TotalRequests int64  `json:"total_requests"`
 }

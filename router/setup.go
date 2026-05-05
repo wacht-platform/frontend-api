@@ -46,6 +46,9 @@ func setupMiddleware(app *fiber.App) {
 		Max:        20,
 		Expiration: 1 * time.Minute,
 		Storage:    middleware.NewNatsStorage(natsService),
+		Next: func(c fiber.Ctx) bool {
+			return c.Method() == fiber.MethodGet && c.Path() == "/session/token"
+		},
 		KeyGenerator: func(c fiber.Ctx) string {
 			now := time.Now()
 			return fmt.Sprintf("%s:%s:%d:%d", c.IP(), c.Path(), now.Hour(), now.Minute())

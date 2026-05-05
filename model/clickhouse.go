@@ -60,9 +60,9 @@ type WebhookEventTimeseriesRow struct {
 
 type ApiAuditLog struct {
 	RequestID     string    `ch:"request_id" json:"request_id"`
-	DeploymentID  int64     `ch:"deployment_id" json:"deployment_id"`
+	DeploymentID  int64     `ch:"deployment_id" json:"deployment_id,string"`
 	AppSlug       string    `ch:"app_slug" json:"app_slug"`
-	KeyID         int64     `ch:"key_id" json:"key_id"`
+	KeyID         int64     `ch:"key_id" json:"key_id,string"`
 	KeyName       string    `ch:"key_name" json:"key_name"`
 	Outcome       string    `ch:"outcome" json:"outcome"`
 	BlockedByRule *string   `ch:"blocked_by_rule" json:"blocked_by_rule,omitempty"`

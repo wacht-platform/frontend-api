@@ -110,7 +110,7 @@ type Deployment struct {
 	OrgRoles                  []OrganizationRole           `json:"-"`
 	EmailTemplates            *DeploymentEmailTemplate     `json:"email_templates"`
 	SmsTemplates              *DeploymentSmsTemplate       `json:"sms_templates"`
-	ProjectID                 uint64                       `json:"project_id"                  gorm:"not null"`
+	ProjectID                 uint64                       `json:"project_id,string"           gorm:"not null"`
 	Project                   Project                      `json:"-"`
 	Mode                      DeploymentMode               `json:"mode"                        gorm:"not null"`
 	KepPair                   *DeploymentKeyPair           `json:"key_pair"`

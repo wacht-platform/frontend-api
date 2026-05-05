@@ -384,5 +384,5 @@ type DeploymentAuthSettings struct {
 	SessionValidityPeriod  uint64                 `json:"session_validity_period"  gorm:"not null"`
 	SessionInactiveTimeout uint64                 `json:"session_inactive_timeout" gorm:"not null"`
 	MultiSessionSupport    MultiSessionSupport    `json:"multi_session_support"    gorm:"not null"`
-	DeploymentID           uint64                 `json:"deployment_id"            gorm:"not null;index"`
+	DeploymentID           uint64                 `json:"deployment_id,string"     gorm:"not null;index"`
 }
