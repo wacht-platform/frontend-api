@@ -153,3 +153,7 @@ is still in progress.
 
 Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-only).
 See [LICENSE.md](./LICENSE.md) for the full text.
+
+---
+
+<sub>* This README was AI-generated.</sub>
