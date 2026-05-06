@@ -208,6 +208,7 @@ func buildScheduleTemplatePayload(item *model.ProjectTaskBoardItem) (json.RawMes
 
 func (s *Service) reconcileProjectTaskSchedule(
 	tx *gorm.DB,
+	projectID uint64,
 	item *model.ProjectTaskBoardItem,
 	schedule *model.ProjectTaskSchedule,
 	clear bool,
@@ -245,9 +246,11 @@ func (s *Service) reconcileProjectTaskSchedule(
 		if schedule.OverlapPolicy == "" {
 			schedule.OverlapPolicy = "skip"
 		}
-		if len(schedule.State) == 0 {
-			schedule.State = json.RawMessage("{}")
+		mounts, err := buildImplicitScheduleMounts(projectID, schedule.ID)
+		if err != nil {
+			return err
 		}
+		schedule.Mounts = mounts
 		if err := tx.Create(schedule).Error; err != nil {
 			return err
 		}
@@ -267,6 +270,18 @@ func (s *Service) reconcileProjectTaskSchedule(
 			"next_run_at":      schedule.NextRunAt,
 			"template_payload": payloadBytes,
 		}).Error
+}
+
+func buildImplicitScheduleMounts(projectID, scheduleID uint64) (json.RawMessage, error) {
+	mounts := []map[string]any{
+		{
+			"mount_path":      "/shared/",
+			"s3_relative_key": fmt.Sprintf("%d/schedules/%d/", projectID, scheduleID),
+			"mode":            "rw",
+			"description":     "Persistent shared workspace for this recurring task. Read state at the start of each run and write any state you want to remember before you finish.",
+		},
+	}
+	return json.Marshal(mounts)
 }
 
 func optionalUint64(value uint64) *uint64 {
@@ -1884,7 +1899,7 @@ func (s *Service) CreateProjectBoardItem(
 		if err := tx.Create(item).Error; err != nil {
 			return err
 		}
-		if err := s.reconcileProjectTaskSchedule(tx, item, schedule, false); err != nil {
+		if err := s.reconcileProjectTaskSchedule(tx, projectID, item, schedule, false); err != nil {
 			return err
 		}
 		return s.enqueueTaskRoutingEvent(tx, deploymentID, *assignedThreadID, item, taskRoutingContext{
@@ -2017,7 +2032,7 @@ func (s *Service) UpdateProjectBoardItem(
 		if err := tx.Model(&model.ProjectTaskBoardItem{}).Where("id = ?", itemID).Updates(updates).Error; err != nil {
 			return err
 		}
-		if err := s.reconcileProjectTaskSchedule(tx, item, schedule, clearSchedule); err != nil {
+		if err := s.reconcileProjectTaskSchedule(tx, projectID, item, schedule, clearSchedule); err != nil {
 			return err
 		}
 

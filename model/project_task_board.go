@@ -36,6 +36,7 @@ type ProjectTaskBoardItem struct {
 	StateVersion     int64                `json:"state_version,string" gorm:"column:state_version;not null;default:1"`
 	PendingQuestion  json.RawMessage      `json:"pending_question,omitempty" gorm:"type:jsonb;column:pending_question"`
 	PendingApproval  json.RawMessage      `json:"pending_approval,omitempty" gorm:"type:jsonb;column:pending_approval"`
+	Mounts           json.RawMessage      `json:"mounts" gorm:"type:jsonb;column:mounts;not null;default:'[]'"`
 }
 
 func (ProjectTaskBoardItem) TableName() string { return "project_task_board_items" }
@@ -67,8 +68,7 @@ type ProjectTaskSchedule struct {
 	BoardID         uint64          `json:"board_id,string" gorm:"column:board_id;not null;index"`
 	TaskKey         string          `json:"task_key" gorm:"column:task_key;not null"`
 	TemplatePayload json.RawMessage `json:"template_payload" gorm:"type:jsonb;column:template_payload;not null"`
-	State           json.RawMessage `json:"state" gorm:"type:jsonb;column:state;not null;default:'{}'"`
-	StateVersion    int64           `json:"state_version" gorm:"column:state_version;not null;default:0"`
+	Mounts          json.RawMessage `json:"mounts" gorm:"type:jsonb;column:mounts;not null;default:'[]'"`
 	Status          string          `json:"status" gorm:"not null"`
 	ScheduleKind    string          `json:"schedule_kind" gorm:"column:schedule_kind;not null"`
 	IntervalSeconds *int64          `json:"interval_seconds,omitempty" gorm:"column:interval_seconds"`

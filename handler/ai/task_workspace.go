@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -54,6 +55,13 @@ type TaskWorkspaceFileEntry struct {
 type TaskWorkspaceListing struct {
 	Exists bool                     `json:"exists"`
 	Files  []TaskWorkspaceFileEntry `json:"files"`
+	Mounts []TaskWorkspaceMount     `json:"mounts,omitempty"`
+}
+
+type TaskWorkspaceMount struct {
+	MountPath   string  `json:"mount_path"`
+	Mode        string  `json:"mode"`
+	Description *string `json:"description,omitempty"`
 }
 
 type TaskWorkspaceFileContent struct {
@@ -723,7 +731,35 @@ func (s *Service) ListBoardItemTaskWorkspaceFiles(deploymentID, actorID, project
 		return nil, err
 	}
 
-	return listTaskWorkspaceFilesFromStorage(storage, deploymentID, board.ProjectID, item.TaskKey, relativePath)
+	listing, err := listTaskWorkspaceFilesFromStorage(storage, deploymentID, board.ProjectID, item.TaskKey, relativePath)
+	if err != nil {
+		return nil, err
+	}
+	listing.Mounts = parseBoardItemMounts(item.Mounts)
+	return listing, nil
+}
+
+func parseBoardItemMounts(raw json.RawMessage) []TaskWorkspaceMount {
+	if len(raw) == 0 {
+		return []TaskWorkspaceMount{}
+	}
+	var entries []struct {
+		MountPath   string  `json:"mount_path"`
+		Mode        string  `json:"mode"`
+		Description *string `json:"description,omitempty"`
+	}
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return []TaskWorkspaceMount{}
+	}
+	out := make([]TaskWorkspaceMount, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, TaskWorkspaceMount{
+			MountPath:   e.MountPath,
+			Mode:        e.Mode,
+			Description: e.Description,
+		})
+	}
+	return out
 }
 
 func (s *Service) GetBoardItemTaskWorkspaceFileContent(deploymentID, actorID, projectID, itemID uint64, relativePath string, includeArchived bool) (*TaskWorkspaceFileContent, error) {
