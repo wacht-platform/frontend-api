@@ -256,12 +256,24 @@ func (s *Service) reconcileProjectTaskSchedule(
 		}
 		scheduleID := schedule.ID
 		item.ScheduleID = &scheduleID
+		item.Mounts = mounts
 		return tx.Model(&model.ProjectTaskBoardItem{}).
 			Where("id = ?", item.ID).
-			Update("schedule_id", scheduleID).Error
+			Updates(map[string]any{
+				"schedule_id": scheduleID,
+				"mounts":      mounts,
+			}).Error
 	}
 
-	return tx.Model(&model.ProjectTaskSchedule{}).
+	mounts := existing.Mounts
+	if len(mounts) == 0 || string(mounts) == "null" || string(mounts) == "[]" {
+		mounts, err = buildImplicitScheduleMounts(projectID, existing.ID)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := tx.Model(&model.ProjectTaskSchedule{}).
 		Where("id = ?", existing.ID).
 		Updates(map[string]any{
 			"status":           "active",
@@ -269,6 +281,19 @@ func (s *Service) reconcileProjectTaskSchedule(
 			"interval_seconds": schedule.IntervalSeconds,
 			"next_run_at":      schedule.NextRunAt,
 			"template_payload": payloadBytes,
+			"mounts":           mounts,
+		}).Error; err != nil {
+		return err
+	}
+
+	scheduleID := existing.ID
+	item.ScheduleID = &scheduleID
+	item.Mounts = mounts
+	return tx.Model(&model.ProjectTaskBoardItem{}).
+		Where("id = ?", item.ID).
+		Updates(map[string]any{
+			"schedule_id": scheduleID,
+			"mounts":      mounts,
 		}).Error
 }
 
