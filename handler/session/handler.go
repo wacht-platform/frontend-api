@@ -495,6 +495,9 @@ func (h *Handler) GetToken(
 		tokenPermissions["organization"] = permissions
 
 		organizationID := session.ActiveSignin.ActiveOrganizationMembership.OrganizationID
+		if organizationID == 0 && session.ActiveSignin.ActiveOrganizationMembership.Organization != nil {
+			organizationID = session.ActiveSignin.ActiveOrganizationMembership.Organization.ID
+		}
 
 		if organizationID != 0 {
 			tok.Set("organization", strconv.FormatUint(organizationID, 10))
@@ -511,6 +514,9 @@ func (h *Handler) GetToken(
 		tokenPermissions["workspace"] = permissions
 
 		workspaceID := session.ActiveSignin.ActiveWorkspaceMembership.WorkspaceID
+		if workspaceID == 0 && session.ActiveSignin.ActiveWorkspaceMembership.Workspace != nil {
+			workspaceID = session.ActiveSignin.ActiveWorkspaceMembership.Workspace.ID
+		}
 
 		if workspaceID != 0 {
 			tok.Set("workspace", strconv.FormatUint(workspaceID, 10))
