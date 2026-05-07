@@ -494,10 +494,7 @@ func (h *Handler) GetToken(
 		permissions := slices.Collect(maps.Keys(permissionsMap))
 		tokenPermissions["organization"] = permissions
 
-		var organizationID uint64
-		if session.ActiveSignin.ActiveOrganizationMembership.Organization != nil {
-			organizationID = session.ActiveSignin.ActiveOrganizationMembership.OrganizationID
-		}
+		organizationID := session.ActiveSignin.ActiveOrganizationMembership.OrganizationID
 
 		if organizationID != 0 {
 			tok.Set("organization", strconv.FormatUint(organizationID, 10))
@@ -513,10 +510,7 @@ func (h *Handler) GetToken(
 		permissions := slices.Collect(maps.Keys(permissionsMap))
 		tokenPermissions["workspace"] = permissions
 
-		var workspaceID uint64
-		if session.ActiveSignin.ActiveWorkspaceMembership.Workspace != nil {
-			workspaceID = session.ActiveSignin.ActiveWorkspaceMembership.WorkspaceID
-		}
+		workspaceID := session.ActiveSignin.ActiveWorkspaceMembership.WorkspaceID
 
 		if workspaceID != 0 {
 			tok.Set("workspace", strconv.FormatUint(workspaceID, 10))
