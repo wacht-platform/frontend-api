@@ -21,9 +21,15 @@ import (
 )
 
 const (
-	sessionCookieName = "__session"
-	devSessionHeader  = "X-Development-Session"
-	sessionDuration   = 6 * time.Hour
+	sessionCookieName       = "__session"
+	authorizationHeader     = "Authorization"
+	nativeSessionHeader     = "X-Wacht-Session"
+	sessionTransportHeader  = "X-Wacht-Session-Transport"
+	devSessionHeader        = "X-Development-Session"
+	sessionTransportBearer  = "bearer"
+	sessionTransportHeaderV = "header"
+	sessionTransportNative  = "native"
+	sessionDuration         = 6 * time.Hour
 )
 
 func SetRequestPrelude(c fiber.Ctx) error {
@@ -78,12 +84,44 @@ func getSessionToken(c fiber.Ctx, host string) string {
 		return token
 	}
 
+	if token := bearerTokenFromAuthorization(c.Get(authorizationHeader)); token != "" {
+		return token
+	}
+
+	if token := strings.TrimSpace(c.Get(nativeSessionHeader)); token != "" {
+		return token
+	}
+
 	deployment, err := getDeploymentFromCacheOrDB(host)
 	if err == nil && !deployment.IsProduction() {
 		return c.Query("__dev_session__", "")
 	}
 
 	return ""
+}
+
+func bearerTokenFromAuthorization(value string) string {
+	fields := strings.Fields(value)
+	if len(fields) != 2 || !strings.EqualFold(fields[0], "Bearer") {
+		return ""
+	}
+	return fields[1]
+}
+
+func wantsHeaderSession(c fiber.Ctx) bool {
+	if bearerTokenFromAuthorization(c.Get(authorizationHeader)) != "" {
+		return true
+	}
+	if strings.TrimSpace(c.Get(nativeSessionHeader)) != "" {
+		return true
+	}
+
+	switch strings.ToLower(strings.TrimSpace(c.Get(sessionTransportHeader))) {
+	case sessionTransportBearer, sessionTransportHeaderV, sessionTransportNative:
+		return true
+	default:
+		return false
+	}
 }
 
 func getDeploymentFromCacheOrDB(host string) (*model.Deployment, error) {
@@ -173,6 +211,10 @@ func setSessionToken(c fiber.Ctx, token string, isProduction bool, deployment mo
 		})
 	} else {
 		c.Set(devSessionHeader, token)
+	}
+
+	if wantsHeaderSession(c) {
+		c.Set(nativeSessionHeader, token)
 	}
 }
 

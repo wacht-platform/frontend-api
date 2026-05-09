@@ -1087,6 +1087,15 @@ func (s *Service) SetAgentThreadArchived(deploymentID, actorID, threadID uint64,
 		return nil, err
 	}
 
+	if archived {
+		if err := s.db.Exec(
+			"DELETE FROM agent_thread_task_subscriptions WHERE thread_id = ?",
+			threadID,
+		).Error; err != nil {
+			return nil, err
+		}
+	}
+
 	return s.GetThread(deploymentID, actorID, threadID)
 }
 
@@ -1265,7 +1274,8 @@ func (s *Service) GetThreadMessages(
 
 	messagesQuery := s.db.Model(&model.Conversation{}).
 		Select("id, thread_id, execution_run_id, message_type, content - 'thought_signature' as content, timestamp, metadata, created_at, updated_at").
-		Where("thread_id = ?", threadID)
+		Where("thread_id = ?", threadID).
+		Where("message_type <> ?", "task_subscription_notification")
 
 	if beforeID != "" {
 		messagesQuery = messagesQuery.Where("id < ?", beforeID)
@@ -2071,7 +2081,13 @@ func (s *Service) UpdateProjectBoardItem(
 		}
 
 		if item.Status == "cancelled" && originalStatus != "cancelled" {
-			return s.suppressPendingRoutingForBoardItem(tx, item.ID)
+			if err := s.suppressPendingRoutingForBoardItem(tx, item.ID); err != nil {
+				return err
+			}
+			return tx.Exec(
+				"DELETE FROM agent_thread_task_subscriptions WHERE board_item_id = ?",
+				item.ID,
+			).Error
 		}
 
 		if project.CoordinatorThreadID != nil {
@@ -2175,7 +2191,13 @@ func (s *Service) CancelProjectBoardItem(deploymentID, actorID, projectID, itemI
 			return err
 		}
 
-		return s.suppressPendingRoutingForBoardItem(tx, item.ID)
+		if err := s.suppressPendingRoutingForBoardItem(tx, item.ID); err != nil {
+			return err
+		}
+		return tx.Exec(
+			"DELETE FROM agent_thread_task_subscriptions WHERE board_item_id = ?",
+			item.ID,
+		).Error
 	}); err != nil {
 		return nil, err
 	}
@@ -2530,6 +2552,12 @@ func (s *Service) ArchiveProjectBoardItem(deploymentID, actorID, projectID, item
 		}
 		if item.ArchivedAt == nil {
 			return gorm.ErrRecordNotFound
+		}
+		if err := tx.Exec(
+			"DELETE FROM agent_thread_task_subscriptions WHERE board_item_id = ?",
+			itemID,
+		).Error; err != nil {
+			return err
 		}
 		return nil
 	}); err != nil {
