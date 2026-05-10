@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -21,6 +22,7 @@ import (
 	"github.com/wacht-platform/frontend-api/utils"
 	"golang.org/x/oauth2"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // OIDCLogin initiates the OIDC authentication flow
@@ -175,6 +177,10 @@ func (h *Handler) OIDCCallback(c fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Invalid enterprise connection")
 	}
 
+	if connection.Domain == nil || !connection.Domain.Verified {
+		return handler.SendBadRequest(c, nil, "Enterprise connection is not bound to a verified domain")
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -253,6 +259,10 @@ func (h *Handler) OIDCCallback(c fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Email address not verified by identity provider")
 	}
 
+	if !emailMatchesConnectionDomain(userEmail, connection) {
+		return handler.SendBadRequest(c, nil, "Email domain does not match the verified domain bound to this enterprise connection")
+	}
+
 	firstName := claims.GivenName
 	lastName := claims.FamilyName
 
@@ -277,6 +287,16 @@ func (h *Handler) OIDCCallback(c fiber.Ctx) error {
 	var created bool
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
+		var lockedAttempt model.SignInAttempt
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", attempt.ID).
+			First(&lockedAttempt).Error; err != nil {
+			return err
+		}
+		if lockedAttempt.Completed {
+			return errAttemptAlreadyCompleted
+		}
+
 		var email model.UserEmailAddress
 		err := tx.Where("email_address = ? AND deployment_id = ?", userEmail, deployment.ID).
 			Preload("User").
@@ -346,6 +366,9 @@ func (h *Handler) OIDCCallback(c fiber.Ctx) error {
 	})
 
 	if err != nil {
+		if errors.Is(err, errAttemptAlreadyCompleted) {
+			return handler.SendBadRequest(c, nil, "Authentication attempt already completed")
+		}
 		// Check if this is a JIT provisioning error - redirect with error params to sign-in page
 		if strings.Contains(err.Error(), "JIT provisioning is disabled") {
 			// Redirect to sign-in page (not app root) so the error can be displayed
@@ -371,6 +394,11 @@ func (h *Handler) OIDCCallback(c fiber.Ctx) error {
 	h.service.TrackMAU(deployment.ID, user.ID)
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
+	if redirectURI != "" {
+		if err := validateSSORedirectURI(&deployment, redirectURI); err != nil {
+			redirectURI = ""
+		}
+	}
 	if redirectURI == "" {
 		redirectURI = deployment.UISettings.AfterSigninRedirectURL
 	}

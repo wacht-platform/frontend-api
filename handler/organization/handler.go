@@ -1915,21 +1915,23 @@ func (h *Handler) CreateEnterpriseConnection(c fiber.Ctx) error {
 		return handler.SendForbidden(c, nil, "Insufficient permissions")
 	}
 
+	if b.DomainID == 0 {
+		return handler.SendBadRequest(c, nil, "domain_id is required; an enterprise connection must be bound to a verified organization domain")
+	}
+
+	var domain model.OrganizationDomain
+	if err := database.Connection.
+		Where("id = ? AND organization_id = ? AND verified = true", b.DomainID, orgID).
+		First(&domain).Error; err != nil {
+		return handler.SendBadRequest(c, nil, "Domain must be verified before configuring SSO")
+	}
+
 	connection := model.EnterpriseConnection{
 		ID:             idgen.NextID(),
 		OrganizationID: getuint64(orgID),
 		DeploymentID:   d.ID,
 		Protocol:       b.Protocol,
-	}
-
-	if b.DomainID != 0 {
-		var domain model.OrganizationDomain
-		if err := database.Connection.
-			Where("id = ? AND organization_id = ? AND verified = true", b.DomainID, orgID).
-			First(&domain).Error; err != nil {
-			return handler.SendBadRequest(c, nil, "Domain must be verified before configuring SSO")
-		}
-		connection.DomainID = &b.DomainID
+		DomainID:       b.DomainID,
 	}
 
 	switch b.Protocol {
@@ -2012,7 +2014,16 @@ func (h *Handler) UpdateEnterpriseConnection(c fiber.Ctx) error {
 	}
 
 	if b.DomainID != nil {
-		connection.DomainID = b.DomainID
+		if *b.DomainID == 0 {
+			return handler.SendBadRequest(c, nil, "domain_id cannot be cleared; an enterprise connection must remain bound to a verified domain")
+		}
+		var domain model.OrganizationDomain
+		if err := database.Connection.
+			Where("id = ? AND organization_id = ? AND verified = true", *b.DomainID, orgID).
+			First(&domain).Error; err != nil {
+			return handler.SendBadRequest(c, nil, "Domain must be verified before configuring SSO")
+		}
+		connection.DomainID = *b.DomainID
 	}
 	if b.IdpEntityID != nil {
 		connection.IdpEntityID = *b.IdpEntityID

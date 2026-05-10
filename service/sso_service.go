@@ -36,6 +36,7 @@ func (s *SSOService) GetConnectionByDomain(domainID uint64) (*model.EnterpriseCo
 func (s *SSOService) GetConnectionByID(connectionID uint64) (*model.EnterpriseConnection, error) {
 	var conn model.EnterpriseConnection
 	err := database.Connection.
+		Preload("Domain").
 		Where("id = ?", connectionID).
 		First(&conn).Error
 	if err != nil {

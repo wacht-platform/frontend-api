@@ -12,7 +12,7 @@ type EnterpriseConnection struct {
 	UpdatedAt        time.Time           `gorm:"autoUpdateTime;not null"               json:"updated_at"`
 	OrganizationID   uint64              `gorm:"not null"                              json:"organization_id,string"`
 	DeploymentID     uint64              `gorm:"not null"                              json:"deployment_id,string"`
-	DomainID         *uint64             `                                             json:"domain_id,string"`
+	DomainID         uint64              `gorm:"not null"                              json:"domain_id,string"`
 	Domain           *OrganizationDomain `gorm:"foreignKey:DomainID"                   json:"domain,omitempty"`
 	Protocol         string              `gorm:"not null"                              json:"protocol"`
 	IdpEntityID      string              `                                             json:"idp_entity_id"`

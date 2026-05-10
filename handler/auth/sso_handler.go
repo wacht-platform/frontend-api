@@ -8,8 +8,10 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"math/big"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -23,8 +25,12 @@ import (
 	"github.com/wacht-platform/frontend-api/pkg/idgen"
 	"github.com/wacht-platform/frontend-api/service"
 	"github.com/wacht-platform/frontend-api/utils"
+	"golang.org/x/net/publicsuffix"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
+
+var errAttemptAlreadyCompleted = errors.New("authentication attempt already completed")
 
 func (h *Handler) SSOLogin(c fiber.Ctx) error {
 	connectionIDStr := c.Query("connection_id")
@@ -50,6 +56,16 @@ func (h *Handler) SSOLogin(c fiber.Ctx) error {
 
 	if connection.DeploymentID != deployment.ID {
 		return handler.SendBadRequest(c, nil, "Invalid enterprise connection for this deployment")
+	}
+
+	if connection.Domain == nil || !connection.Domain.Verified {
+		return handler.SendBadRequest(c, nil, "Enterprise connection is not bound to a verified domain")
+	}
+
+	if redirectURI != "" {
+		if err := validateSSORedirectURI(&deployment, redirectURI); err != nil {
+			return handler.SendBadRequest(c, nil, err.Error())
+		}
 	}
 
 	if connection.Protocol == "oidc" {
@@ -111,6 +127,10 @@ func (h *Handler) EnterpriseSSOCallback(c fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Invalid or expired authentication attempt")
 	}
 
+	if attempt.Completed {
+		return handler.SendBadRequest(c, nil, "Authentication attempt already completed")
+	}
+
 	var session model.Session
 	if err := database.Connection.Where("id = ?", attempt.SessionID).
 		Preload("Signins").
@@ -133,6 +153,10 @@ func (h *Handler) EnterpriseSSOCallback(c fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Invalid enterprise connection")
 	}
 
+	if connection.Domain == nil || !connection.Domain.Verified {
+		return handler.SendBadRequest(c, nil, "Enterprise connection is not bound to a verified domain")
+	}
+
 	var keypair model.DeploymentKeyPair
 	if err := database.Connection.Where("deployment_id = ?", deployment.ID).First(&keypair).Error; err != nil {
 		return handler.SendInternalServerError(c, err, "Failed to get deployment keypair")
@@ -153,10 +177,24 @@ func (h *Handler) EnterpriseSSOCallback(c fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "No email found in SAML assertion")
 	}
 
+	if !emailMatchesConnectionDomain(userEmail, connection) {
+		return handler.SendBadRequest(c, nil, "Email domain does not match the verified domain bound to this enterprise connection")
+	}
+
 	var user *model.User
 	var created bool
 
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
+		var lockedAttempt model.SignInAttempt
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", attempt.ID).
+			First(&lockedAttempt).Error; err != nil {
+			return err
+		}
+		if lockedAttempt.Completed {
+			return errAttemptAlreadyCompleted
+		}
+
 		var email model.UserEmailAddress
 		err := tx.Where("email_address = ? AND deployment_id = ?", userEmail, deployment.ID).
 			Preload("User").
@@ -226,6 +264,9 @@ func (h *Handler) EnterpriseSSOCallback(c fiber.Ctx) error {
 	})
 
 	if err != nil {
+		if errors.Is(err, errAttemptAlreadyCompleted) {
+			return handler.SendBadRequest(c, nil, "Authentication attempt already completed")
+		}
 		// Check if this is a JIT provisioning error - redirect with error params to sign-in page
 		if strings.Contains(err.Error(), "JIT provisioning is disabled") {
 			// Redirect to sign-in page (not app root) so the error can be displayed
@@ -251,6 +292,11 @@ func (h *Handler) EnterpriseSSOCallback(c fiber.Ctx) error {
 	h.service.TrackMAU(deployment.ID, user.ID)
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
+	if redirectURI != "" {
+		if err := validateSSORedirectURI(&deployment, redirectURI); err != nil {
+			redirectURI = ""
+		}
+	}
 	if redirectURI == "" {
 		redirectURI = deployment.UISettings.AfterSigninRedirectURL
 	}
@@ -491,6 +537,65 @@ func validateSAMLResponse(
 	}
 
 	return assertion, nil
+}
+
+func emailMatchesConnectionDomain(email string, connection *model.EnterpriseConnection) bool {
+	if connection == nil || connection.Domain == nil || !connection.Domain.Verified {
+		return false
+	}
+	at := strings.LastIndexByte(email, '@')
+	if at <= 0 || at == len(email)-1 {
+		return false
+	}
+	emailDomain := strings.ToLower(strings.TrimSpace(email[at+1:]))
+	connectionDomain := strings.ToLower(strings.TrimSpace(connection.Domain.Fqdn))
+	return emailDomain != "" && emailDomain == connectionDomain
+}
+
+func validateSSORedirectURI(deployment *model.Deployment, redirectURI string) error {
+	value := strings.TrimSpace(redirectURI)
+	if value == "" {
+		return nil
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || !parsed.IsAbs() || parsed.Host == "" {
+		return fmt.Errorf("redirect_uri must be an absolute URL")
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "https" && scheme != "http" {
+		return fmt.Errorf("redirect_uri must use http or https")
+	}
+
+	if deployment == nil || !deployment.IsProduction() {
+		return nil
+	}
+	if scheme != "https" {
+		return fmt.Errorf("redirect_uri must use https in production")
+	}
+	if deployment.FrontendHost == "" {
+		return fmt.Errorf("deployment frontend host is not configured")
+	}
+
+	redirectHost := strings.ToLower(parsed.Hostname())
+	frontendHost := strings.ToLower(strings.TrimSpace(deployment.FrontendHost))
+	if i := strings.IndexByte(frontendHost, '/'); i >= 0 {
+		frontendHost = frontendHost[:i]
+	}
+	if h, _, splitErr := net.SplitHostPort(frontendHost); splitErr == nil {
+		frontendHost = h
+	}
+	if redirectHost == frontendHost {
+		return nil
+	}
+	frontendSite, fErr := publicsuffix.EffectiveTLDPlusOne(frontendHost)
+	redirectSite, rErr := publicsuffix.EffectiveTLDPlusOne(redirectHost)
+	if fErr != nil || rErr != nil {
+		return fmt.Errorf("redirect_uri host must match deployment frontend domain")
+	}
+	if strings.EqualFold(frontendSite, redirectSite) {
+		return nil
+	}
+	return fmt.Errorf("redirect_uri host must match deployment frontend domain")
 }
 
 func encodeRelayState(attemptID uint64, redirectURI string, deploymentID uint64) string {
