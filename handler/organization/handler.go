@@ -1152,7 +1152,6 @@ func (h *Handler) AcceptInvitation(
 		}
 	}
 
-	deployment := handler.GetDeployment(c)
 	utils.PublishWebhookEvent(
 		deployment.ID,
 		"organization.invitation.accepted",
