@@ -525,7 +525,7 @@ func resolveEffectiveScopes(
 func scopeAllowsResourceType(def oauthConsentScopeDefinition, resourceType string) bool {
 	category := strings.ToLower(strings.TrimSpace(def.Category))
 	if category == "" {
-		return false
+		return true
 	}
 	return category == resourceType
 }
