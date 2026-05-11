@@ -607,8 +607,10 @@ func (h *Handler) AddWorkspaceMemberRole(c fiber.Ctx) error {
 	}
 
 	var role model.WorkspaceRole
-	if err := database.Connection.First(&role, roleIDToAdd).Error; err != nil {
-		return handler.SendNotFound(c, nil, "Role not found.")
+	if err := database.Connection.
+		Where("id = ? AND workspace_id = ?", roleIDToAdd, workspaceID).
+		First(&role).Error; err != nil {
+		return handler.SendNotFound(c, nil, "Role not found in this workspace.")
 	}
 
 	var targetMembership model.WorkspaceMembership
@@ -760,8 +762,13 @@ func (h *Handler) UpdateWorkspace(c fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
+	deployment := handler.GetDeployment(c)
+
 	var workspace model.Workspace
-	if err := database.Connection.Preload("Segments", "deleted_at IS NULL").First(&workspace, workspaceID).Error; err != nil {
+	if err := database.Connection.
+		Preload("Segments", "deleted_at IS NULL").
+		Where("id = ? AND deployment_id = ?", workspaceID, deployment.ID).
+		First(&workspace).Error; err != nil {
 		return handler.SendNotFound(c, nil, "Workspace not found")
 	}
 
@@ -814,7 +821,6 @@ func (h *Handler) UpdateWorkspace(c fiber.Ctx) error {
 		)
 	}
 
-	deployment := handler.GetDeployment(c)
 	utils.PublishWebhookEvent(deployment.ID, "workspace.updated", workspace.ID, "workspace")
 
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
@@ -846,8 +852,19 @@ func (h *Handler) DeleteWorkspace(c fiber.Ctx) error {
 		)
 	}
 
+	deployment := handler.GetDeployment(c)
+
+	var workspace model.Workspace
+	if err := database.Connection.
+		Where("id = ? AND deployment_id = ?", workspaceID, deployment.ID).
+		First(&workspace).Error; err != nil {
+		return handler.SendNotFound(c, nil, "Workspace not found")
+	}
+
 	var orgUsingThisAsAutoAssign model.Organization
-	if err := database.Connection.Where("auto_assigned_workspace_id = ?", workspaceID).First(&orgUsingThisAsAutoAssign).Error; err == nil {
+	if err := database.Connection.
+		Where("auto_assigned_workspace_id = ? AND deployment_id = ?", workspaceID, deployment.ID).
+		First(&orgUsingThisAsAutoAssign).Error; err == nil {
 		return handler.SendForbidden(
 			c,
 			nil,
@@ -860,8 +877,6 @@ func (h *Handler) DeleteWorkspace(c fiber.Ctx) error {
 		log.Printf("Error checking if workspace %d is an auto-assigned workspace: %v", workspaceID, err)
 		return handler.SendInternalServerError(c, err, "Failed to verify workspace status before deletion.")
 	}
-
-	deployment := handler.GetDeployment(c)
 
 	if err := database.Connection.Exec(`
 		WITH

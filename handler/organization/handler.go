@@ -894,9 +894,16 @@ func (h *Handler) AcceptInvitation(
 		return handler.SendSuccess(c, response)
 	}
 
+	deployment := handler.GetDeployment(c)
+
 	var org model.Organization
-	if err := database.Connection.First(&org, invitation.OrganizationID).Error; err != nil {
-		return handler.SendInternalServerError(c, err, "Failed to fetch organization")
+	if err := database.Connection.
+		Where("id = ? AND deployment_id = ?", invitation.OrganizationID, deployment.ID).
+		First(&org).Error; err != nil {
+		return handler.SendBadRequest(c, nil, "Invalid or expired invitation", handler.Error{
+			Code:    handler.ErrCodeInvalidInvitationToken,
+			Message: "The invitation token is invalid for this deployment",
+		})
 	}
 
 	var emailAddress model.UserEmailAddress
@@ -1239,10 +1246,12 @@ func (h *Handler) AddMemberRole(
 	var role model.OrganizationRole
 	var assignedMember model.OrganizationMembership
 
-	err = database.Connection.Where("id = ?", roleID).First(&role).Error
+	err = database.Connection.
+		Where("id = ? AND organization_id = ?", roleID, orgID).
+		First(&role).Error
 	if err != nil {
 		log.Println(err)
-		return handler.SendInternalServerError(c, err, "Failed to add role")
+		return handler.SendNotFound(c, err, "Role not found in this organization.")
 	}
 
 	err = database.Connection.
