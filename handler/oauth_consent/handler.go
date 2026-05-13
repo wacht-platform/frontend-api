@@ -120,7 +120,7 @@ func (h *Handler) Details(c fiber.Ctx) error {
 	// exact scopes to this client for an unambiguous resource, skip the UI
 	// (unless the RP asked for `prompt=consent`). Mirrors what Google/Auth0
 	// do — second-time RPs feel seamless to end users.
-	defaultResource := pickAutoApproveResource(handoff.Resource, resourceOptions)
+	defaultResource := pickAutoApproveResource(handoff.Resource, handoff.Scopes, resourceOptions)
 	autoApproveResource := ""
 	grantCovers := false
 	if defaultResource != "" {
@@ -158,15 +158,49 @@ func (h *Handler) Details(c fiber.Ctx) error {
 	})
 }
 
+// OIDC standard scopes — pure identity claims, no tenant data.
+var oidcStandardScopes = map[string]struct{}{
+	"openid":         {},
+	"profile":        {},
+	"email":          {},
+	"offline_access": {},
+}
+
+func isIdentityOnlyRequest(scopes []string) bool {
+	if len(scopes) == 0 {
+		return false
+	}
+	for _, s := range scopes {
+		if _, ok := oidcStandardScopes[s]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 // pickAutoApproveResource returns the canonical resource URN to fast-path
-// against, or "" when the consent flow must defer to the user. We can only
-// auto-approve when there's exactly one resource we'd act on — either
-// because the RP explicitly narrowed it via `resource`, or because the
-// session has a single accessible option.
-func pickAutoApproveResource(rpResource *string, options []consentResourceOption) string {
+// against, or "" when the consent flow must defer to the user.
+//
+// Priority:
+//  1. RP-supplied `resource` parameter (RFC 8707) — explicit narrowing.
+//  2. Identity-only OIDC requests — always the personal user resource;
+//     workspace/org pickers don't apply to pure-identity scopes.
+//  3. Exactly one accessible option — unambiguous, safe to auto-pick.
+func pickAutoApproveResource(
+	rpResource *string,
+	scopes []string,
+	options []consentResourceOption,
+) string {
 	if rpResource != nil {
 		if trimmed := strings.TrimSpace(*rpResource); isCanonicalTenantResource(trimmed) {
 			return trimmed
+		}
+	}
+	if isIdentityOnlyRequest(scopes) {
+		for _, opt := range options {
+			if opt.Type == "user" {
+				return opt.Value
+			}
 		}
 	}
 	if len(options) == 1 {
