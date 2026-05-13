@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -1948,15 +1949,24 @@ func (h *Handler) CreateEnterpriseConnection(c fiber.Ctx) error {
 		connection.IdpSSOURL = b.IdpSSOURL
 		connection.IdpCertificate = b.IdpCertificate
 	case "oidc":
-		if b.OIDCClientID != "" {
-			connection.OIDCClientID = &b.OIDCClientID
+		issuerURL := strings.TrimSpace(b.OIDCIssuerURL)
+		clientID := strings.TrimSpace(b.OIDCClientID)
+		clientSecret := strings.TrimSpace(b.OIDCClientSecret)
+		if issuerURL == "" {
+			return handler.SendBadRequest(c, nil, "oidc_issuer_url is required for OIDC enterprise connections")
 		}
-		if b.OIDCClientSecret != "" {
-			connection.OIDCClientSecret = &b.OIDCClientSecret
+		if clientID == "" {
+			return handler.SendBadRequest(c, nil, "oidc_client_id is required for OIDC enterprise connections")
 		}
-		if b.OIDCIssuerURL != "" {
-			connection.OIDCIssuerURL = &b.OIDCIssuerURL
+		canonicalIssuer, err := normalizeOIDCIssuerURL(issuerURL)
+		if err != nil {
+			return handler.SendBadRequest(c, nil, err.Error())
 		}
+		connection.OIDCClientID = &clientID
+		if clientSecret != "" {
+			connection.OIDCClientSecret = &clientSecret
+		}
+		connection.OIDCIssuerURL = &canonicalIssuer
 		if b.OIDCScopes != "" {
 			connection.OIDCScopes = &b.OIDCScopes
 		} else {
@@ -2044,13 +2054,30 @@ func (h *Handler) UpdateEnterpriseConnection(c fiber.Ctx) error {
 	}
 
 	if b.OIDCClientID != nil {
-		connection.OIDCClientID = b.OIDCClientID
+		trimmed := strings.TrimSpace(*b.OIDCClientID)
+		if connection.Protocol == "oidc" && trimmed == "" {
+			return handler.SendBadRequest(c, nil, "oidc_client_id cannot be cleared on an OIDC connection")
+		}
+		if trimmed != "" {
+			connection.OIDCClientID = &trimmed
+		}
 	}
 	if b.OIDCClientSecret != nil && *b.OIDCClientSecret != "" {
-		connection.OIDCClientSecret = b.OIDCClientSecret
+		trimmed := strings.TrimSpace(*b.OIDCClientSecret)
+		connection.OIDCClientSecret = &trimmed
 	}
 	if b.OIDCIssuerURL != nil {
-		connection.OIDCIssuerURL = b.OIDCIssuerURL
+		trimmed := strings.TrimSpace(*b.OIDCIssuerURL)
+		if connection.Protocol == "oidc" && trimmed == "" {
+			return handler.SendBadRequest(c, nil, "oidc_issuer_url cannot be cleared on an OIDC connection")
+		}
+		if trimmed != "" {
+			canonical, err := normalizeOIDCIssuerURL(trimmed)
+			if err != nil {
+				return handler.SendBadRequest(c, nil, err.Error())
+			}
+			connection.OIDCIssuerURL = &canonical
+		}
 	}
 	if b.OIDCScopes != nil {
 		connection.OIDCScopes = b.OIDCScopes
@@ -2256,6 +2283,20 @@ func validateSAMLConfig(certificate string, ssoURL string, result TestConnection
 	}
 
 	return result
+}
+
+// Mirrors platform-api's enterprise OIDC issuer normalization: trim, require
+// http/https, strip trailing slash. Same canonical form on both sides means
+// frontend-api can't save a connection that platform-api rejects.
+func normalizeOIDCIssuerURL(raw string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Host == "" {
+		return "", fmt.Errorf("oidc_issuer_url is not a valid URL")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", fmt.Errorf("oidc_issuer_url scheme %q is not supported; must be http or https", parsed.Scheme)
+	}
+	return strings.TrimRight(parsed.String(), "/"), nil
 }
 
 func validateOIDCConfig(issuerURL string, result TestConnectionResult) TestConnectionResult {

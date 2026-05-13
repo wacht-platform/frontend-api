@@ -63,6 +63,7 @@ func (h *Handler) Init(c fiber.Ctx) error {
 	consentURL := buildFrontendConsentURL(
 		deployment.FrontendHost,
 		deployment.IsProduction(),
+		handoffID,
 	)
 
 	if !deployment.IsProduction() {
@@ -115,18 +116,97 @@ func (h *Handler) Details(c fiber.Ctx) error {
 		return handler.SendInternalServerError(c, err, "Failed to load consent resource options")
 	}
 
+	// Skip-consent-when-covered: if the user has previously granted these
+	// exact scopes to this client for an unambiguous resource, skip the UI
+	// (unless the RP asked for `prompt=consent`). Mirrors what Google/Auth0
+	// do — second-time RPs feel seamless to end users.
+	defaultResource := pickAutoApproveResource(handoff.Resource, resourceOptions)
+	autoApproveResource := ""
+	grantCovers := false
+	if defaultResource != "" {
+		covers, err := userGrantCoversRequest(
+			c.RequestCtx(),
+			uint64(handoff.OAuthClientID),
+			*session.ActiveSignin.UserID,
+			handoff.Scopes,
+			defaultResource,
+		)
+		if err != nil {
+			return handler.SendInternalServerError(c, err, "Failed to check existing OAuth grant")
+		}
+		if covers {
+			grantCovers = true
+			autoApproveResource = defaultResource
+		}
+	}
+
 	return handler.SendSuccess(c, fiber.Map{
-		"client_name":       handoff.ClientName,
-		"client_id":         handoff.ClientID,
-		"redirect_uri":      handoff.RedirectURI,
-		"scopes":            handoff.Scopes,
-		"scope_definitions": handoff.ScopeDefinitions,
-		"resource":          handoff.Resource,
-		"resource_options":  resourceOptions,
-		"state":             handoff.State,
-		"expires_at":        handoff.ExpiresAt,
-		"csrf_token":        csrfToken,
+		"client_name":           handoff.ClientName,
+		"client_id":             handoff.ClientID,
+		"redirect_uri":          handoff.RedirectURI,
+		"scopes":                handoff.Scopes,
+		"scope_definitions":     handoff.ScopeDefinitions,
+		"resource":              handoff.Resource,
+		"resource_options":      resourceOptions,
+		"state":                 handoff.State,
+		"expires_at":            handoff.ExpiresAt,
+		"csrf_token":            csrfToken,
+		"prompt":                handoff.Prompt,
+		"max_age":               handoff.MaxAge,
+		"grant_already_covers":  grantCovers,
+		"auto_approve_resource": autoApproveResource,
 	})
+}
+
+// pickAutoApproveResource returns the canonical resource URN to fast-path
+// against, or "" when the consent flow must defer to the user. We can only
+// auto-approve when there's exactly one resource we'd act on — either
+// because the RP explicitly narrowed it via `resource`, or because the
+// session has a single accessible option.
+func pickAutoApproveResource(rpResource *string, options []consentResourceOption) string {
+	if rpResource != nil {
+		if trimmed := strings.TrimSpace(*rpResource); isCanonicalTenantResource(trimmed) {
+			return trimmed
+		}
+	}
+	if len(options) == 1 {
+		return options[0].Value
+	}
+	return ""
+}
+
+// userGrantCoversRequest checks for an active oauth_client_grants row owned
+// by `userID` that already covers every scope in `requestedScopes` for
+// `resource`. Returns false (without error) when scopes is empty.
+func userGrantCoversRequest(
+	ctx context.Context,
+	oauthClientID uint64,
+	userID uint64,
+	requestedScopes []string,
+	resource string,
+) (bool, error) {
+	if len(requestedScopes) == 0 {
+		return false, nil
+	}
+	scopesJSON, err := json.Marshal(requestedScopes)
+	if err != nil {
+		return false, err
+	}
+	var exists bool
+	if err := database.Connection.WithContext(ctx).Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM oauth_client_grants
+			WHERE oauth_client_id = ?
+			  AND granted_by_user_id = ?
+			  AND status = 'active'
+			  AND (expires_at IS NULL OR expires_at > NOW())
+			  AND resource = ?
+			  AND scopes @> ?::jsonb
+		)
+	`, oauthClientID, userID, resource, string(scopesJSON)).Scan(&exists).Error; err != nil {
+		return false, err
+	}
+	return exists, nil
 }
 
 func (h *Handler) Submit(c fiber.Ctx) error {
@@ -179,6 +259,10 @@ func (h *Handler) Submit(c fiber.Ctx) error {
 	payload.Set("request_token", strings.TrimSpace(handoff.RequestToken))
 	payload.Set("action", normalizedAction)
 	payload.Set("user_id", strconv.FormatUint(*session.ActiveSignin.UserID, 10))
+	// OIDC: forward the live Wacht session id so platform-api can bind the
+	// issued auth code / tokens to the exact session that approved consent
+	// instead of guessing via "most recent session for user".
+	payload.Set("session_id", strconv.FormatUint(session.ID, 10))
 	if normalizedAction == "approve" {
 		grantedResource := strings.TrimSpace(request.GrantedResource)
 		if grantedResource == "" {
@@ -210,11 +294,15 @@ func (h *Handler) Submit(c fiber.Ctx) error {
 		payload.Set("granted_resource", grantedResource)
 		payload.Set("scope", strings.Join(effectiveScopes, " "))
 	}
-	req, _ := http.NewRequest(
+	req, err := http.NewRequestWithContext(
+		c.RequestCtx(),
 		http.MethodPost,
 		handoff.Issuer+"/oauth/consent/submit",
 		strings.NewReader(payload.Encode()),
 	)
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to build OAuth consent request")
+	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	if secret := oauthConsentSubmitSecret(); secret != "" {
 		req.Header.Set("X-OAuth-Consent-Secret", secret)
@@ -234,7 +322,9 @@ func (h *Handler) Submit(c fiber.Ctx) error {
 		return c.Redirect().Status(fiber.StatusFound).To(location)
 	}
 
-	body, _ := io.ReadAll(resp.Body)
+	// Cap error-body relay so a misbehaving platform-api can't flood us.
+	const maxErrorBodyBytes = 64 * 1024
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		_ = deleteOAuthConsentHandoff(c.RequestCtx(), handoffID)
 		_ = deleteSessionConsentHandoff(c.RequestCtx(), session.ID)
@@ -245,8 +335,16 @@ func (h *Handler) Submit(c fiber.Ctx) error {
 	return c.Status(resp.StatusCode).Send(body)
 }
 
-func buildFrontendConsentURL(frontendHost string, isProduction bool) string {
-	return fmt.Sprintf("%s/oauth/consent", hostBaseURL(frontendHost, isProduction))
+func buildFrontendConsentURL(frontendHost string, isProduction bool, handoffID string) string {
+	consentURL := fmt.Sprintf("%s/oauth/consent", hostBaseURL(frontendHost, isProduction))
+	u, err := url.Parse(consentURL)
+	if err != nil {
+		return consentURL
+	}
+	q := u.Query()
+	q.Set("handoff_id", strings.TrimSpace(handoffID))
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 func hostBaseURL(host string, isProduction bool) string {

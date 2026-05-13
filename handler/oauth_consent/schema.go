@@ -21,6 +21,8 @@ type oauthConsentHandoffPayload struct {
 	ResourceOptions  []string                      `json:"resource_options"`
 	State            *string                       `json:"state"`
 	ExpiresAt        int64                         `json:"expires_at"`
+	Prompt           *string                       `json:"prompt,omitempty"`
+	MaxAge           *int64                        `json:"max_age,omitempty"`
 }
 
 type oauthConsentScopeDefinition struct {
