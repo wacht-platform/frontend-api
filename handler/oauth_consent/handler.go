@@ -20,6 +20,7 @@ import (
 	"github.com/wacht-platform/frontend-api/config"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
+	"github.com/wacht-platform/frontend-api/model"
 )
 
 type Handler struct {
@@ -67,6 +68,14 @@ func (h *Handler) Init(c fiber.Ctx) error {
 					"No active end-user session",
 				),
 			)
+		}
+		// OIDC §3.1.2.3: the OP MUST prompt the End-User for authentication
+		// when no session exists. Redirect to the deployment's sign-in page
+		// with this Init URL as the post-sign-in target, so the user returns
+		// here with a valid session and the normal consent flow proceeds.
+		signInRedirect := buildSignInRedirectForInit(c, &deployment)
+		if signInRedirect != "" {
+			return c.Redirect().Status(fiber.StatusTemporaryRedirect).To(signInRedirect)
 		}
 		return handler.SendUnauthorized(c, nil, "Session required")
 	}
@@ -411,6 +420,38 @@ func buildFrontendConsentURL(frontendHost string, isProduction bool, handoffID s
 	q.Set("handoff_id", strings.TrimSpace(handoffID))
 	u.RawQuery = q.Encode()
 	return u.String()
+}
+
+// buildSignInRedirectForInit builds a redirect URL to the deployment's sign-in
+// page with the current Init URL set as the post-sign-in target. After the
+// user authenticates, the account-portal sends them back here, this time with
+// a session, so the consent flow can proceed. Returns "" when there's no
+// usable sign-in URL for this deployment (fall back to a 401 in that case).
+func buildSignInRedirectForInit(c fiber.Ctx, deployment *model.Deployment) string {
+	signInURL := strings.TrimSpace(deployment.UISettings.SignInPageURL)
+	if signInURL == "" && strings.TrimSpace(deployment.FrontendHost) != "" {
+		signInURL = fmt.Sprintf("%s/sign-in", hostBaseURL(deployment.FrontendHost, deployment.IsProduction()))
+	}
+	if signInURL == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(signInURL)
+	if err != nil {
+		return ""
+	}
+
+	selfURL := strings.TrimRight(c.BaseURL(), "/") + c.OriginalURL()
+
+	q := parsed.Query()
+	q.Set("redirect_uri", selfURL)
+	if !deployment.IsProduction() {
+		if dev := strings.TrimSpace(c.GetRespHeader("X-Development-Session")); dev != "" {
+			q.Set("__dev_session__", dev)
+		}
+	}
+	parsed.RawQuery = q.Encode()
+	return parsed.String()
 }
 
 func hostBaseURL(host string, isProduction bool) string {
