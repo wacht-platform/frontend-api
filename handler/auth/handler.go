@@ -10,6 +10,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/lib/pq"
 	"github.com/pquerna/otp/totp"
 	"github.com/wacht-platform/frontend-api/database"
 	"github.com/wacht-platform/frontend-api/handler"
@@ -1154,13 +1155,16 @@ func (h *Handler) OAuth2Callback(c fiber.Ctx) error {
 			return err
 		}
 
-		connection := h.service.CreateSocialConnection(
+		connection, err := h.service.CreateSocialConnection(
 			u.ID,
 			email.ID,
 			attempt.SSOProvider,
 			user.Email,
 			token,
 		)
+		if err != nil {
+			return err
+		}
 		if err := h.service.ValidateIPCountryRestrictions(c, deployment.Restrictions); err != nil {
 			return err
 		}
@@ -2065,7 +2069,15 @@ func (h *Handler) handleSignInVerification(
 					"Authenticator not set up",
 				)
 			}
-			verified = totp.Validate(b.VerificationCode, user.UserAuthenticator.TotpSecret)
+			plaintextSecret, err := utils.DecryptAtRest(user.UserAuthenticator.TotpSecret)
+			if err != nil {
+				return handler.SendInternalServerError(
+					c,
+					err,
+					"Failed to decrypt authenticator secret",
+				)
+			}
+			verified = totp.Validate(b.VerificationCode, plaintextSecret)
 			if !verified {
 				return handler.SendBadRequest(
 					c,
@@ -2097,11 +2109,10 @@ func (h *Handler) handleSignInVerification(
 			}
 
 			for i, code := range user.BackupCodes {
-				match, err := utils.ComparePassword(code, b.VerificationCode)
-				if err == nil && match {
+				if utils.CompareBackupCode(code, b.VerificationCode) {
 					verified = true
 					user.BackupCodes = slices.Delete(user.BackupCodes, i, i+1)
-					if err := database.Connection.Model(&user).Update("backup_codes", user.BackupCodes).Error; err != nil {
+					if err := database.Connection.Model(&user).Update("backup_codes", pq.Array(user.BackupCodes)).Error; err != nil {
 						return handler.SendInternalServerError(
 							c,
 							err,

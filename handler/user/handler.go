@@ -733,11 +733,22 @@ func (h *Handler) GenerateAuthenticator(c fiber.Ctx) error {
 		)
 	}
 
+	plaintextSecret := key.Secret()
+	encryptedSecret, err := utils.EncryptAtRest(plaintextSecret)
+	if err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to encrypt authenticator secret",
+			handler.ErrInternal,
+		)
+	}
+
 	authenticator := &model.UserAuthenticator{
 		Model: model.Model{
 			ID: idgen.NextID(),
 		},
-		TotpSecret: key.Secret(),
+		TotpSecret: encryptedSecret,
 		OtpUrl:     key.URL(),
 	}
 
@@ -750,10 +761,12 @@ func (h *Handler) GenerateAuthenticator(c fiber.Ctx) error {
 		)
 	}
 
+	// Return the plaintext base32 secret — this is the user's only chance to
+	// see it for QR-code scanning. The DB row stores only the ciphertext.
 	resp := map[string]any{
 		"id":          strconv.Itoa(int(authenticator.ID)),
 		"otp_url":     authenticator.OtpUrl,
-		"totp_secret": authenticator.TotpSecret,
+		"totp_secret": plaintextSecret,
 		"created_at":  authenticator.CreatedAt,
 	}
 
@@ -791,9 +804,19 @@ func (h *Handler) VerifyAuthenticator(c fiber.Ctx) error {
 	firstCode := b.Codes[0]
 	secondCode := b.Codes[1]
 
+	plaintextSecret, err := utils.DecryptAtRest(authenticator.TotpSecret)
+	if err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to decrypt authenticator secret",
+			handler.ErrInternal,
+		)
+	}
+
 	valid, err := totp.ValidateCustom(
 		firstCode,
-		authenticator.TotpSecret,
+		plaintextSecret,
 		time.Now().Add(-time.Second*30),
 		totp.ValidateOpts{
 			Period: 30,
@@ -818,7 +841,7 @@ func (h *Handler) VerifyAuthenticator(c fiber.Ctx) error {
 
 	valid, err = totp.ValidateCustom(
 		secondCode,
-		authenticator.TotpSecret,
+		plaintextSecret,
 		time.Now(),
 		totp.ValidateOpts{
 			Period: 30,
@@ -980,8 +1003,18 @@ func (h *Handler) GenerateBackupCodes(c fiber.Ctx) error {
 		}
 	}
 
+	hashedCodes, err := hashBackupCodes(backupCodes)
+	if err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to hash backup codes",
+			handler.ErrInternal,
+		)
+	}
+
 	if err := database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Updates(map[string]interface{}{
-		"backup_codes":           pq.Array(backupCodes),
+		"backup_codes":           pq.Array(hashedCodes),
 		"backup_codes_generated": true,
 	}).Error; err != nil {
 		return handler.SendInternalServerError(
@@ -997,7 +1030,22 @@ func (h *Handler) GenerateBackupCodes(c fiber.Ctx) error {
 
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
+	// Return the plaintext codes — this is the user's only chance to see them.
 	return handler.SendSuccess(c, backupCodes)
+}
+
+// hashBackupCodes hashes each plaintext code with argon2. The plaintext list is
+// returned to the user one time; the hashes are what live in the DB.
+func hashBackupCodes(codes []string) ([]string, error) {
+	hashed := make([]string, len(codes))
+	for i, code := range codes {
+		h, err := utils.HashPassword(code)
+		if err != nil {
+			return nil, err
+		}
+		hashed[i] = h
+	}
+	return hashed, nil
 }
 
 func (h *Handler) RegenerateBackupCodes(c fiber.Ctx) error {
@@ -1050,8 +1098,18 @@ func (h *Handler) RegenerateBackupCodes(c fiber.Ctx) error {
 		}
 	}
 
+	hashedCodes, err := hashBackupCodes(backupCodes)
+	if err != nil {
+		return handler.SendInternalServerError(
+			c,
+			err,
+			"Failed to hash regenerated backup codes",
+			handler.ErrInternal,
+		)
+	}
+
 	if err := database.Connection.Model(&model.User{}).Where("id = ?", session.ActiveSignin.UserID).Updates(map[string]interface{}{
-		"backup_codes":           pq.Array(backupCodes),
+		"backup_codes":           pq.Array(hashedCodes),
 		"backup_codes_generated": true,
 	}).Error; err != nil {
 		return handler.SendInternalServerError(
@@ -1067,6 +1125,7 @@ func (h *Handler) RegenerateBackupCodes(c fiber.Ctx) error {
 
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
+	// Return the plaintext codes — this is the user's only chance to see them.
 	return handler.SendSuccess(c, backupCodes)
 }
 
@@ -2053,6 +2112,15 @@ func (h *Handler) ConnectSocialCallback(c fiber.Ctx) error {
 			}
 		}
 
+		encAccess, err := utils.EncryptAtRest(token.AccessToken)
+		if err != nil {
+			return err
+		}
+		encRefresh, err := utils.EncryptAtRest(token.RefreshToken)
+		if err != nil {
+			return err
+		}
+
 		socialConnection := model.SocialConnection{
 			UserID:             *session.ActiveSignin.UserID,
 			UserEmailAddressID: userEmailAddress.ID,
@@ -2060,8 +2128,8 @@ func (h *Handler) ConnectSocialCallback(c fiber.Ctx) error {
 			EmailAddress:       oauthUser.Email,
 			FirstName:          oauthUser.FirstName,
 			LastName:           oauthUser.LastName,
-			AccessToken:        token.AccessToken,
-			RefreshToken:       token.RefreshToken,
+			AccessToken:        encAccess,
+			RefreshToken:       encRefresh,
 		}
 
 		if err := tx.Create(&socialConnection).Error; err != nil {

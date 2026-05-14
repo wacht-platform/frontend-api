@@ -1,10 +1,6 @@
 package ai
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -13,15 +9,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/wacht-platform/frontend-api/config"
 	"github.com/wacht-platform/frontend-api/database"
+	"github.com/wacht-platform/frontend-api/utils"
 	"gorm.io/gorm"
 )
 
-const (
-	defaultDeploymentStorageRegion = "auto"
-	deploymentStorageNonceSize     = 12
-)
+const defaultDeploymentStorageRegion = "auto"
 
 type deploymentStorageSettingsRow struct {
 	StorageProvider        string  `gorm:"column:storage_provider"`
@@ -122,48 +115,8 @@ func derefString(value *string) string {
 }
 
 func decryptDeploymentStorageValue(encrypted string) (string, error) {
-	encrypted = strings.TrimSpace(encrypted)
-	if encrypted == "" {
+	if strings.TrimSpace(encrypted) == "" {
 		return "", fmt.Errorf("value is empty")
 	}
-
-	keyHex := strings.TrimSpace(config.GetEnv("ENCRYPTION_KEY", ""))
-	if keyHex == "" {
-		return "", fmt.Errorf("ENCRYPTION_KEY is required")
-	}
-
-	keyBytes, err := hex.DecodeString(keyHex)
-	if err != nil {
-		return "", fmt.Errorf("invalid encryption key hex: %w", err)
-	}
-	if len(keyBytes) != 32 {
-		return "", fmt.Errorf("encryption key must be 32 bytes")
-	}
-
-	combined, err := base64.StdEncoding.DecodeString(encrypted)
-	if err != nil {
-		return "", fmt.Errorf("invalid encrypted base64: %w", err)
-	}
-	if len(combined) < deploymentStorageNonceSize {
-		return "", fmt.Errorf("invalid encrypted payload")
-	}
-
-	nonce := combined[:deploymentStorageNonceSize]
-	ciphertext := combined[deploymentStorageNonceSize:]
-
-	block, err := aes.NewCipher(keyBytes)
-	if err != nil {
-		return "", err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		return "", err
-	}
-
-	return string(plaintext), nil
+	return utils.DecryptAtRest(encrypted)
 }

@@ -41,3 +41,8 @@ func ComparePassword(hashedPassword, password string) (bool, error) {
 
 	return false, errors.New("unsupported password hash algorithm")
 }
+
+func CompareBackupCode(stored, input string) bool {
+	match, err := ComparePassword(stored, input)
+	return err == nil && match
+}

@@ -12,9 +12,9 @@ import (
 )
 
 type pendingApprovalState struct {
-	RequestMessageID *string                       `json:"request_message_id,omitempty"`
-	Description      string                        `json:"description"`
-	Tools            []requestedToolApprovalState  `json:"tools"`
+	RequestMessageID *string                      `json:"request_message_id,omitempty"`
+	Description      string                       `json:"description"`
+	Tools            []requestedToolApprovalState `json:"tools"`
 }
 
 type ApprovalSubmissionItem struct {
@@ -54,13 +54,9 @@ func (s *Service) ApproveProjectBoardItemTool(
 		return nil, fmt.Errorf("request_message_id does not match the pending approval")
 	}
 
-	requestedToolIDs := make(map[string]uint64, len(pending.Tools))
+	requestedToolIDs := make(map[string]int64, len(pending.Tools))
 	for _, tool := range pending.Tools {
-		var toolID uint64
-		if _, err := fmt.Sscanf(tool.ToolID, "%d", &toolID); err != nil {
-			return nil, fmt.Errorf("invalid tool_id in pending_approval: %w", err)
-		}
-		requestedToolIDs[tool.ToolName] = toolID
+		requestedToolIDs[tool.ToolName] = int64(tool.ToolID)
 	}
 
 	seen := make(map[string]struct{}, len(submission.Approvals))

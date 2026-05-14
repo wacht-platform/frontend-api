@@ -323,16 +323,24 @@ func (s *AuthService) CreateSocialConnection(
 	provider model.SocialConnectionProvider,
 	email string,
 	token *oauth2.Token,
-) model.SocialConnection {
+) (model.SocialConnection, error) {
+	encAccess, err := utils.EncryptAtRest(token.AccessToken)
+	if err != nil {
+		return model.SocialConnection{}, err
+	}
+	encRefresh, err := utils.EncryptAtRest(token.RefreshToken)
+	if err != nil {
+		return model.SocialConnection{}, err
+	}
 	return model.SocialConnection{
 		Model:              model.Model{ID: idgen.NextID()},
 		Provider:           provider,
 		EmailAddress:       email,
 		UserID:             userID,
 		UserEmailAddressID: emailID,
-		AccessToken:        token.AccessToken,
-		RefreshToken:       token.RefreshToken,
-	}
+		AccessToken:        encAccess,
+		RefreshToken:       encRefresh,
+	}, nil
 }
 
 func (s *AuthService) HandleExistingUser(
@@ -355,13 +363,17 @@ func (s *AuthService) HandleExistingUser(
 	}
 
 	if connection.ID == 0 {
-		connection = s.CreateSocialConnection(
+		newConnection, err := s.CreateSocialConnection(
 			email.User.ID,
 			email.ID,
 			attempt.SSOProvider,
 			email.EmailAddress,
 			token,
 		)
+		if err != nil {
+			return nil, err
+		}
+		connection = newConnection
 
 		if err := tx.Create(&connection).Error; err != nil {
 			return nil, err
@@ -1008,6 +1020,15 @@ func (s *AuthService) CreateOAuthUser(
 
 	primaryAddressID := idgen.NextID()
 
+	encAccess, err := utils.EncryptAtRest(attempt.SSOAccessToken)
+	if err != nil {
+		return nil, err
+	}
+	encRefresh, err := utils.EncryptAtRest(attempt.SSORefreshToken)
+	if err != nil {
+		return nil, err
+	}
+
 	u := model.User{
 		Model: model.Model{
 			ID: idgen.NextID(),
@@ -1033,8 +1054,8 @@ func (s *AuthService) CreateOAuthUser(
 			Provider:           attempt.SSOProvider,
 			EmailAddress:       attempt.Email,
 			UserEmailAddressID: primaryAddressID,
-			AccessToken:        attempt.SSOAccessToken,
-			RefreshToken:       attempt.SSORefreshToken,
+			AccessToken:        encAccess,
+			RefreshToken:       encRefresh,
 		}},
 	}
 

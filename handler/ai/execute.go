@@ -24,9 +24,35 @@ import (
 )
 
 type requestedToolApprovalState struct {
-	ToolID          string  `json:"tool_id"`
-	ToolName        string  `json:"tool_name"`
-	ToolDescription *string `json:"tool_description,omitempty"`
+	ToolID          snowflakeID `json:"tool_id"`
+	ToolName        string      `json:"tool_name"`
+	ToolDescription *string     `json:"tool_description,omitempty"`
+}
+
+type snowflakeID int64
+
+func (id *snowflakeID) UnmarshalJSON(data []byte) error {
+	var raw string
+	if len(data) > 0 && data[0] == '"' {
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return err
+		}
+	} else {
+		raw = strings.TrimSpace(string(data))
+	}
+	if raw == "" {
+		return fmt.Errorf("expected integer")
+	}
+	parsed, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return err
+	}
+	*id = snowflakeID(parsed)
+	return nil
+}
+
+func (id snowflakeID) MarshalJSON() ([]byte, error) {
+	return json.Marshal(strconv.FormatInt(int64(id), 10))
 }
 
 type toolApprovalDecision struct {

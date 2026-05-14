@@ -274,6 +274,7 @@ func refreshSession(c fiber.Ctx, expJwt jwt.Token, deployment model.Deployment) 
 
 	if finalRotatingTokenID == 0 {
 		c.Locals("session", sessionID)
+		go utils.UpdateSessionLastActive(sessionID)
 		return c.Next()
 	}
 
@@ -294,6 +295,7 @@ func refreshSession(c fiber.Ctx, expJwt jwt.Token, deployment model.Deployment) 
 	setSessionToken(c, token, deployment.IsProduction(), deployment)
 
 	c.Locals("session", sessionID)
+	go utils.UpdateSessionLastActive(sessionID)
 
 	return c.Next()
 }
