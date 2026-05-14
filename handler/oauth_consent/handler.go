@@ -53,7 +53,21 @@ func (h *Handler) Init(c fiber.Ctx) error {
 	}
 
 	session := handler.GetSession(c)
-	if session == nil {
+	if session == nil || session.ActiveSigninID == nil ||
+		session.ActiveSignin == nil || session.ActiveSignin.UserID == nil {
+		// OIDC §3.1.2.4: `prompt=none` must NEVER show a login UI. When
+		// the user isn't authenticated we have to bounce the user-agent
+		// back to the RP with `error=login_required`.
+		if handoffPromptHasNone(handoff.Prompt) {
+			return c.Redirect().Status(fiber.StatusTemporaryRedirect).To(
+				buildAuthorizeErrorRedirect(
+					handoff.RedirectURI,
+					handoff.State,
+					"login_required",
+					"No active end-user session",
+				),
+			)
+		}
 		return handler.SendUnauthorized(c, nil, "Session required")
 	}
 	if err := setSessionConsentHandoff(c.RequestCtx(), session.ID, handoffID); err != nil {
@@ -84,10 +98,15 @@ func (h *Handler) Init(c fiber.Ctx) error {
 func (h *Handler) Details(c fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 	session := handler.GetSession(c)
-	if session == nil || session.ActiveSigninID == nil {
-		return handler.SendUnauthorized(c, nil, "No active sign in")
-	}
-	if session.ActiveSignin == nil || session.ActiveSignin.UserID == nil {
+	noActiveSignin := session == nil || session.ActiveSigninID == nil ||
+		session.ActiveSignin == nil || session.ActiveSignin.UserID == nil
+
+	// We need the handoff to figure out if the RP asked for prompt=none;
+	// without an active signin and prompt=none we still want to redirect
+	// rather than 401. Load the handoff via the session-scoped key only
+	// when a session exists — otherwise we fall back to the same 401 the
+	// caller used to get.
+	if noActiveSignin {
 		return handler.SendUnauthorized(c, nil, "No active sign in")
 	}
 
@@ -123,7 +142,20 @@ func (h *Handler) Details(c fiber.Ctx) error {
 	defaultResource := pickAutoApproveResource(handoff.Resource, handoff.Scopes, resourceOptions)
 	autoApproveResource := ""
 	grantCovers := false
-	if defaultResource != "" {
+
+	// First-party shortcut: when the OAuth client has `skip_consent=true`
+	// the deployment trusts the app to act on the user's behalf without an
+	// explicit consent screen — frontend-api hands the consent page a
+	// `grant_already_covers=true` so the auto-submit path fires.
+	skipConsent, err := oauthClientSkipsConsent(c.RequestCtx(), uint64(handoff.OAuthClientID))
+	if err != nil {
+		return handler.SendInternalServerError(c, err, "Failed to load OAuth client settings")
+	}
+
+	if skipConsent && defaultResource != "" {
+		grantCovers = true
+		autoApproveResource = defaultResource
+	} else if defaultResource != "" {
 		covers, err := userGrantCoversRequest(
 			c.RequestCtx(),
 			uint64(handoff.OAuthClientID),
@@ -397,6 +429,52 @@ func oauthConsentSubmitSecret() string {
 	}
 	sum := sha256.Sum256([]byte("oauth-consent-submit-v1:" + key))
 	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+// oauthClientSkipsConsent reads the per-client `skip_consent` flag. First-
+// party apps set this to true so the consent screen is bypassed entirely.
+func oauthClientSkipsConsent(ctx context.Context, oauthClientID uint64) (bool, error) {
+	var skip bool
+	if err := database.Connection.WithContext(ctx).Raw(
+		"SELECT skip_consent FROM oauth_clients WHERE id = ?",
+		oauthClientID,
+	).Scan(&skip).Error; err != nil {
+		return false, err
+	}
+	return skip, nil
+}
+
+// handoffPromptHasNone reports whether the RP requested `prompt=none`.
+// Multiple values are space-separated per OIDC §3.1.2.1.
+func handoffPromptHasNone(prompt *string) bool {
+	if prompt == nil {
+		return false
+	}
+	for _, value := range strings.Fields(*prompt) {
+		if value == "none" {
+			return true
+		}
+	}
+	return false
+}
+
+// buildAuthorizeErrorRedirect appends the OIDC-style error params to the RP's
+// redirect_uri so we can bounce the user-agent back without showing UI.
+func buildAuthorizeErrorRedirect(redirectURI string, state *string, errCode, errDescription string) string {
+	u, err := url.Parse(redirectURI)
+	if err != nil {
+		return redirectURI
+	}
+	q := u.Query()
+	q.Set("error", errCode)
+	if errDescription != "" {
+		q.Set("error_description", errDescription)
+	}
+	if state != nil && *state != "" {
+		q.Set("state", *state)
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 func validateIssuer(raw string) (string, error) {
