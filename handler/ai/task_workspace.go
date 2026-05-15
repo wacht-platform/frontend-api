@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"path/filepath"
@@ -476,6 +477,91 @@ func listWorkspaceDirectoryFromStorage(
 	}, nil
 }
 
+// getWorkspaceFileStreamFromStorage returns the S3 object body as a stream
+// (caller owns closing). Used by download endpoints to avoid buffering the
+// whole file into memory before sending the response.
+func getWorkspaceFileStreamFromStorage(
+	storage *deploymentAgentStorage,
+	basePrefix string,
+	relativePath string,
+) (io.ReadCloser, int64, string, error) {
+	cleanedRelativePath, err := sanitizeTaskWorkspaceRelativePath(relativePath)
+	if err != nil {
+		return nil, 0, "", err
+	}
+
+	key := storage.objectKey(basePrefix + cleanedRelativePath)
+	result, err := storage.s3Client.GetObject(&s3.GetObjectInput{
+		Bucket: aws.String(storage.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, 0, "", err
+	}
+
+	var size int64
+	if result.ContentLength != nil {
+		size = *result.ContentLength
+		if size > maxTaskWorkspaceReadBytes {
+			result.Body.Close()
+			return nil, 0, "", errTaskWorkspaceFileTooLarge
+		}
+	}
+
+	mimeType := "application/octet-stream"
+	if result.ContentType != nil && strings.TrimSpace(*result.ContentType) != "" {
+		mimeType = *result.ContentType
+	} else if ext := filepath.Ext(cleanedRelativePath); ext != "" {
+		if guess := mime.TypeByExtension(ext); guess != "" {
+			mimeType = guess
+		}
+	}
+
+	return result.Body, size, mimeType, nil
+}
+
+func getBoardItemTaskWorkspaceFileStreamFromStorage(
+	storage *deploymentAgentStorage,
+	deploymentID, projectID uint64,
+	taskKey, relativePath string,
+) (io.ReadCloser, int64, string, error) {
+	return getWorkspaceFileStreamFromStorage(
+		storage,
+		taskWorkspaceStoragePrefix(deploymentID, projectID, taskKey),
+		relativePath,
+	)
+}
+
+func getThreadFilesystemFileStreamFromStorage(
+	storage *deploymentAgentStorage,
+	deploymentID, threadID uint64,
+	relativePath string,
+) (io.ReadCloser, int64, string, error) {
+	cleanedRelativePath, err := sanitizeTaskWorkspaceRelativePath(relativePath)
+	if err != nil {
+		return nil, 0, "", err
+	}
+
+	switch {
+	case cleanedRelativePath == "workspace", cleanedRelativePath == "uploads":
+		return nil, 0, "", errTaskWorkspaceRequestedDirectory
+	case strings.HasPrefix(cleanedRelativePath, "workspace/"):
+		return getWorkspaceFileStreamFromStorage(
+			storage,
+			threadWorkspaceStoragePrefix(deploymentID, threadID),
+			strings.TrimPrefix(cleanedRelativePath, "workspace/"),
+		)
+	case strings.HasPrefix(cleanedRelativePath, "uploads/"):
+		return getWorkspaceFileStreamFromStorage(
+			storage,
+			threadUploadsStoragePrefix(deploymentID, threadID),
+			strings.TrimPrefix(cleanedRelativePath, "uploads/"),
+		)
+	default:
+		return nil, 0, "", errTaskWorkspacePathOutsideRoots
+	}
+}
+
 func getWorkspaceFileBytesFromStorage(
 	storage *deploymentAgentStorage,
 	basePrefix string,
@@ -795,6 +881,31 @@ func (s *Service) GetBoardItemTaskWorkspaceFileContent(deploymentID, actorID, pr
 	return getTaskWorkspaceFileContentFromStorage(storage, deploymentID, board.ProjectID, item.TaskKey, relativePath)
 }
 
+// StreamBoardItemTaskWorkspaceFile is the streaming variant of
+// GetBoardItemTaskWorkspaceFileBytes. The caller owns closing the returned
+// ReadCloser. Use this for download endpoints that should not buffer the
+// whole file in memory.
+func (s *Service) StreamBoardItemTaskWorkspaceFile(deploymentID, actorID, projectID, itemID uint64, relativePath string, includeArchived bool) (io.ReadCloser, int64, string, error) {
+	item, err := s.GetAuthorizedBoardItem(deploymentID, actorID, itemID, includeArchived)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	board, err := s.GetProjectBoardByID(deploymentID, actorID, item.BoardID)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	if board.ProjectID != projectID {
+		return nil, 0, "", gorm.ErrRecordNotFound
+	}
+
+	storage, err := resolveDeploymentAgentStorage(deploymentID)
+	if err != nil {
+		return nil, 0, "", err
+	}
+
+	return getBoardItemTaskWorkspaceFileStreamFromStorage(storage, deploymentID, board.ProjectID, item.TaskKey, relativePath)
+}
+
 func (s *Service) GetBoardItemTaskWorkspaceFileBytes(deploymentID, actorID, projectID, itemID uint64, relativePath string, includeArchived bool) ([]byte, string, error) {
 	item, err := s.GetAuthorizedBoardItem(deploymentID, actorID, itemID, includeArchived)
 	if err != nil {
@@ -1022,7 +1133,7 @@ func (h *Handler) DownloadBoardItemTaskWorkspaceFile(c fiber.Ctx) error {
 	}
 
 	deployment := handler.GetDeployment(c)
-	body, mimeType, err := h.service.GetBoardItemTaskWorkspaceFileBytes(
+	body, size, mimeType, err := h.service.StreamBoardItemTaskWorkspaceFile(
 		deployment.ID,
 		actorID,
 		projectID,
@@ -1037,12 +1148,14 @@ func (h *Handler) DownloadBoardItemTaskWorkspaceFile(c fiber.Ctx) error {
 		if errors.Is(err, errTaskWorkspacePathRequired) ||
 			errors.Is(err, errTaskWorkspacePathTraversalNotAllowed) ||
 			errors.Is(err, errTaskWorkspaceRequestedDirectory) ||
-			errors.Is(err, errTaskWorkspacePathOutsideRoots) {
+			errors.Is(err, errTaskWorkspacePathOutsideRoots) ||
+			errors.Is(err, errTaskWorkspaceFileTooLarge) {
 			return handler.SendBadRequest(c, nil, "Invalid file path")
 		}
 		log.Printf("DownloadBoardItemTaskWorkspaceFile storage read failed: %v", err)
 		return handler.SendInternalServerError(c, nil, "Failed to load task workspace file")
 	}
+	defer body.Close()
 
 	c.Set(fiber.HeaderCacheControl, "no-store")
 	c.Set(fiber.HeaderContentType, mimeType)
@@ -1052,7 +1165,10 @@ func (h *Handler) DownloadBoardItemTaskWorkspaceFile(c fiber.Ctx) error {
 	} else {
 		c.Set(fiber.HeaderContentDisposition, "attachment")
 	}
-	return c.Send(body)
+	if size > 0 {
+		return c.SendStream(body, int(size))
+	}
+	return c.SendStream(body)
 }
 
 func (h *Handler) ListThreadFilesystemEntries(c fiber.Ctx) error {
@@ -1113,7 +1229,7 @@ func (h *Handler) GetThreadFilesystemFileContent(c fiber.Ctx) error {
 		return handler.SendInternalServerError(c, nil, "Failed to resolve deployment storage")
 	}
 
-	body, mimeType, err := getThreadFilesystemFileBytesFromStorage(
+	body, size, mimeType, err := getThreadFilesystemFileStreamFromStorage(
 		storage,
 		deployment.ID,
 		threadID,
@@ -1133,6 +1249,7 @@ func (h *Handler) GetThreadFilesystemFileContent(c fiber.Ctx) error {
 		log.Printf("GetThreadFilesystemFileContent storage read failed: %v", err)
 		return handler.SendInternalServerError(c, nil, "Failed to load thread filesystem file")
 	}
+	defer body.Close()
 
 	c.Set(fiber.HeaderCacheControl, "no-store")
 	c.Set(fiber.HeaderContentType, mimeType)
@@ -1142,5 +1259,8 @@ func (h *Handler) GetThreadFilesystemFileContent(c fiber.Ctx) error {
 	} else {
 		c.Set(fiber.HeaderContentDisposition, "attachment")
 	}
-	return c.Send(body)
+	if size > 0 {
+		return c.SendStream(body, int(size))
+	}
+	return c.SendStream(body)
 }
