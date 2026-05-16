@@ -3,6 +3,7 @@ package session
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -123,6 +124,7 @@ func (h *Handler) ExchangeTicket(c fiber.Ctx) error {
 	if err != nil {
 		return handler.SendBadRequest(c, err, "Invalid deployment ID in ticket")
 	}
+	log.Println(deploymentID, deployment.ID)
 	if deploymentID != deployment.ID {
 		return handler.SendUnauthorized(c, nil, "Ticket not valid for this deployment")
 	}
