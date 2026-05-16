@@ -1155,7 +1155,10 @@ func (h *Handler) DownloadBoardItemTaskWorkspaceFile(c fiber.Ctx) error {
 		log.Printf("DownloadBoardItemTaskWorkspaceFile storage read failed: %v", err)
 		return handler.SendInternalServerError(c, nil, "Failed to load task workspace file")
 	}
-	defer body.Close()
+	// NOTE: do NOT defer body.Close(). Fiber/fasthttp consumes the stream
+	// after this handler returns; closing here would race with the
+	// serializer. fasthttp's SetBodyStream calls Close() on the reader
+	// itself after the body has been written to the wire.
 
 	c.Set(fiber.HeaderCacheControl, "no-store")
 	c.Set(fiber.HeaderContentType, mimeType)
@@ -1249,7 +1252,8 @@ func (h *Handler) GetThreadFilesystemFileContent(c fiber.Ctx) error {
 		log.Printf("GetThreadFilesystemFileContent storage read failed: %v", err)
 		return handler.SendInternalServerError(c, nil, "Failed to load thread filesystem file")
 	}
-	defer body.Close()
+	// NOTE: do NOT defer body.Close(); fasthttp closes the reader after
+	// the body has been streamed to the wire.
 
 	c.Set(fiber.HeaderCacheControl, "no-store")
 	c.Set(fiber.HeaderContentType, mimeType)
