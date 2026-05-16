@@ -33,10 +33,10 @@ const (
 )
 
 func SetRequestPrelude(c fiber.Ctx) error {
-	host := c.Hostname()
+	host := requestHost(c)
 	path := c.Path()
 
-	if net.ParseIP(host) != nil {
+	if host == "" || net.ParseIP(host) != nil {
 		return c.Status(404).JSON(fiber.Map{"message": "Deployment not found"})
 	}
 
@@ -47,6 +47,17 @@ func SetRequestPrelude(c fiber.Ctx) error {
 	}
 
 	return handleDeploymentAndSession(c, host)
+}
+
+func requestHost(c fiber.Ctx) string {
+	forwarded := strings.TrimSpace(string(c.Request().Header.Peek("X-Forwarded-Host")))
+	if forwarded != "" {
+		if idx := strings.IndexByte(forwarded, ','); idx >= 0 {
+			forwarded = strings.TrimSpace(forwarded[:idx])
+		}
+		return strings.Clone(strings.ToLower(forwarded))
+	}
+	return strings.Clone(strings.ToLower(strings.TrimSpace(c.Hostname())))
 }
 
 func handleDeploymentOnly(c fiber.Ctx, host string) error {

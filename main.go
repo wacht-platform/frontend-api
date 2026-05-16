@@ -36,13 +36,10 @@ func main() {
 	}
 
 	app := fiber.New(fiber.Config{
-		JSONEncoder:  json.Marshal,
-		JSONDecoder:  json.Unmarshal,
-		ErrorHandler: handler.DefaultErrorHandler,
-		TrustProxy:   true,
-		TrustProxyConfig: fiber.TrustProxyConfig{
-			Proxies: []string{config.GetEnv("LOAD_BALANCER_IP", "127.0.0.1")},
-		},
+		JSONEncoder:    json.Marshal,
+		JSONDecoder:    json.Unmarshal,
+		ErrorHandler:   handler.DefaultErrorHandler,
+		TrustProxy:     false,
 		ReadBufferSize: 16384,
 		BodyLimit:      50 * 1024 * 1024,
 	})
