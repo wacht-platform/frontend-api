@@ -479,7 +479,8 @@ func (h *Handler) ListBoardItemAssignments(c fiber.Ctx) error {
 		cursorID = &assignmentID
 	}
 
-	assignments, err := h.service.ListBoardItemAssignments(itemID, limit, cursorID)
+	order := normalizeAssignmentOrder(c.Query("order"))
+	assignments, err := h.service.ListBoardItemAssignments(itemID, limit, cursorID, order)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}
@@ -709,6 +710,9 @@ func (h *Handler) AnswerBoardItemQuestion(c fiber.Ctx) error {
 		})
 	}
 	submission := AnswerSubmission{Answers: answers}
+	if freeform := strings.TrimSpace(c.FormValue("freeform_text")); freeform != "" {
+		submission.FreeformText = &freeform
+	}
 
 	item, err := h.service.AnswerProjectBoardItemQuestion(
 		deployment.ID, actorID, projectID, itemID, &submission,
@@ -1009,7 +1013,8 @@ func (h *Handler) ListThreadAssignments(c fiber.Ctx) error {
 		cursorID = &assignmentID
 	}
 
-	assignments, err := h.service.ListThreadAssignments(threadID, limit, cursorID)
+	order := normalizeAssignmentOrder(c.Query("order"))
+	assignments, err := h.service.ListThreadAssignments(threadID, limit, cursorID, order)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, "Internal server error")
 	}

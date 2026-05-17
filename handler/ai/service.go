@@ -2252,18 +2252,19 @@ func (s *Service) AnswerThreadQuestion(
 		return err
 	}
 
-	answersJSON, err := json.Marshal(submission.Answers)
-	if err != nil {
-		return err
-	}
+	payload := answerPayloadFrom(submission)
 	requestID := pending.ID
 
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		responseContent, err := json.Marshal(map[string]any{
+		responseBody := map[string]any{
 			"type":               "clarification_response",
 			"request_message_id": fmt.Sprintf("%d", requestID),
-			"answers":            json.RawMessage(answersJSON),
-		})
+			"answers":            payload.Answers,
+		}
+		if payload.FreeformText != nil {
+			responseBody["freeform_text"] = *payload.FreeformText
+		}
+		responseContent, err := json.Marshal(responseBody)
 		if err != nil {
 			return err
 		}
@@ -2350,10 +2351,7 @@ func (s *Service) AnswerProjectBoardItemQuestion(
 		return nil, err
 	}
 
-	answersJSON, err := json.Marshal(submission.Answers)
-	if err != nil {
-		return nil, err
-	}
+	payload := answerPayloadFrom(submission)
 	now := time.Now()
 
 	enqueuedRouting := false
@@ -2384,7 +2382,7 @@ func (s *Service) AnswerProjectBoardItemQuestion(
 			if _, err := fmt.Sscanf(*pending.AskedByAssignmentID, "%d", &assignmentID); err != nil {
 				return fmt.Errorf("invalid asked_by_assignment_id: %w", err)
 			}
-			if err := s.enqueueAssignmentResumeEvent(tx, deploymentID, assignmentID, answersJSON); err != nil {
+			if err := s.enqueueAssignmentResumeEvent(tx, deploymentID, assignmentID, payload); err != nil {
 				return err
 			}
 			enqueuedRouting = true
@@ -2401,7 +2399,7 @@ func (s *Service) AnswerProjectBoardItemQuestion(
 			tx,
 			pending.AskedByThreadID,
 			item.ID,
-			answersJSON,
+			payload,
 		)
 	}); err != nil {
 		return nil, err
@@ -2435,7 +2433,7 @@ func (s *Service) appendClarificationResponseConversation(
 	tx *gorm.DB,
 	askedByThreadIDStr string,
 	boardItemID uint64,
-	answersJSON []byte,
+	payload AnswerPayload,
 ) error {
 	var threadID uint64
 	if _, err := fmt.Sscanf(askedByThreadIDStr, "%d", &threadID); err != nil {
@@ -2443,10 +2441,14 @@ func (s *Service) appendClarificationResponseConversation(
 	}
 	id := idgen.NextID()
 	now := time.Now()
-	content, err := json.Marshal(map[string]any{
+	body := map[string]any{
 		"type":    "clarification_response",
-		"answers": json.RawMessage(answersJSON),
-	})
+		"answers": payload.Answers,
+	}
+	if payload.FreeformText != nil {
+		body["freeform_text"] = *payload.FreeformText
+	}
+	content, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
@@ -2464,14 +2466,14 @@ func (s *Service) appendClarificationResponseConversation(
 func (s *Service) enqueueAssignmentResumeEvent(
 	tx *gorm.DB,
 	deploymentID, assignmentID uint64,
-	answersJSON []byte,
+	answer AnswerPayload,
 ) error {
 	var assignment model.ProjectTaskBoardItemAssignment
 	if err := tx.Where("id = ?", assignmentID).First(&assignment).Error; err != nil {
 		return err
 	}
 	eventLogID := idgen.NextID()
-	payload, err := json.Marshal(map[string]any{
+	body := map[string]any{
 		"event_log_id":  fmt.Sprintf("%d", eventLogID),
 		"deployment_id": fmt.Sprintf("%d", deploymentID),
 		"thread_id":     fmt.Sprintf("%d", assignment.ThreadID),
@@ -2479,8 +2481,12 @@ func (s *Service) enqueueAssignmentResumeEvent(
 		"board_item_id": fmt.Sprintf("%d", assignment.BoardItemID),
 		"kind":          "assignment_execution",
 		"summary":       "User answered the pending clarification; resume the assignment.",
-		"answers":       json.RawMessage(answersJSON),
-	})
+		"answers":       answer.Answers,
+	}
+	if answer.FreeformText != nil {
+		body["freeform_text"] = *answer.FreeformText
+	}
+	payload, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
@@ -2774,10 +2780,32 @@ func encodeAssignmentCursor(assignmentID uint64) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%d", assignmentID)))
 }
 
+// AssignmentListOrder controls the row ordering for assignment list endpoints.
+// "asc"  → oldest-first (id ASC) — the default for back-compat.
+// "desc" → newest-first (id DESC) — convenient for "latest N" lookups.
+// The cursor predicate is flipped to match the chosen direction so pagination
+// keeps walking the same way.
+type AssignmentListOrder string
+
+const (
+	AssignmentListOrderAsc  AssignmentListOrder = "asc"
+	AssignmentListOrderDesc AssignmentListOrder = "desc"
+)
+
+func normalizeAssignmentOrder(raw string) AssignmentListOrder {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "desc":
+		return AssignmentListOrderDesc
+	default:
+		return AssignmentListOrderAsc
+	}
+}
+
 func (s *Service) ListBoardItemAssignments(
 	itemID uint64,
 	limit int,
 	cursorID *uint64,
+	order AssignmentListOrder,
 ) (*BoardItemAssignmentsResponse, error) {
 	if limit <= 0 {
 		limit = 40
@@ -2789,10 +2817,19 @@ func (s *Service) ListBoardItemAssignments(
 	var assignments []model.ProjectTaskBoardItemAssignment
 	query := s.db.Where("board_item_id = ?", itemID)
 	if cursorID != nil {
-		query = query.Where("id > ?", *cursorID)
+		// Cursor walks in the direction of the requested order.
+		if order == AssignmentListOrderDesc {
+			query = query.Where("id < ?", *cursorID)
+		} else {
+			query = query.Where("id > ?", *cursorID)
+		}
+	}
+	orderClause := "id ASC"
+	if order == AssignmentListOrderDesc {
+		orderClause = "id DESC"
 	}
 	if err := query.
-		Order("id ASC").
+		Order(orderClause).
 		Limit(limit + 1).
 		Find(&assignments).Error; err != nil {
 		return nil, err
@@ -2821,6 +2858,7 @@ func (s *Service) ListThreadAssignments(
 	threadID uint64,
 	limit int,
 	cursorID *uint64,
+	order AssignmentListOrder,
 ) (*ThreadAssignmentsResponse, error) {
 	if limit <= 0 {
 		limit = 40
@@ -2832,10 +2870,18 @@ func (s *Service) ListThreadAssignments(
 	var assignments []model.ProjectTaskBoardItemAssignment
 	query := s.db.Where("thread_id = ?", threadID)
 	if cursorID != nil {
-		query = query.Where("id > ?", *cursorID)
+		if order == AssignmentListOrderDesc {
+			query = query.Where("id < ?", *cursorID)
+		} else {
+			query = query.Where("id > ?", *cursorID)
+		}
+	}
+	orderClause := "id ASC"
+	if order == AssignmentListOrderDesc {
+		orderClause = "id DESC"
 	}
 	if err := query.
-		Order("id ASC").
+		Order(orderClause).
 		Limit(limit + 1).
 		Find(&assignments).Error; err != nil {
 		return nil, err

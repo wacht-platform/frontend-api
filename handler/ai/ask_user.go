@@ -8,20 +8,20 @@ import (
 )
 
 type AnswerKind struct {
-	Kind          string   `json:"kind"`
-	Placeholder   *string  `json:"placeholder,omitempty"`
-	MaxLength     *uint32  `json:"max_length,omitempty"`
-	Choices       []Choice `json:"choices,omitempty"`
-	AllowOther    *bool    `json:"allow_other,omitempty"`
-	MinSelected   *uint32  `json:"min_selected,omitempty"`
-	MaxSelected   *uint32  `json:"max_selected,omitempty"`
-	Min           *float64 `json:"min,omitempty"`
-	Max           *float64 `json:"max,omitempty"`
-	MinDate       *string  `json:"-"`
-	MaxDate       *string  `json:"-"`
-	Unit          *string  `json:"unit,omitempty"`
-	ConfirmLabel  *string  `json:"confirm_label,omitempty"`
-	CancelLabel   *string  `json:"cancel_label,omitempty"`
+	Kind         string   `json:"kind"`
+	Placeholder  *string  `json:"placeholder,omitempty"`
+	MaxLength    *uint32  `json:"max_length,omitempty"`
+	Choices      []Choice `json:"choices,omitempty"`
+	AllowOther   *bool    `json:"allow_other,omitempty"`
+	MinSelected  *uint32  `json:"min_selected,omitempty"`
+	MaxSelected  *uint32  `json:"max_selected,omitempty"`
+	Min          *float64 `json:"min,omitempty"`
+	Max          *float64 `json:"max,omitempty"`
+	MinDate      *string  `json:"-"`
+	MaxDate      *string  `json:"-"`
+	Unit         *string  `json:"unit,omitempty"`
+	ConfirmLabel *string  `json:"confirm_label,omitempty"`
+	CancelLabel  *string  `json:"cancel_label,omitempty"`
 }
 
 type Choice struct {
@@ -37,11 +37,11 @@ type Question struct {
 }
 
 type PendingQuestion struct {
-	Questions             []Question `json:"questions"`
-	Context               *string    `json:"context,omitempty"`
-	AskedAt               time.Time  `json:"asked_at"`
-	AskedByThreadID       string     `json:"asked_by_thread_id"`
-	AskedByAssignmentID   *string    `json:"asked_by_assignment_id,omitempty"`
+	Questions           []Question `json:"questions"`
+	Context             *string    `json:"context,omitempty"`
+	AskedAt             time.Time  `json:"asked_at"`
+	AskedByThreadID     string     `json:"asked_by_thread_id"`
+	AskedByAssignmentID *string    `json:"asked_by_assignment_id,omitempty"`
 }
 
 type AnswerValue struct {
@@ -66,7 +66,14 @@ type QuestionAnswer struct {
 }
 
 type AnswerSubmission struct {
-	Answers []QuestionAnswer `json:"answers"`
+	Answers      []QuestionAnswer `json:"answers,omitempty"`
+	FreeformText *string          `json:"freeform_text,omitempty"`
+}
+
+const freeformAnswerMaxChars = 4000
+
+func (s *AnswerSubmission) IsFreeform() bool {
+	return s.FreeformText != nil && strings.TrimSpace(*s.FreeformText) != ""
 }
 
 type rawAnswerKind struct {
@@ -84,7 +91,33 @@ type rawAnswerKind struct {
 	CancelLabel  *string  `json:"cancel_label,omitempty"`
 }
 
+type AnswerPayload struct {
+	Answers      []QuestionAnswer `json:"answers"`
+	FreeformText *string          `json:"freeform_text,omitempty"`
+}
+
+func answerPayloadFrom(submission *AnswerSubmission) AnswerPayload {
+	if submission.IsFreeform() {
+		text := strings.TrimSpace(*submission.FreeformText)
+		return AnswerPayload{Answers: []QuestionAnswer{}, FreeformText: &text}
+	}
+	return AnswerPayload{Answers: submission.Answers}
+}
+
 func validateAnswers(pending *PendingQuestion, submission *AnswerSubmission) error {
+	if submission.IsFreeform() {
+		if len(submission.Answers) > 0 {
+			return fmt.Errorf("send either structured answers or freeform_text, not both")
+		}
+		text := strings.TrimSpace(*submission.FreeformText)
+		if len([]rune(text)) > freeformAnswerMaxChars {
+			return fmt.Errorf("freeform_text exceeds %d characters", freeformAnswerMaxChars)
+		}
+		return nil
+	}
+	if len(submission.Answers) == 0 {
+		return fmt.Errorf("send either structured answers or freeform_text")
+	}
 	if len(submission.Answers) != len(pending.Questions) {
 		return fmt.Errorf("expected %d answers, got %d", len(pending.Questions), len(submission.Answers))
 	}
