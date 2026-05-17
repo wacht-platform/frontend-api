@@ -499,13 +499,14 @@ func getWorkspaceFileStreamFromStorage(
 		return nil, 0, "", err
 	}
 
+	// NOTE: the streaming path intentionally does NOT enforce
+	// `maxTaskWorkspaceReadBytes`. That cap exists for the buffered read path
+	// (`getWorkspaceFileBytesFromStorage`) where the entire file lands in
+	// memory. Streaming hands the S3 reader straight to the HTTP body so the
+	// only true limit is the request timeout — large mp4s should flow through.
 	var size int64
 	if result.ContentLength != nil {
 		size = *result.ContentLength
-		if size > maxTaskWorkspaceReadBytes {
-			result.Body.Close()
-			return nil, 0, "", errTaskWorkspaceFileTooLarge
-		}
 	}
 
 	mimeType := "application/octet-stream"
@@ -1168,8 +1169,16 @@ func (h *Handler) DownloadBoardItemTaskWorkspaceFile(c fiber.Ctx) error {
 	} else {
 		c.Set(fiber.HeaderContentDisposition, "attachment")
 	}
+	// We DELIBERATELY do not pass the size to SendStream even when we know it.
+	// Passing size makes fasthttp write a fixed `Content-Length` header, which
+	// on Cloud Run HTTP/1.1 means the platform proxy can buffer the full
+	// response in memory (~32MiB cap) before flushing to the client.
+	// Omitting size forces `Transfer-Encoding: chunked`, which Cloud Run
+	// streams through unbuffered — what we want for large mp4s.
+	// The size is still echoed via an explicit X-Content-Size header for
+	// clients that want it for progress UI.
 	if size > 0 {
-		return c.SendStream(body, int(size))
+		c.Set("X-Content-Size", strconv.FormatInt(size, 10))
 	}
 	return c.SendStream(body)
 }
