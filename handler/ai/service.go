@@ -1672,6 +1672,11 @@ func (s *Service) enqueueTaskRoutingEvent(
 	// freshly-generated snowflake from the payload, tries to claim a
 	// work_lease for a row id that was never inserted, and trips the
 	// work_lease_event_id_fkey foreign key.
+	//
+	// `payload` is passed as `string(...)` (not `[]byte`) because GORM/pq
+	// renders a `[]byte` placeholder inside a function-call context as a
+	// comma-separated list of byte literals (SQLSTATE 54023, > 100 args).
+	// String binding lands as text and casts cleanly to jsonb.
 	updateResult := tx.Exec(`
 		UPDATE event_log
 		SET payload = jsonb_set(?::jsonb, '{event_log_id}', to_jsonb(id::text)),
@@ -1680,7 +1685,7 @@ func (s *Service) enqueueTaskRoutingEvent(
 		  AND aggregate_id = ?
 		  AND event_type = 'task_routing'
 		  AND publish_status = 'pending'
-	`, payload, item.ID)
+	`, string(payload), item.ID)
 	if updateResult.Error != nil {
 		return updateResult.Error
 	}
