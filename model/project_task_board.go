@@ -37,6 +37,7 @@ type ProjectTaskBoardItem struct {
 	PendingQuestion  json.RawMessage      `json:"pending_question,omitempty" gorm:"type:jsonb;column:pending_question"`
 	PendingApproval  json.RawMessage      `json:"pending_approval,omitempty" gorm:"type:jsonb;column:pending_approval"`
 	Mounts           json.RawMessage      `json:"mounts" gorm:"type:jsonb;column:mounts;not null;default:'[]'"`
+	Deliverables     json.RawMessage      `json:"deliverables" gorm:"type:jsonb;column:deliverables;not null;default:'[]'"`
 }
 
 func (ProjectTaskBoardItem) TableName() string { return "project_task_board_items" }
