@@ -1,14 +1,39 @@
 package router
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/gofiber/fiber/v3"
-	"github.com/wacht-platform/frontend-api/handler/ai"
+	"github.com/gofiber/fiber/v3/middleware/limiter"
+	"github.com/wacht-platform/frontend-api/handler"
+	aihandler "github.com/wacht-platform/frontend-api/handler/ai"
+	"github.com/wacht-platform/frontend-api/middleware"
+	"github.com/wacht-platform/frontend-api/service"
 )
 
 func setupAiRoutes(app *fiber.App) {
-	h := ai.NewHandler()
+	h := aihandler.NewHandler()
 
+	natsService := service.GetNATS()
 	aiGroup := app.Group("/ai")
+	aiGroup.Use(limiter.New(limiter.Config{
+		Max:        100,
+		Expiration: 1 * time.Minute,
+		Storage:    middleware.NewNatsStorage(natsService),
+		KeyGenerator: func(c fiber.Ctx) string {
+			now := time.Now()
+			return fmt.Sprintf("%s:%s:%d:%d", c.IP(), c.Path(), now.Hour(), now.Minute())
+		},
+		LimitReached: func(c fiber.Ctx) error {
+			return handler.SendTooManyRequests(
+				c,
+				nil,
+				"Too many requests. Please try again later.",
+				handler.ErrTooManyRequests,
+			)
+		},
+	}))
 	aiGroup.Get("/session", h.GetSession)
 	aiGroup.Get("/projects", h.ListActorProjects)
 	aiGroup.Get("/projects/search", h.SearchActorProjects)

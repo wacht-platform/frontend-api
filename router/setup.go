@@ -43,11 +43,15 @@ func setupMiddleware(app *fiber.App) {
 	app.Use(recover.New())
 	natsService := service.GetNATS()
 	app.Use(limiter.New(limiter.Config{
-		Max:        20,
+		Max:        50,
 		Expiration: 1 * time.Minute,
 		Storage:    middleware.NewNatsStorage(natsService),
 		Next: func(c fiber.Ctx) bool {
-			return c.Method() == fiber.MethodGet && c.Path() == "/session/token"
+			if c.Method() == fiber.MethodGet && c.Path() == "/session/token" {
+				return true
+			}
+			// /ai/* routes have their own per-route limiter (see setupAiRoutes).
+			return strings.HasPrefix(c.Path(), "/ai")
 		},
 		KeyGenerator: func(c fiber.Ctx) string {
 			now := time.Now()
