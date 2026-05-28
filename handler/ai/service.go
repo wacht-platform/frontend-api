@@ -2749,19 +2749,20 @@ func (s *Service) CreateProjectBoardItemComment(
 			return err
 		}
 
-		// Active executor threads on this item — if any, route the feedback
-		// directly to them as a UserMessage so the executor sees it on its
-		// next turn. Falls back to the coordinator-routing path only when
-		// nothing is actively executing.
+		// Every thread that has ever been assigned to this item gets the
+		// feedback as a UserMessage — covers pending/available (newly
+		// delegated, not started yet), claimed/in_progress (running), and
+		// completed/cancelled/rejected/blocked (closed but the user has
+		// follow-up). Falls back to coordinator routing only when the item
+		// has no assignments at all.
 		type activeAssignmentRow struct {
 			ThreadID uint64 `gorm:"column:thread_id"`
 		}
 		var activeAssignmentRows []activeAssignmentRow
 		if err := tx.Raw(`
-			SELECT thread_id
+			SELECT DISTINCT thread_id
 			FROM project_task_board_item_assignments
 			WHERE board_item_id = ?
-			  AND status IN ('claimed', 'in_progress')
 		`, item.ID).Scan(&activeAssignmentRows).Error; err != nil {
 			return err
 		}
