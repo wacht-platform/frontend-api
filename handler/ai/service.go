@@ -2450,11 +2450,33 @@ func (s *Service) appendClarificationResponseConversation(
 	if _, err := fmt.Sscanf(askedByThreadIDStr, "%d", &threadID); err != nil {
 		return fmt.Errorf("invalid asked_by_thread_id: %w", err)
 	}
+
+	// The agent-engine renderer pairs ClarificationResponse → ClarificationRequest
+	// by request_message_id. Without it the answer is dropped and the agent keeps
+	// rendering the question as "Pending".
+	var requestMessageID uint64
+	if err := tx.Raw(`
+		SELECT id FROM conversations
+		WHERE thread_id = ?
+		  AND message_type = 'clarification_request'
+		  AND id > COALESCE(
+		      (SELECT MAX(id) FROM conversations
+		       WHERE thread_id = ? AND message_type = 'clarification_response'),
+		      0)
+		ORDER BY id DESC
+		LIMIT 1
+	`, threadID, threadID).Scan(&requestMessageID).Error; err != nil {
+		return fmt.Errorf("lookup pending clarification_request: %w", err)
+	}
+
 	id := idgen.NextID()
 	now := time.Now()
 	body := map[string]any{
 		"type":    "clarification_response",
 		"answers": payload.Answers,
+	}
+	if requestMessageID != 0 {
+		body["request_message_id"] = fmt.Sprintf("%d", requestMessageID)
 	}
 	if payload.FreeformText != nil {
 		body["freeform_text"] = *payload.FreeformText
@@ -2721,11 +2743,99 @@ func (s *Service) CreateProjectBoardItemComment(
 	}
 
 	enqueuedRouting := false
+	commentBody := body
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(comment).Error; err != nil {
 			return err
 		}
 
+		// Active executor threads on this item — if any, route the feedback
+		// directly to them as a UserMessage so the executor sees it on its
+		// next turn. Falls back to the coordinator-routing path only when
+		// nothing is actively executing.
+		type activeAssignmentRow struct {
+			ThreadID uint64 `gorm:"column:thread_id"`
+		}
+		var activeAssignmentRows []activeAssignmentRow
+		if err := tx.Raw(`
+			SELECT thread_id
+			FROM project_task_board_item_assignments
+			WHERE board_item_id = ?
+			  AND status IN ('claimed', 'in_progress')
+		`, item.ID).Scan(&activeAssignmentRows).Error; err != nil {
+			return err
+		}
+		activeExecutorThreadIDs := make([]uint64, 0, len(activeAssignmentRows))
+		for _, row := range activeAssignmentRows {
+			activeExecutorThreadIDs = append(activeExecutorThreadIDs, row.ThreadID)
+		}
+
+		if item.ArchivedAt == nil && len(activeExecutorThreadIDs) > 0 {
+			feedbackMessage := fmt.Sprintf(
+				"[New feedback from user on task %s]\n%s",
+				item.TaskKey,
+				commentBody,
+			)
+			for _, threadID := range activeExecutorThreadIDs {
+				convID := idgen.NextID()
+				convContent, err := json.Marshal(map[string]any{
+					"type":    "user_message",
+					"message": feedbackMessage,
+				})
+				if err != nil {
+					return err
+				}
+				if err := tx.Exec(`
+					INSERT INTO conversations (
+						id, thread_id, board_item_id, execution_run_id, timestamp, content, message_type,
+						created_at, updated_at, metadata
+					) VALUES (
+						?, ?, ?, NULL, ?, ?::jsonb, 'user_message',
+						?, ?, NULL
+					)
+				`, convID, threadID, item.ID, now, string(convContent), now, now).Error; err != nil {
+					return err
+				}
+
+				eventLogID := idgen.NextID()
+				idempotencyKey := fmt.Sprintf("user_message_received_%d_%d", threadID, convID)
+				executionRequest := map[string]any{
+					"deployment_id":   fmt.Sprintf("%d", deploymentID),
+					"thread_id":       fmt.Sprintf("%d", threadID),
+					"type":            "new_message",
+					"conversation_id": fmt.Sprintf("%d", convID),
+				}
+				payload, err := json.Marshal(map[string]any{
+					"event_log_id":      fmt.Sprintf("%d", eventLogID),
+					"deployment_id":     fmt.Sprintf("%d", deploymentID),
+					"thread_id":         fmt.Sprintf("%d", threadID),
+					"kind":              "user_message_received",
+					"conversation_id":   fmt.Sprintf("%d", convID),
+					"execution_payload": executionRequest,
+				})
+				if err != nil {
+					return err
+				}
+				if err := tx.Exec(`
+					INSERT INTO event_log (
+						id, deployment_id,
+						aggregate_type, aggregate_id, event_type, payload, priority,
+						publish_subject, publish_status, idempotency_key
+					) VALUES (
+						?, ?,
+						'thread', ?, 'user_message_received', ?::jsonb, 70,
+						?, 'pending', ?
+					)
+					ON CONFLICT (idempotency_key) DO NOTHING
+				`, eventLogID, deploymentID, threadID, payload, eventLogWorkSubject, idempotencyKey).Error; err != nil {
+					return err
+				}
+				enqueuedRouting = true
+			}
+			return nil
+		}
+
+		// No active executor — keep the previous coordinator-routing flow.
 		if _, err := s.preemptActiveBoardItemAssignment(tx, item.ID); err != nil {
 			return err
 		}
