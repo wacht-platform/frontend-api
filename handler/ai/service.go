@@ -693,6 +693,10 @@ func (s *Service) ensureProjectDefaultThreads(
 		}
 	}
 
+	if _, err := s.ensureProjectBoard(db, deploymentID, actorID, projectID, project.Name); err != nil {
+		return fmt.Errorf("failed to ensure project board: %w", err)
+	}
+
 	return nil
 }
 
@@ -1347,12 +1351,33 @@ func (s *Service) EnsureProjectBoard(deploymentID, actorID, projectID uint64) (*
 		return nil, err
 	}
 
+	return s.ensureProjectBoard(s.db, deploymentID, actorID, projectID, project.Name)
+}
+
+// ensureProjectBoard get-or-creates the project's board on the given db handle.
+func (s *Service) ensureProjectBoard(
+	db *gorm.DB,
+	deploymentID, actorID, projectID uint64,
+	projectName string,
+) (*model.ProjectTaskBoard, error) {
+	var existing model.ProjectTaskBoard
+	result := db.Where("deployment_id = ? AND actor_id = ? AND project_id = ? AND archived_at IS NULL", deploymentID, actorID, projectID).
+		Order("updated_at DESC").
+		Limit(1).
+		Find(&existing)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected > 0 {
+		return &existing, nil
+	}
+
 	title := "Project Board"
-	if name := strings.TrimSpace(project.Name); name != "" {
+	if name := strings.TrimSpace(projectName); name != "" {
 		title = fmt.Sprintf("%s Board", name)
 	}
 
-	board = &model.ProjectTaskBoard{
+	board := &model.ProjectTaskBoard{
 		Model:        model.Model{ID: idgen.NextID()},
 		DeploymentID: deploymentID,
 		ActorID:      actorID,
@@ -1362,11 +1387,19 @@ func (s *Service) EnsureProjectBoard(deploymentID, actorID, projectID uint64) (*
 		Metadata:     json.RawMessage("{}"),
 	}
 
-	if err := s.db.Create(board).Error; err != nil {
+	if err := db.Create(board).Error; err != nil {
 		if !strings.Contains(err.Error(), "duplicate key") {
 			return nil, err
 		}
-		return s.GetProjectBoard(deploymentID, actorID, projectID)
+		// Concurrent creator won the race; re-read on the same handle.
+		var raced model.ProjectTaskBoard
+		if err := db.Where("deployment_id = ? AND actor_id = ? AND project_id = ? AND archived_at IS NULL", deploymentID, actorID, projectID).
+			Order("updated_at DESC").
+			Limit(1).
+			Find(&raced).Error; err != nil {
+			return nil, err
+		}
+		return &raced, nil
 	}
 
 	return board, nil

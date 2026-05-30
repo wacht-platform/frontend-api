@@ -98,6 +98,7 @@ DB_NAME=wacht_db
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_PASSWORD=
+REDIS_TLS=false
 
 # JWT
 JWT_SECRET=your-super-secret-jwt-key
