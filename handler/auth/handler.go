@@ -207,7 +207,7 @@ func (h *Handler) handleUsernameSignIn(
 				}
 			}
 
-			utils.PublishSignInEvent(d.ID, user, string(b.Strategy), &user.Username, c)
+			utils.PublishSignInEvent(d.ID, user, string(b.Strategy), &user.Username, signIn, c)
 		}
 
 		return nil
@@ -384,7 +384,7 @@ func (h *Handler) handleEmailPasswordSignIn(
 				_ = h.service.nats.SendSignInNotificationEmail(d.ID, email.User.ID, signIn.ID, email.EmailAddress)
 			}
 
-			utils.PublishSignInEvent(d.ID, &email.User, string(b.Strategy), &email.EmailAddress, c)
+			utils.PublishSignInEvent(d.ID, &email.User, string(b.Strategy), &email.EmailAddress, signIn, c)
 		}
 
 		return nil
@@ -848,8 +848,8 @@ func (h *Handler) SignUp(c fiber.Ctx) error {
 				return err
 			}
 
-			utils.PublishSignUpEvent(d.ID, &u, "email_password", &b.Email, c)
-			utils.PublishSignInEvent(d.ID, &u, "email_password", &b.Email, c)
+			utils.PublishSignUpEvent(d.ID, &u, "email_password", &b.Email, signIn, c)
+			utils.PublishSignInEvent(d.ID, &u, "email_password", &b.Email, signIn, c)
 		}
 
 		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
@@ -1235,8 +1235,8 @@ func (h *Handler) OAuth2Callback(c fiber.Ctx) error {
 				}
 			}
 
-			utils.PublishSignUpEvent(deployment.ID, &u, "oauth", primaryEmail, c)
-			utils.PublishSignInEvent(deployment.ID, &u, "oauth", primaryEmail, c)
+			utils.PublishSignUpEvent(deployment.ID, &u, "oauth", primaryEmail, signIn, c)
+			utils.PublishSignInEvent(deployment.ID, &u, "oauth", primaryEmail, signIn, c)
 		}
 
 		if err := tx.Save(&attempt).Error; err != nil {
@@ -1690,7 +1690,7 @@ func (h *Handler) VerifyMagicLink(c fiber.Ctx) error {
 		})
 
 		if err == nil {
-			utils.PublishSignInEvent(deployment.ID, &email.User, "magic_link", &email.EmailAddress, c)
+			utils.PublishSignInEvent(deployment.ID, &email.User, "magic_link", &email.EmailAddress, signIn, c)
 			h.service.TrackMAU(deployment.ID, email.User.ID)
 		}
 
@@ -2171,7 +2171,7 @@ func (h *Handler) handleSignInVerification(
 				}
 			}
 
-			utils.PublishSignInEvent(deployment.ID, &user, "otp", primaryEmail, c)
+			utils.PublishSignInEvent(deployment.ID, &user, "otp", primaryEmail, signin, c)
 		} else {
 			attempt.RemainingSteps = attempt.RemainingSteps[1:]
 			attempt.CurrentStep = attempt.RemainingSteps[0]
@@ -2291,6 +2291,7 @@ func (h *Handler) handleSignUpVerification(
 			return handler.SendBadRequest(c, nil, err.Error(), handler.ErrCountryRestricted)
 		}
 
+		var signIn *model.Signin
 		if err := database.Connection.Transaction(func(tx *gorm.DB) error {
 			email := user.UserEmailAddresses[0]
 			user.UserEmailAddresses = []model.UserEmailAddress{}
@@ -2316,7 +2317,7 @@ func (h *Handler) handleSignUpVerification(
 				return err
 			}
 
-			signIn := h.service.CreateSignin(user.ID, session.ID, c, d.AuthSettings.SessionValidityPeriod)
+			signIn = h.service.CreateSignin(user.ID, session.ID, c, d.AuthSettings.SessionValidityPeriod)
 
 			if err := tx.Create(signIn).Error; err != nil {
 				return err
@@ -2356,8 +2357,8 @@ func (h *Handler) handleSignUpVerification(
 
 		h.service.TrackMAU(d.ID, user.ID)
 
-		utils.PublishSignUpEvent(d.ID, user, "email_password", &attempt.Email, c)
-		utils.PublishSignInEvent(d.ID, user, "email_password", &attempt.Email, c)
+		utils.PublishSignUpEvent(d.ID, user, "email_password", &attempt.Email, signIn, c)
+		utils.PublishSignInEvent(d.ID, user, "email_password", &attempt.Email, signIn, c)
 
 		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 
@@ -2889,7 +2890,7 @@ func (h *Handler) ResetPassword(c fiber.Ctx) error {
 				}
 			}
 
-			utils.PublishSignInEvent(deployment.ID, &user, "password_reset", nil, c)
+			utils.PublishSignInEvent(deployment.ID, &user, "password_reset", nil, signIn, c)
 		}
 
 		return nil

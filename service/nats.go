@@ -184,6 +184,8 @@ type AnalyticsEventTask struct {
 	AuthMethod     *string   `json:"auth_method"`
 	Timestamp      time.Time `json:"timestamp"`
 	IPAddress      *string   `json:"ip_address"`
+	Country        *string   `json:"country"`
+	Device         *string   `json:"device"`
 }
 
 type BillingEventTask struct {
@@ -506,7 +508,7 @@ func (s *NatsService) PublishAnalyticsEvent(
 	deploymentID uint64,
 	userID *uint64,
 	eventType string,
-	userName, userIdentifier, authMethod, ipAddress *string,
+	userName, userIdentifier, authMethod, ipAddress, country, device *string,
 ) error {
 	task := AnalyticsEventTask{
 		DeploymentID:   deploymentID,
@@ -517,6 +519,8 @@ func (s *NatsService) PublishAnalyticsEvent(
 		AuthMethod:     authMethod,
 		Timestamp:      time.Now(),
 		IPAddress:      ipAddress,
+		Country:        country,
+		Device:         device,
 	}
 	return s.publishTask(context.Background(), "analytics.event", task)
 }

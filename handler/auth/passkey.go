@@ -227,7 +227,7 @@ func (h *Handler) FinishPasskeyLogin(c fiber.Ctx) error {
 			return err
 		}
 
-		utils.PublishSignInEvent(d.ID, &user, "passkey", nil, c)
+		utils.PublishSignInEvent(d.ID, &user, "passkey", nil, signIn, c)
 
 		return nil
 	})

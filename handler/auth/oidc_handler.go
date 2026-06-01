@@ -358,9 +358,9 @@ func (h *Handler) OIDCCallback(c fiber.Ctx) error {
 		utils.PublishWebhookEvent(deployment.ID, "session.created", session.ID, "session")
 
 		if created {
-			utils.PublishSignUpEvent(deployment.ID, user, "enterprise_sso", &userEmail, c)
+			utils.PublishSignUpEvent(deployment.ID, user, "enterprise_sso", &userEmail, signIn, c)
 		}
-		utils.PublishSignInEvent(deployment.ID, user, "enterprise_sso", &userEmail, c)
+		utils.PublishSignInEvent(deployment.ID, user, "enterprise_sso", &userEmail, signIn, c)
 
 		return nil
 	})
