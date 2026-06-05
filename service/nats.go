@@ -73,6 +73,10 @@ type ApiKeyWorkspaceRoleSyncPayload struct {
 	RoleID uint64 `json:"role_id"`
 }
 
+type SearchUserSyncPayload struct {
+	UserID uint64 `json:"user_id"`
+}
+
 type VerificationEmailTask struct {
 	DeploymentID     uint64 `json:"deployment_id"`
 	Recipient        string `json:"recipient"`
@@ -501,6 +505,14 @@ func (s *NatsService) PublishApiKeyWorkspaceRoleSync(roleID uint64) error {
 		context.Background(),
 		"api_key.sync_workspace_role_permissions",
 		ApiKeyWorkspaceRoleSyncPayload{RoleID: roleID},
+	)
+}
+
+func (s *NatsService) PublishSearchUserSync(userID uint64) error {
+	return s.publishTask(
+		context.Background(),
+		"search.sync_user",
+		SearchUserSyncPayload{UserID: userID},
 	)
 }
 

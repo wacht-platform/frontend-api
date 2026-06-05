@@ -216,6 +216,9 @@ func (h *Handler) CreateUser(c fiber.Ctx) error {
 		return h.sendSCIMError(c, 500, err.Error(), "")
 	}
 
+	// Index the SCIM-provisioned user for search (post-commit).
+	database.SyncUserWrapper(nil, user.ID, "scim.create")
+
 	// Reload user with associations
 	user, _ = h.service.GetUserByID(user.ID, deployment.ID)
 
@@ -296,6 +299,9 @@ func (h *Handler) ReplaceUser(c fiber.Ctx) error {
 	if err != nil {
 		return h.sendSCIMError(c, 500, err.Error(), "")
 	}
+
+	// Re-index the SCIM-updated user for search (post-commit).
+	database.SyncUserWrapper(nil, user.ID, "scim.update")
 
 	// Reload user
 	user, _ = h.service.GetUserByID(userID, deploymentID)

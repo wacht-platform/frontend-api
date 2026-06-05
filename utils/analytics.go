@@ -63,6 +63,14 @@ func PublishSignInEvent(deploymentID uint64, user *model.User, authMethod string
 
 func PublishSignUpEvent(deploymentID uint64, user *model.User, authMethod string, identifier *string, signin *model.Signin, c fiber.Ctx) {
 	natsService := service.GetNATS()
+
+	// Index the freshly-created user for search. This runs post-commit for every
+	// interactive signup flow (password, oauth, enterprise SSO, OIDC), so new users
+	// are searchable immediately instead of only after a later profile/membership edit.
+	if err := natsService.PublishSearchUserSync(user.ID); err != nil {
+		log.Printf("[search] failed to enqueue sync for user %d: %v", user.ID, err)
+	}
+
 	ipAddress := c.IP()
 	country, device := signinGeo(signin)
 

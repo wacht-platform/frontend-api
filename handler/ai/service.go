@@ -687,7 +687,21 @@ func (s *Service) ensureProjectDefaultThreads(
 			}
 		}
 		if reviewID, ok := defaultThreadIDs[threadPurposeReview]; ok {
-			if err := s.upsertThreadAgentAssignment(db, reviewID, *selectedAgentID); err != nil {
+			// Reviewer defaults to the agent itself unless it designates a sub-agent reviewer.
+			reviewerAgentID := *selectedAgentID
+			var reviewerRow struct {
+				ReviewerAgentID *uint64 `gorm:"column:reviewer_agent_id"`
+			}
+			if err := db.Raw(
+				`SELECT reviewer_agent_id FROM ai_agents WHERE id = ? AND deployment_id = ?`,
+				*selectedAgentID, deploymentID,
+			).Scan(&reviewerRow).Error; err != nil {
+				return fmt.Errorf("failed to resolve reviewer agent: %w", err)
+			}
+			if reviewerRow.ReviewerAgentID != nil && *reviewerRow.ReviewerAgentID != 0 {
+				reviewerAgentID = *reviewerRow.ReviewerAgentID
+			}
+			if err := s.upsertThreadAgentAssignment(db, reviewID, reviewerAgentID); err != nil {
 				return fmt.Errorf("failed to bind review thread agent: %w", err)
 			}
 		}
@@ -1010,7 +1024,23 @@ func (s *Service) CreateAgentThread(deploymentID, actorID, projectID uint64, req
 			return err
 		}
 		if req.AgentID != nil && *req.AgentID != 0 {
-			if err := s.upsertThreadAgentAssignment(tx, thread.ID, *req.AgentID); err != nil {
+			boundAgentID := *req.AgentID
+			if thread.ThreadPurpose == threadPurposeConversation {
+				// A user-facing conversation defaults to the agent itself unless it designates a conversation agent.
+				var row struct {
+					ConversationAgentID *uint64 `gorm:"column:conversation_agent_id"`
+				}
+				if err := tx.Raw(
+					`SELECT conversation_agent_id FROM ai_agents WHERE id = ? AND deployment_id = ?`,
+					*req.AgentID, deploymentID,
+				).Scan(&row).Error; err != nil {
+					return err
+				}
+				if row.ConversationAgentID != nil && *row.ConversationAgentID != 0 {
+					boundAgentID = *row.ConversationAgentID
+				}
+			}
+			if err := s.upsertThreadAgentAssignment(tx, thread.ID, boundAgentID); err != nil {
 				return err
 			}
 		}

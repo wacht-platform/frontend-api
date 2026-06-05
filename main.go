@@ -30,6 +30,14 @@ func main() {
 		log.Fatal("Error connecting to NATS: ", err)
 	}
 
+	// Wire the search-index publisher now that NATS is up. Injected so the database
+	// package (where SyncUserWrapper lives) needn't import service (import cycle).
+	database.PublishSearchSync = func(userID uint64) {
+		if err := service.GetNATS().PublishSearchUserSync(userID); err != nil {
+			log.Printf("[search] failed to enqueue sync for user %d: %v", userID, err)
+		}
+	}
+
 	err = service.InitPrelude()
 	if err != nil {
 		log.Fatal("Error initializing Prelude: ", err)

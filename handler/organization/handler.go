@@ -1422,14 +1422,8 @@ func (h *Handler) GetOrganizationMembers(
 	args := []interface{}{d.ID, fmt.Sprintf("[%d]", orgID)}
 
 	if searchQuery != "" {
-		baseWhere += ` AND (
-			search_users.search_vector @@ websearch_to_tsquery('english', ?)
-			OR search_users.first_name % ?
-			OR search_users.last_name % ?
-			OR search_users.username % ?
-			OR search_users.primary_email % ?
-		)`
-		args = append(args, searchQuery, searchQuery, searchQuery, searchQuery, searchQuery)
+		baseWhere += " AND search_users.search_text ILIKE '%' || ? || '%'"
+		args = append(args, searchQuery)
 	}
 
 	var userIDs []uint64
