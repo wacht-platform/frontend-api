@@ -1130,6 +1130,8 @@ func (h *Handler) OAuth2Callback(c fiber.Ctx) error {
 			},
 			FirstName:             user.FirstName,
 			LastName:              user.LastName,
+			HasProfilePicture:     user.ImageUrl != "",
+			ProfilePictureURL:     user.ImageUrl,
 			SchemaVersion:         model.SchemaVersionV1,
 			SecondFactorPolicy:    deployment.AuthSettings.SecondFactorPolicy,
 			DeploymentID:          deployment.ID,

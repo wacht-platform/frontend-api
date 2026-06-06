@@ -207,6 +207,8 @@ func ExchangeTokenForUser(
 			lastName = namesplit[1]
 		}
 
+		imageUrl, _ := res["avatar_url"].(string)
+
 		req, err = http.NewRequest(
 			"GET",
 			"https://api.github.com/user/emails",
@@ -235,6 +237,7 @@ func ExchangeTokenForUser(
 					FirstName: firstName,
 					LastName:  lastName,
 					Email:     email["email"].(string),
+					ImageUrl:  imageUrl,
 				}, nil
 			}
 		}
@@ -260,15 +263,17 @@ func ExchangeTokenForUser(
 		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 			return nil, err
 		}
+		imageUrl, _ := res["picture"].(string)
 		return &OAuthUser{
 			FirstName: res["given_name"].(string),
 			LastName:  res["family_name"].(string),
 			Email:     res["email"].(string),
+			ImageUrl:  imageUrl,
 		}, nil
 	case model.SocialConnectionProviderFacebook:
 		req, err := http.NewRequest(
 			"GET",
-			"https://graph.facebook.com/me?fields=id,name,email,first_name,last_name",
+			"https://graph.facebook.com/me?fields=id,name,email,first_name,last_name,picture.type(large)",
 			nil,
 		)
 		if err != nil {
@@ -288,10 +293,18 @@ func ExchangeTokenForUser(
 			return nil, err
 		}
 
+		imageUrl := ""
+		if picture, ok := res["picture"].(map[string]any); ok {
+			if data, ok := picture["data"].(map[string]any); ok {
+				imageUrl, _ = data["url"].(string)
+			}
+		}
+
 		return &OAuthUser{
 			FirstName: res["first_name"].(string),
 			LastName:  res["last_name"].(string),
 			Email:     res["email"].(string),
+			ImageUrl:  imageUrl,
 		}, nil
 	case model.SocialConnectionProviderMicrosoft:
 		req, err := http.NewRequest(
@@ -377,10 +390,13 @@ func ExchangeTokenForUser(
 			}
 		}
 
+		imageUrl, _ := res["picture"].(string)
+
 		return &OAuthUser{
 			FirstName: firstName,
 			LastName:  lastName,
 			Email:     email,
+			ImageUrl:  imageUrl,
 		}, nil
 	case model.SocialConnectionProviderDiscord:
 		req, err := http.NewRequest(
@@ -423,10 +439,22 @@ func ExchangeTokenForUser(
 			lastName = strings.Join(nameParts[1:], " ")
 		}
 
+		imageUrl := ""
+		if avatar, ok := res["avatar"].(string); ok && avatar != "" {
+			if id, ok := res["id"].(string); ok && id != "" {
+				imageUrl = fmt.Sprintf(
+					"https://cdn.discordapp.com/avatars/%s/%s.png",
+					id,
+					avatar,
+				)
+			}
+		}
+
 		return &OAuthUser{
 			FirstName: firstName,
 			LastName:  lastName,
 			Email:     res["email"].(string),
+			ImageUrl:  imageUrl,
 		}, nil
 	case model.SocialConnectionProviderX:
 		userReq, err := http.NewRequest(
@@ -457,6 +485,7 @@ func ExchangeTokenForUser(
 
 		name, _ := userData["name"].(string)
 		userID, _ := userData["id"].(string)
+		imageUrl, _ := userData["profile_image_url"].(string)
 
 		nameParts := strings.Split(name, " ")
 		firstName := nameParts[0]
@@ -503,6 +532,7 @@ func ExchangeTokenForUser(
 			FirstName: firstName,
 			LastName:  lastName,
 			Email:     email,
+			ImageUrl:  imageUrl,
 		}, nil
 	case model.SocialConnectionProviderGitLab:
 		req, err := http.NewRequest(
@@ -535,10 +565,13 @@ func ExchangeTokenForUser(
 			lastName = strings.Join(nameParts[1:], " ")
 		}
 
+		imageUrl, _ := res["avatar_url"].(string)
+
 		return &OAuthUser{
 			FirstName: firstName,
 			LastName:  lastName,
 			Email:     res["email"].(string),
+			ImageUrl:  imageUrl,
 		}, nil
 	case model.SocialConnectionProviderApple:
 		idToken := token.Extra("id_token")
