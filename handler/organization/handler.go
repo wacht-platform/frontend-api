@@ -159,6 +159,8 @@ func (h *Handler) CreateOrganization(
 
 	utils.PublishWebhookEvent(d.ID, "organization.created", org.ID, "organization")
 
+	utils.PublishOrganizationCreatedEvent(d.ID, session.ActiveSignin.UserID)
+
 	database.SyncUserWrapper(database.Connection, *session.ActiveSignin.UserID, "organization.created")
 
 	handler.RemoveSessionFromCacheAndLocals(c, session.ID)

@@ -1111,6 +1111,7 @@ func (h *Handler) OAuth2Callback(c fiber.Ctx) error {
 				attempt.Completed = true
 
 				utils.PublishWebhookEvent(deployment.ID, "session.created", session.ID, "session")
+				utils.PublishSignInEvent(deployment.ID, &email.User, "oauth", &email.EmailAddress, signIn, c)
 			} else {
 				attempt.Completed = false
 			}
@@ -1884,6 +1885,19 @@ func (h *Handler) handleSignInVerification(
 
 			if attempt.Completed {
 				h.service.TrackMAU(deployment.ID, userID)
+
+				signinUser := user
+				if signinUser == nil {
+					var u model.User
+					if database.Connection.Where("id = ?", userID).First(&u).Error == nil {
+						signinUser = &u
+					} else {
+						signinUser = &model.User{Model: model.Model{ID: userID}}
+					}
+				}
+				if signin != nil {
+					utils.PublishSignInEvent(deployment.ID, signinUser, "otp", &emailAddress, signin, c)
+				}
 			}
 
 			h.service.DeleteOTPFromRedis(
@@ -2025,6 +2039,19 @@ func (h *Handler) handleSignInVerification(
 
 			if attempt.Completed {
 				h.service.TrackMAU(deployment.ID, userID)
+
+				signinUser := user
+				if signinUser == nil {
+					var u model.User
+					if database.Connection.Where("id = ?", userID).First(&u).Error == nil {
+						signinUser = &u
+					} else {
+						signinUser = &model.User{Model: model.Model{ID: userID}}
+					}
+				}
+				if signin != nil {
+					utils.PublishSignInEvent(deployment.ID, signinUser, "otp", &phoneNumber, signin, c)
+				}
 			}
 
 			h.service.DeleteOTPFromRedis(
@@ -2511,6 +2538,9 @@ func (h *Handler) CompleteOAuthSignup(c fiber.Ctx) error {
 		}
 
 		h.service.TrackMAU(deployment.ID, user.ID)
+
+		utils.PublishSignUpEvent(deployment.ID, user, "oauth", &attempt.Email, signIn, c)
+		utils.PublishSignInEvent(deployment.ID, user, "oauth", &attempt.Email, signIn, c)
 
 		handler.RemoveSessionFromCacheAndLocals(c, session.ID)
 		return handler.SendSuccess(c, session)

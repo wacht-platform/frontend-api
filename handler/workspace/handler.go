@@ -239,6 +239,8 @@ func (h *Handler) CreateWorkspace(c fiber.Ctx) error {
 		)
 	}
 
+	utils.PublishWorkspaceCreatedEvent(deployment.ID, session.ActiveSignin.UserID)
+
 	var finalWorkspace model.Workspace
 	if err := database.Connection.
 		Preload("Members", "user_id = ?", session.ActiveSignin.UserID).
