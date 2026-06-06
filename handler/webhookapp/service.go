@@ -995,7 +995,7 @@ func (s *Service) GetDelivery(deploymentID uint64, appSlug string, deliveryID in
 				payload_size_bytes,
 				timestamp
 			FROM webhook_logs_light
-			WHERE deployment_id = ? AND app_slug = ? AND delivery_id = ?
+			WHERE deployment_id = ? AND app_slug = ? AND delivery_id = ? AND status != 'pending'
 		)
 		SELECT
 			d.delivery_id,
@@ -1214,7 +1214,7 @@ func (s *Service) GetAnalytics(deploymentID uint64, appSlug string, startDate, e
 	}
 
 	if fieldSet[string(FieldSuccessRate)] || len(selectParts) == 0 {
-		selectParts = append([]string{"count() as total_deliveries"}, selectParts...)
+		selectParts = append([]string{"uniqExactIf(delivery_id, status != 'pending') as total_deliveries"}, selectParts...)
 		scanTargets = append([]interface{}{&stats.TotalDeliveries}, scanTargets...)
 	}
 
@@ -1344,7 +1344,7 @@ func (s *Service) GetTimeseries(deploymentID uint64, appSlug string, startDate, 
 	deliveryQuery := fmt.Sprintf(
 		"SELECT "+
 			"%s(timestamp) as bucket, "+
-			"toInt64(count()) as total_deliveries, "+
+			"toInt64(uniqExactIf(delivery_id, status != 'pending')) as total_deliveries, "+
 			"toInt64(countIf(status = 'success')) as successful_deliveries, "+
 			"toInt64(countIf(status IN ('failed', 'permanently_failed'))) as failed_deliveries, "+
 			"toInt64(countIf(status = 'filtered')) as filtered_deliveries, "+
