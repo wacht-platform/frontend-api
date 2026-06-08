@@ -125,7 +125,7 @@ func (h *Handler) CreateOrganization(
 				id, deployment_id, name, description, image_url, member_count,
 				enforce_mfa_setup, enable_ip_restriction, created_at, updated_at,
 				public_metadata, private_metadata
-			) VALUES (?, ?, ?, ?, ?, 1, false, false, NOW(), NOW(), '{}', '{}')
+			) VALUES (?, ?, ?, ?, ?, 0, false, false, NOW(), NOW(), '{}', '{}')
 			RETURNING id
 		),
 		inserted_membership AS (
