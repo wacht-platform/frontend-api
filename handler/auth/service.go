@@ -36,6 +36,7 @@ type AuthService struct {
 	db      *gorm.DB
 	nats    *service.NatsService
 	prelude *service.PreludeService
+	s3      *service.S3Service
 }
 
 func NewAuthService() *AuthService {
@@ -46,6 +47,7 @@ func NewAuthService() *AuthService {
 		db:      database.Connection,
 		nats:    natsService,
 		prelude: preludeService,
+		s3:      service.NewS3Service(),
 	}
 }
 

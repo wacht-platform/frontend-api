@@ -1086,6 +1086,16 @@ func (h *Handler) OAuth2Callback(c fiber.Ctx) error {
 
 	exists := err != gorm.ErrRecordNotFound
 
+	newUserID := idgen.NextID()
+	profilePictureURL := user.ImageUrl
+	if !exists && user.ImageUrl != "" {
+		if cdnURL, uploadErr := h.service.s3.UploadFromURL(fmt.Sprintf("users/%d", newUserID), user.ImageUrl); uploadErr != nil {
+			log.Printf("failed to mirror oauth profile picture to cdn: %v", uploadErr)
+		} else {
+			profilePictureURL = cdnURL
+		}
+	}
+
 	err = database.Connection.Transaction(func(tx *gorm.DB) error {
 		if exists {
 			if err := h.service.ValidateIPCountryRestrictions(c, deployment.Restrictions); err != nil {
@@ -1127,12 +1137,12 @@ func (h *Handler) OAuth2Callback(c fiber.Ctx) error {
 
 		u := model.User{
 			Model: model.Model{
-				ID: idgen.NextID(),
+				ID: newUserID,
 			},
 			FirstName:             user.FirstName,
 			LastName:              user.LastName,
-			HasProfilePicture:     user.ImageUrl != "",
-			ProfilePictureURL:     user.ImageUrl,
+			HasProfilePicture:     profilePictureURL != "",
+			ProfilePictureURL:     profilePictureURL,
 			SchemaVersion:         model.SchemaVersionV1,
 			SecondFactorPolicy:    deployment.AuthSettings.SecondFactorPolicy,
 			DeploymentID:          deployment.ID,

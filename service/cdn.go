@@ -23,6 +23,25 @@ func NewS3Service() *S3Service {
 	}
 }
 
+func (s *S3Service) UploadFromURL(key, sourceURL string) (string, error) {
+	resp, err := http.Get(sourceURL)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to download image from %s: status %d", sourceURL, resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return s.UploadToCdn(key, bytes.NewReader(data))
+}
+
 func (s *S3Service) UploadToCdn(key string, file io.ReadSeeker) (string, error) {
 	_, err := s.client.PutObject(&s3.PutObjectInput{
 		Bucket: aws.String(os.Getenv("R2_CDN_BUCKET")),
