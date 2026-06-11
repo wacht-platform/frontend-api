@@ -2812,12 +2812,13 @@ func (s *Service) CreateProjectBoardItemComment(
 			return err
 		}
 
-		// Every thread that has ever been assigned to this item gets the
-		// feedback as a UserMessage — covers pending/available (newly
-		// delegated, not started yet), claimed/in_progress (running), and
-		// completed/cancelled/rejected/blocked (closed but the user has
-		// follow-up). Falls back to coordinator routing only when the item
-		// has no assignments at all.
+		// Only threads with a LIVE assignment (pending/available/claimed/
+		// in_progress) get the feedback delivered directly as a UserMessage —
+		// those are actively working the task and should adapt mid-flight.
+		// When every assignment is terminal (completed/cancelled/rejected/
+		// blocked) there is no live executor, so we fall through to coordinator
+		// routing; waking a finished executor thread does no task work and the
+		// coordinator never gets to re-evaluate/re-assign.
 		type activeAssignmentRow struct {
 			ThreadID uint64 `gorm:"column:thread_id"`
 		}
@@ -2826,6 +2827,7 @@ func (s *Service) CreateProjectBoardItemComment(
 			SELECT DISTINCT thread_id
 			FROM project_task_board_item_assignments
 			WHERE board_item_id = ?
+			  AND status IN ('pending', 'available', 'claimed', 'in_progress')
 		`, item.ID).Scan(&activeAssignmentRows).Error; err != nil {
 			return err
 		}
