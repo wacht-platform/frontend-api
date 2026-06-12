@@ -60,6 +60,65 @@ func (d *DarkModeSettings) GormDBDataType() string {
 	return "jsonb"
 }
 
+type WaThemeTokens struct {
+	Surface           string `json:"surface,omitempty"`
+	SurfaceSubtle     string `json:"surface_subtle,omitempty"`
+	Background        string `json:"background,omitempty"`
+	Canvas            string `json:"canvas,omitempty"`
+	Text              string `json:"text,omitempty"`
+	TextSecondary     string `json:"text_secondary,omitempty"`
+	TextMuted         string `json:"text_muted,omitempty"`
+	TextFaint         string `json:"text_faint,omitempty"`
+	Border            string `json:"border,omitempty"`
+	BorderStrong      string `json:"border_strong,omitempty"`
+	Primary           string `json:"primary,omitempty"`
+	PrimarySoft       string `json:"primary_soft,omitempty"`
+	PrimaryForeground string `json:"primary_foreground,omitempty"`
+	Success           string `json:"success,omitempty"`
+	SuccessSoft       string `json:"success_soft,omitempty"`
+	Info              string `json:"info,omitempty"`
+	InfoSoft          string `json:"info_soft,omitempty"`
+	Warning           string `json:"warning,omitempty"`
+	WarningSoft       string `json:"warning_soft,omitempty"`
+	Error             string `json:"error,omitempty"`
+	ErrorSoft         string `json:"error_soft,omitempty"`
+	Radius            string `json:"radius,omitempty"`
+	RadiusLg          string `json:"radius_lg,omitempty"`
+	FontSans          string `json:"font_sans,omitempty"`
+	FontMono          string `json:"font_mono,omitempty"`
+}
+
+// ThemeTokens is the per-deployment `--wa-*` override served to the SDK. The
+// column is nullable; a NULL row scans to the zero value (no overrides) and the
+// SDK renders with its defaults.
+type ThemeTokens struct {
+	Light *WaThemeTokens `json:"light,omitempty"`
+	Dark  *WaThemeTokens `json:"dark,omitempty"`
+}
+
+func (t *ThemeTokens) Scan(value any) error {
+	if value == nil {
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return errors.New("invalid type for ThemeTokens")
+	}
+	return json.Unmarshal(bytes, t)
+}
+
+func (t ThemeTokens) Value() (driver.Value, error) {
+	return json.Marshal(t)
+}
+
+func (t *ThemeTokens) GormDataType() string {
+	return "jsonb"
+}
+
+func (t *ThemeTokens) GormDBDataType() string {
+	return "jsonb"
+}
+
 type UITokenOverrides struct {
 	SpaceUnit              string `json:"space_unit,omitempty"`
 	Card                   string `json:"card,omitempty"`
@@ -188,4 +247,5 @@ type DeploymentUISettings struct {
 	SignupTermsStatementShown              bool              `json:"signup_terms_statement_shown"                gorm:"not null"`
 	LightModeSettings                      LightModeSettings `json:"light_mode_settings"                         gorm:"not null"`
 	DarkModeSettings                       DarkModeSettings  `json:"dark_mode_settings"                          gorm:"not null"`
+	ThemeTokens                            ThemeTokens       `json:"theme_tokens"                                gorm:"type:jsonb"`
 }
