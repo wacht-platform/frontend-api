@@ -363,28 +363,31 @@ func (h *Handler) DeleteOrganization(
 	}
 	deployment := handler.GetDeployment(c)
 
-	rawSQL := `
-		DELETE FROM workspace_membership_roles WHERE organization_id = ?;
-		DELETE FROM workspace_memberships WHERE organization_id = ?;
-		DELETE FROM workspace_roles WHERE organization_id = ?;
-		DELETE FROM workspaces WHERE organization_id = ?;
-		DELETE FROM organization_membership_roles WHERE organization_id = ?;
-		DELETE FROM organization_memberships WHERE organization_id = ?;
-		DELETE FROM organization_invitations WHERE organization_id = ?;
-		DELETE FROM scim_group_members WHERE scim_group_id IN (SELECT id FROM scim_groups WHERE organization_id = ?);
-		DELETE FROM scim_groups WHERE organization_id = ?;
-		DELETE FROM scim_tokens WHERE organization_id = ?;
-		DELETE FROM enterprise_connections WHERE organization_id = ?;
-		DELETE FROM organization_domains WHERE organization_id = ?;
-		DELETE FROM organization_roles WHERE organization_id = ?;
-		DELETE FROM organizations WHERE id = ?;
-	`
+	deleteStatements := []string{
+		"DELETE FROM workspace_membership_roles WHERE organization_id = ?",
+		"DELETE FROM workspace_memberships WHERE organization_id = ?",
+		"DELETE FROM workspace_roles WHERE organization_id = ?",
+		"DELETE FROM workspaces WHERE organization_id = ?",
+		"DELETE FROM organization_membership_roles WHERE organization_id = ?",
+		"DELETE FROM organization_memberships WHERE organization_id = ?",
+		"DELETE FROM organization_invitations WHERE organization_id = ?",
+		"DELETE FROM scim_group_members WHERE scim_group_id IN (SELECT id FROM scim_groups WHERE organization_id = ?)",
+		"DELETE FROM scim_groups WHERE organization_id = ?",
+		"DELETE FROM scim_tokens WHERE organization_id = ?",
+		"DELETE FROM enterprise_connections WHERE organization_id = ?",
+		"DELETE FROM organization_domains WHERE organization_id = ?",
+		"DELETE FROM organization_roles WHERE organization_id = ?",
+		"DELETE FROM organizations WHERE id = ?",
+	}
 
-	if err := database.Connection.Exec(
-		rawSQL,
-		orgIDUint, orgIDUint, orgIDUint, orgIDUint, orgIDUint, orgIDUint, orgIDUint,
-		orgIDUint, orgIDUint, orgIDUint, orgIDUint, orgIDUint, orgIDUint, orgIDUint,
-	).Error; err != nil {
+	if err := database.Connection.Transaction(func(tx *gorm.DB) error {
+		for _, stmt := range deleteStatements {
+			if err := tx.Exec(stmt, orgIDUint).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		log.Printf("Failed to delete organization %s: %v", orgID, err)
 		return handler.SendInternalServerError(c, err, "Failed to delete organization")
 	}
