@@ -1298,6 +1298,7 @@ func (s *Service) GetThreadMessages(
 	threadID uint64,
 	limit int,
 	beforeID, afterID string,
+	boardItemID uint64,
 ) ([]ConversationMessage, bool, error) {
 	if _, err := s.GetThread(deploymentID, actorID, threadID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -1310,6 +1311,10 @@ func (s *Service) GetThreadMessages(
 		Select("id, thread_id, execution_run_id, message_type, content - 'thought_signature' as content, timestamp, metadata, created_at, updated_at").
 		Where("thread_id = ?", threadID).
 		Where("message_type <> ?", "task_subscription_notification")
+
+	if boardItemID != 0 {
+		messagesQuery = messagesQuery.Where("board_item_id = ?", boardItemID)
+	}
 
 	if beforeID != "" {
 		messagesQuery = messagesQuery.Where("id < ?", beforeID)

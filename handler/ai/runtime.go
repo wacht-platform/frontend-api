@@ -68,6 +68,7 @@ func (h *Handler) GetThreadMessages(c fiber.Ctx) error {
 
 	beforeID := c.Query("before_id")
 	afterID := c.Query("after_id")
+	boardItemID, _ := strconv.ParseUint(c.Query("board_item_id"), 10, 64)
 
 	deployment := handler.GetDeployment(c)
 	messages, hasMore, err := h.service.GetThreadMessages(
@@ -77,6 +78,7 @@ func (h *Handler) GetThreadMessages(c fiber.Ctx) error {
 		limit,
 		beforeID,
 		afterID,
+		boardItemID,
 	)
 	if err != nil {
 		return handler.SendInternalServerError(c, nil, "Failed to fetch thread messages")
