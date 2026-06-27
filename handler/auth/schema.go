@@ -25,7 +25,7 @@ type SignUpRequest struct {
 	InviteToken      string `form:"invite_token"`
 }
 
-type SSOCallbackResponse struct {
+type SocialCallbackResponse struct {
 	Session model.Session `json:"session"`
 }
 

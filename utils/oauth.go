@@ -129,11 +129,11 @@ func GetOAuthConfigForDeployment(
 
 	if deployment.Mode == model.DeploymentModeProduction {
 		conf.RedirectURL = fmt.Sprintf(
-			"https://%s/sso-callback",
+			"https://%s/social/login",
 			deployment.FrontendHost,
 		)
 	} else {
-		conf.RedirectURL = "https://ssocallback.wacht.services"
+		conf.RedirectURL = "https://social.wacht.services"
 	}
 
 	switch provider {
@@ -695,11 +695,11 @@ func GenerateOAuthConnectURL(
 
 	if deployment.Mode == model.DeploymentModeProduction {
 		conf.RedirectURL = fmt.Sprintf(
-			"https://%s/sso-callback",
+			"https://%s/social/login",
 			deployment.FrontendHost,
 		)
 	} else {
-		conf.RedirectURL = "https://ssocallback.wacht.services"
+		conf.RedirectURL = "https://social.wacht.services"
 	}
 
 	switch ssoProvider {
