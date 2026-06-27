@@ -129,7 +129,7 @@ func GetOAuthConfigForDeployment(
 
 	if deployment.Mode == model.DeploymentModeProduction {
 		conf.RedirectURL = fmt.Sprintf(
-			"https://%s/social/login",
+			"https://%s/social/callback",
 			deployment.FrontendHost,
 		)
 	} else {
@@ -695,7 +695,7 @@ func GenerateOAuthConnectURL(
 
 	if deployment.Mode == model.DeploymentModeProduction {
 		conf.RedirectURL = fmt.Sprintf(
-			"https://%s/social/login",
+			"https://%s/social/callback",
 			deployment.FrontendHost,
 		)
 	} else {
