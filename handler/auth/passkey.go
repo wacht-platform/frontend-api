@@ -206,6 +206,17 @@ func (h *Handler) FinishPasskeyLogin(c fiber.Ctx) error {
 		return handler.SendForbidden(c, nil, "Account is disabled", handler.ErrUserDisabled)
 	}
 
+	for _, signin := range session.Signins {
+		if signin.UserID != nil && *signin.UserID == user.ID {
+			return handler.SendBadRequest(
+				c,
+				nil,
+				"User already signed in",
+				handler.ErrUserAlreadySignedIn,
+			)
+		}
+	}
+
 	attempt := h.service.CreateSignInAttempt(
 		&user.ID,
 		nil,
