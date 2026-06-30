@@ -22,6 +22,7 @@ func Setup(app *fiber.App) {
 }
 
 func setupRoutes(app *fiber.App) {
+	setupCaptchaRoutes(app)
 	setupPublicRoutes(app)
 	setupOAuthConsentRoutes(app)
 	setupAuthRoutes(app)

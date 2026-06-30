@@ -48,6 +48,10 @@ func (h *Handler) SSOLogin(c fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 	session := handler.GetSession(c)
 
+	if err := requireChallenge(c, ""); err != nil {
+		return err
+	}
+
 	ssoService := service.NewSSOService()
 	connection, err := ssoService.GetConnectionByID(connectionID)
 	if err != nil {

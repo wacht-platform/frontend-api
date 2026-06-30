@@ -41,6 +41,10 @@ func (h *Handler) SignIn(c fiber.Ctx) error {
 	d := handler.GetDeployment(c)
 	session := handler.GetSession(c)
 
+	if err := requireChallenge(c, b.ChallengeToken); err != nil {
+		return err
+	}
+
 	if b.Email != "" {
 		b.Email = strings.TrimSpace(b.Email)
 		b.Email = strings.ToLower(b.Email)
@@ -696,6 +700,10 @@ func (h *Handler) SignUp(c fiber.Ctx) error {
 	d := handler.GetDeployment(c)
 	session := handler.GetSession(c)
 
+	if err := requireChallenge(c, b.ChallengeToken); err != nil {
+		return err
+	}
+
 	if d.AuthSettings.Password.Enabled && b.Password != "" {
 		if err := h.service.ValidatePasswordWithSettings(b.Password, d.AuthSettings.Password); err != nil {
 			return handler.SendBadRequest(c, nil, err.Error())
@@ -891,6 +899,10 @@ func (h *Handler) InitOAuth2(c fiber.Ctx) error {
 	session := handler.GetSession(c)
 	deployment := handler.GetDeployment(c)
 	customRedirectURI := c.Query("redirect_uri")
+
+	if err := requireChallenge(c, ""); err != nil {
+		return err
+	}
 
 	attempt := model.NewSignInAttempt(model.SignInMethodSSO)
 	attempt.Method = model.SignInMethodSSO
@@ -1331,6 +1343,10 @@ func (h *Handler) PrepareVerification(c fiber.Ctx) error {
 	strategy := c.Query("strategy")
 	redirectURI := c.Query("redirect_uri")
 	deployment := handler.GetDeployment(c)
+
+	if err := requireChallenge(c, ""); err != nil {
+		return err
+	}
 
 	if attemptIdentifier == 0 {
 		return handler.SendBadRequest(

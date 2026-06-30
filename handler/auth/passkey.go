@@ -45,6 +45,10 @@ func (h *Handler) BeginPasskeyLogin(c fiber.Ctx) error {
 	d := handler.GetDeployment(c)
 	session := handler.GetSession(c)
 
+	if err := requireChallenge(c, ""); err != nil {
+		return err
+	}
+
 	if d.AuthSettings.Passkey == nil || !d.AuthSettings.Passkey.Enabled {
 		return handler.SendForbidden(c, nil, "Passkeys are not enabled", handler.ErrPasskeyNotEnabled)
 	}

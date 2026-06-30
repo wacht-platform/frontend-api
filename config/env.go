@@ -9,6 +9,7 @@ import (
 func Init() {
 	godotenv.Load()
 	initR2Session()
+	initCaptcha()
 }
 
 func GetEnv(key, defaultValue string) string {

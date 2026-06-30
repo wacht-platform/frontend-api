@@ -12,6 +12,7 @@ type SignInRequest struct {
 	Password         string             `form:"password"`
 	Strategy         model.SignInMethod `form:"strategy"`
 	Token            string             `form:"token"`
+	ChallengeToken   string             `form:"challenge_token"`
 }
 
 type SignUpRequest struct {
@@ -22,6 +23,7 @@ type SignUpRequest struct {
 	PhoneCountryCode string `form:"phone_country_code"`
 	Email            string `form:"email"`
 	Password         string `form:"password"`
+	ChallengeToken   string `form:"challenge_token"`
 	InviteToken      string `form:"invite_token"`
 }
 

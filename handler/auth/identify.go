@@ -31,6 +31,10 @@ func (h *Handler) Identify(c fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Identifier is required")
 	}
 
+	if err := requireChallenge(c, ""); err != nil {
+		return err
+	}
+
 	deployment := handler.GetDeployment(c)
 	identifier := strings.TrimSpace(strings.ToLower(b.Identifier))
 
