@@ -16,6 +16,11 @@ func ProxyChallenge(c fiber.Ctx) error {
 	return proxyToCap(c, target)
 }
 
+func ProxyRedeem(c fiber.Ctx) error {
+	target := fmt.Sprintf("%s/%s/redeem", config.Captcha.ServerURL, config.Captcha.SiteKey)
+	return proxyToCap(c, target)
+}
+
 func VerifyToken(token string) error {
 	cfg := config.Captcha
 	if token == "" {

@@ -7,4 +7,5 @@ import (
 
 func setupCaptchaRoutes(app *fiber.App) {
 	app.Post("/captcha/challenge", captcha.ProxyChallenge)
+	app.Post("/captcha/redeem", captcha.ProxyRedeem)
 }
