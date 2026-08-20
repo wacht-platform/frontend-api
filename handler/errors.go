@@ -53,6 +53,7 @@ const (
 	ErrCodeAlreadyOrganizationMember    = "ALREADY_ORGANIZATION_MEMBER"
 	ErrCodeMfaRequired                  = "MFA_REQUIRED"
 	ErrCodePasskeyNotEnabled            = "PASSKEY_NOT_ENABLED"
+	ErrCodeIPNotAllowed                 = "IP_NOT_ALLOWED"
 )
 
 var (
@@ -99,6 +100,10 @@ var (
 	ErrBadRequestBody = Error{
 		Code:    ErrCodeBadRequestBody,
 		Message: "Unable to process request body. Please check the format.",
+	}
+	ErrIPNotAllowed = Error{
+		Code:    ErrCodeIPNotAllowed,
+		Message: "Access denied: IP address not allowed.",
 	}
 	ErrUnauthorized = Error{
 		Code:    ErrCodeUnauthorized,

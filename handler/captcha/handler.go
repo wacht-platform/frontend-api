@@ -2,9 +2,11 @@ package captcha
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/config"
@@ -21,15 +23,39 @@ func ProxyRedeem(c fiber.Ctx) error {
 	return proxyToCap(c, target)
 }
 
+type siteVerifyRequest struct {
+	Secret   string `json:"secret"`
+	Response string `json:"response"`
+}
+
+type siteVerifyResponse struct {
+	Success bool `json:"success"`
+}
+
+var captchaHTTPClient = &http.Client{Timeout: 10 * time.Second}
+
 func VerifyToken(token string) error {
 	cfg := config.Captcha
 	if token == "" {
 		return fmt.Errorf("challenge_token is required")
 	}
-	target := fmt.Sprintf("%s/%s/siteverify", cfg.ServerURL, cfg.SiteKey)
-	body := fmt.Sprintf(`{"secret":"%s","response":"%s"}`, cfg.SecretKey, token)
 
-	resp, err := http.Post(target, "application/json", bytes.NewBufferString(body))
+	payload, err := json.Marshal(siteVerifyRequest{
+		Secret:   cfg.SecretKey,
+		Response: token,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to encode captcha verification request: %w", err)
+	}
+
+	target := fmt.Sprintf("%s/%s/siteverify", cfg.ServerURL, cfg.SiteKey)
+	req, err := http.NewRequest(http.MethodPost, target, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("failed to build captcha verification request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := captchaHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("captcha server unreachable: %w", err)
 	}
@@ -39,12 +65,11 @@ func VerifyToken(token string) error {
 		return fmt.Errorf("captcha server returned %d", resp.StatusCode)
 	}
 
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read captcha response: %w", err)
+	var result siteVerifyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode captcha response: %w", err)
 	}
-
-	if !bytes.Contains(raw, []byte(`"success":true`)) {
+	if !result.Success {
 		return fmt.Errorf("captcha verification failed")
 	}
 
@@ -61,7 +86,7 @@ func proxyToCap(c fiber.Ctx, target string) error {
 
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := captchaHTTPClient.Do(req)
 	if err != nil {
 		return handler.SendInternalServerError(c, err, "Captcha server unreachable")
 	}

@@ -3,11 +3,10 @@ package middleware
 import (
 	"net"
 
-	"github.com/gofiber/fiber/v3"
 	"github.com/wacht-platform/frontend-api/handler"
 )
 
-func checkIPAllowlist(c fiber.Ctx, clientIP string, whitelistedIPs []string) error {
+func checkIPAllowlist(clientIP string, whitelistedIPs []string) error {
 	if len(whitelistedIPs) == 0 {
 		return nil
 	}
@@ -25,7 +24,7 @@ func checkIPAllowlist(c fiber.Ctx, clientIP string, whitelistedIPs []string) err
 		}
 	}
 	if !allowed {
-		return handler.SendForbidden(c, nil, "Access denied: IP address not allowed")
+		return handler.ErrIPNotAllowed
 	}
 	return nil
 }

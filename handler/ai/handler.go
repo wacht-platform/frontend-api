@@ -95,10 +95,10 @@ func parseTimeIDCursor(raw string) (*time.Time, *uint64, error) {
 
 func requireMultipartFormRequest(c fiber.Ctx) error {
 	contentType := strings.ToLower(strings.TrimSpace(c.Get("Content-Type")))
-	if strings.HasPrefix(contentType, "multipart/form-data") {
-		return nil
+	if !strings.HasPrefix(contentType, "multipart/form-data") {
+		return handler.ErrBadRequestBody
 	}
-	return handler.SendBadRequest(c, nil, "multipart/form-data is required")
+	return nil
 }
 
 func (h *Handler) ListActorProjects(c fiber.Ctx) error {
@@ -370,7 +370,7 @@ func (h *Handler) CreateProjectBoardItem(c fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Invalid project_id")
 	}
 	if err := requireMultipartFormRequest(c); err != nil {
-		return err
+		return handler.SendBadRequest(c, nil, "multipart/form-data is required", handler.ErrBadRequestBody)
 	}
 
 	form, err := c.MultipartForm()
@@ -501,7 +501,7 @@ func (h *Handler) UpdateBoardItem(c fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Invalid item_id")
 	}
 	if err := requireMultipartFormRequest(c); err != nil {
-		return err
+		return handler.SendBadRequest(c, nil, "multipart/form-data is required", handler.ErrBadRequestBody)
 	}
 
 	form, err := c.MultipartForm()

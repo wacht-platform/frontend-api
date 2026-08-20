@@ -178,7 +178,7 @@ func (h *Handler) RunThread(c fiber.Ctx) error {
 		return handler.SendUnauthorized(c, nil, "Session required")
 	}
 	if err := requireMultipartFormRequest(c); err != nil {
-		return err
+		return handler.SendBadRequest(c, nil, "multipart/form-data is required", handler.ErrBadRequestBody)
 	}
 
 	deployment := handler.GetDeployment(c)

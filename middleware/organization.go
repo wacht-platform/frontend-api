@@ -94,8 +94,8 @@ func SetOrganizationContext(c fiber.Ctx) error {
 	clientIP := c.IP()
 
 	if d.B2BSettings.IpAllowlistPerOrgEnabled && org.EnableIPRestriction && len(org.WhitelistedIPs) > 0 {
-		if err := checkIPAllowlist(c, clientIP, org.WhitelistedIPs); err != nil {
-			return err
+		if err := checkIPAllowlist(clientIP, org.WhitelistedIPs); err != nil {
+			return handler.SendForbidden(c, nil, err.Error(), handler.ErrIPNotAllowed)
 		}
 	}
 

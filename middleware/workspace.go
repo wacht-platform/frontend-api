@@ -128,15 +128,15 @@ func SetWorkspaceContext(c fiber.Ctx) error {
 
 	// 1. IP Restriction - Organization Level
 	if membership.Organization != nil && d.B2BSettings.IpAllowlistPerOrgEnabled && membership.Organization.EnableIPRestriction && len(membership.Organization.WhitelistedIPs) > 0 {
-		if err := checkIPAllowlist(c, clientIP, membership.Organization.WhitelistedIPs); err != nil {
-			return err
+		if err := checkIPAllowlist(clientIP, membership.Organization.WhitelistedIPs); err != nil {
+			return handler.SendForbidden(c, nil, err.Error(), handler.ErrIPNotAllowed)
 		}
 	}
 
 	// 2. IP Restriction - Workspace Level
 	if d.B2BSettings.IpAllowlistPerWorkspaceEnabled && membership.Workspace.EnableIPRestriction && len(membership.Workspace.WhitelistedIPs) > 0 {
-		if err := checkIPAllowlist(c, clientIP, membership.Workspace.WhitelistedIPs); err != nil {
-			return err
+		if err := checkIPAllowlist(clientIP, membership.Workspace.WhitelistedIPs); err != nil {
+			return handler.SendForbidden(c, nil, err.Error(), handler.ErrIPNotAllowed)
 		}
 	}
 
