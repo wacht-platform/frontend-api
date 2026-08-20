@@ -41,8 +41,8 @@ func (h *Handler) SignIn(c fiber.Ctx) error {
 	d := handler.GetDeployment(c)
 	session := handler.GetSession(c)
 
-	if err := requireChallenge(c, b.ChallengeToken); err != nil {
-		return err
+	if err := requireChallenge(b.ChallengeToken); err != nil {
+		return handler.SendForbidden(c, nil, "Challenge verification failed", handler.ErrBadRequestBody)
 	}
 
 	if b.Email != "" {
