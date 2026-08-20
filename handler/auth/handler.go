@@ -700,8 +700,8 @@ func (h *Handler) SignUp(c fiber.Ctx) error {
 	d := handler.GetDeployment(c)
 	session := handler.GetSession(c)
 
-	if err := requireChallenge(c, b.ChallengeToken); err != nil {
-		return err
+	if err := requireChallenge(b.ChallengeToken); err != nil {
+		return handler.SendForbidden(c, nil, "Challenge verification failed", handler.ErrBadRequestBody)
 	}
 
 	if d.AuthSettings.Password.Enabled && b.Password != "" {
@@ -900,8 +900,8 @@ func (h *Handler) InitOAuth2(c fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 	customRedirectURI := c.Query("redirect_uri")
 
-	if err := requireChallenge(c, ""); err != nil {
-		return err
+	if err := requireChallengeFromRequest(c); err != nil {
+		return handler.SendForbidden(c, nil, "Challenge verification failed", handler.ErrBadRequestBody)
 	}
 
 	attempt := model.NewSignInAttempt(model.SignInMethodSSO)
@@ -1344,8 +1344,8 @@ func (h *Handler) PrepareVerification(c fiber.Ctx) error {
 	redirectURI := c.Query("redirect_uri")
 	deployment := handler.GetDeployment(c)
 
-	if err := requireChallenge(c, ""); err != nil {
-		return err
+	if err := requireChallengeFromRequest(c); err != nil {
+		return handler.SendForbidden(c, nil, "Challenge verification failed", handler.ErrBadRequestBody)
 	}
 
 	if attemptIdentifier == 0 {

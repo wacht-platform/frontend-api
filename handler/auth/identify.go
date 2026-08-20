@@ -11,7 +11,8 @@ import (
 )
 
 type IdentifyRequest struct {
-	Identifier string `form:"identifier"`
+	Identifier     string `form:"identifier"`
+	ChallengeToken string `form:"challenge_token" json:"challenge_token"`
 }
 
 type IdentifyResponse struct {
@@ -31,8 +32,8 @@ func (h *Handler) Identify(c fiber.Ctx) error {
 		return handler.SendBadRequest(c, nil, "Identifier is required")
 	}
 
-	if err := requireChallenge(c, ""); err != nil {
-		return err
+	if err := requireChallenge(b.ChallengeToken); err != nil {
+		return handler.SendForbidden(c, nil, "Challenge verification failed", handler.ErrBadRequestBody)
 	}
 
 	deployment := handler.GetDeployment(c)

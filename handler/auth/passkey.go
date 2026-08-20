@@ -45,8 +45,8 @@ func (h *Handler) BeginPasskeyLogin(c fiber.Ctx) error {
 	d := handler.GetDeployment(c)
 	session := handler.GetSession(c)
 
-	if err := requireChallenge(c, ""); err != nil {
-		return err
+	if err := requireChallengeFromRequest(c); err != nil {
+		return handler.SendForbidden(c, nil, "Challenge verification failed", handler.ErrBadRequestBody)
 	}
 
 	if d.AuthSettings.Passkey == nil || !d.AuthSettings.Passkey.Enabled {

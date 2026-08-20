@@ -48,8 +48,8 @@ func (h *Handler) SSOLogin(c fiber.Ctx) error {
 	deployment := handler.GetDeployment(c)
 	session := handler.GetSession(c)
 
-	if err := requireChallenge(c, ""); err != nil {
-		return err
+	if err := requireChallengeFromRequest(c); err != nil {
+		return handler.SendForbidden(c, nil, "Challenge verification failed", handler.ErrBadRequestBody)
 	}
 
 	ssoService := service.NewSSOService()
