@@ -8,11 +8,9 @@ import (
 
 func requireChallenge(c fiber.Ctx, token string) error {
 	if token == "" {
-		token = c.FormValue("challenge_token")
+		return handler.SendForbidden(c, nil, "Challenge verification failed", handler.ErrTooManyRequests)
 	}
-	if token == "" {
-		token = c.Query("challenge_token")
-	}
+
 	if err := captcha.VerifyToken(token); err != nil {
 		return handler.SendForbidden(c, nil, "Challenge verification failed", handler.ErrTooManyRequests)
 	}
