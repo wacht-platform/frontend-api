@@ -1863,12 +1863,13 @@ func (h *Handler) handleSignInVerification(
 				if attempt.ProfileCompletionData != nil && attempt.ProfileCompletionData.Email != "" && user != nil {
 					emailID := idgen.NextID()
 					emailRecord := model.UserEmailAddress{
-						Model:        model.Model{ID: emailID},
-						EmailAddress: emailAddress,
-						Verified:     true,
-						VerifiedAt:   time.Now().UTC(),
-						DeploymentID: deployment.ID,
-						UserID:       &userID,
+						Model:                model.Model{ID: emailID},
+						EmailAddress:         emailAddress,
+						Verified:             true,
+						VerifiedAt:           time.Now().UTC(),
+						DeploymentID:         deployment.ID,
+						UserID:               &userID,
+						VerificationStrategy: model.Otp,
 					}
 					if err := tx.Create(&emailRecord).Error; err != nil {
 						return err

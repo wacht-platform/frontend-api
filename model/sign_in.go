@@ -10,8 +10,8 @@ type Signin struct {
 	Model
 	SessionID                      uint64                  `json:"session_id,string"                        gorm:"index"`
 	UserID                         *uint64                 `json:"user_id,string"                           gorm:"index"`
-	ActiveOrganizationMembershipID *uint64                 `json:"active_organization_membership_id,string"`
-	ActiveWorkspaceMembershipID    *uint64                 `json:"active_workspace_membership_id,string"`
+	ActiveOrganizationMembershipID *uint64                 `json:"active_organization_membership_id,string" gorm:"index:idx_signins_active_org_membership_id"`
+	ActiveWorkspaceMembershipID    *uint64                 `json:"active_workspace_membership_id,string"   gorm:"index:idx_signins_active_workspace_membership_id"`
 	User                           *User                   `json:"user,omitempty"                           gorm:"foreignKey:UserID"`
 	ActiveWorkspaceMembership      *WorkspaceMembership    `json:"active_workspace_membership,omitempty"`
 	ActiveOrganizationMembership   *OrganizationMembership `json:"active_organization_membership,omitempty"`

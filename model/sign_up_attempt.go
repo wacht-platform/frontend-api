@@ -40,7 +40,7 @@ func (s SignupAttemptStatus) Value() (driver.Value, error) {
 
 type SignupAttempt struct {
 	Model
-	SessionID        uint64                                 `json:"session_id,string"`
+	SessionID        uint64                                 `json:"session_id,string" gorm:"index:idx_signup_attempts_session_id"`
 	FirstName        string                                 `json:"first_name"`
 	LastName         string                                 `json:"last_name"`
 	Email            string                                 `json:"email"`

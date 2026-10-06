@@ -8,7 +8,7 @@ import (
 
 type RotatingToken struct {
 	Model
-	SessionID   uint64    `json:"session_id"    gorm:"not null"`
+	SessionID   uint64    `json:"session_id"    gorm:"not null;index:idx_rotating_tokens_session_id"`
 	ValidUntil  time.Time `json:"valid_until"   gorm:"not null"`
 	NextTokenID *uint64   `json:"next_token_id"`
 }

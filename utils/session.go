@@ -173,7 +173,7 @@ const (
 				'id', ua.id::text,
 				'created_at', to_char(ua.created_at, ` + fmtTime + `),
 				'updated_at', to_char(ua.updated_at, ` + fmtTime + `),
-				'user_id', ua.user_id::text, 'otp_url', ua.otp_url
+				'user_id', ua.user_id::text
 			)
 			FROM user_authenticators ua WHERE ua.user_id = u.id AND ua.deleted_at IS NULL LIMIT 1
 		)

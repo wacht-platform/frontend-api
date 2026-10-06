@@ -282,10 +282,11 @@ func (h *Handler) CreateUserEmailAddress(c fiber.Ctx) error {
 		Model: model.Model{
 			ID: idgen.NextID(),
 		},
-		DeploymentID: deployment.ID,
-		UserID:       session.ActiveSignin.UserID,
-		EmailAddress: b.Email,
-		Verified:     false,
+		DeploymentID:         deployment.ID,
+		UserID:               session.ActiveSignin.UserID,
+		EmailAddress:         b.Email,
+		Verified:             false,
+		VerificationStrategy: model.Otp,
 	}
 
 	query := database.Connection.Create(&newEmail)
@@ -749,7 +750,6 @@ func (h *Handler) GenerateAuthenticator(c fiber.Ctx) error {
 			ID: idgen.NextID(),
 		},
 		TotpSecret: encryptedSecret,
-		OtpUrl:     key.URL(),
 	}
 
 	if err := database.Connection.Create(authenticator).Error; err != nil {
@@ -765,7 +765,7 @@ func (h *Handler) GenerateAuthenticator(c fiber.Ctx) error {
 	// see it for QR-code scanning. The DB row stores only the ciphertext.
 	resp := map[string]any{
 		"id":          strconv.Itoa(int(authenticator.ID)),
-		"otp_url":     authenticator.OtpUrl,
+		"otp_url":     key.URL(),
 		"totp_secret": plaintextSecret,
 		"created_at":  authenticator.CreatedAt,
 	}
