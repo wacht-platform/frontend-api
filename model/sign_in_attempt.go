@@ -78,7 +78,7 @@ type SignInAttempt struct {
 	Model
 	UserID                             *uint64                                `json:"user_id,string"`
 	IdentifierID                       *uint64                                `json:"identifier_id,string"`
-	SessionID                          uint64                                 `json:"session_id,string"                     gorm:"not null"`
+	SessionID                          uint64                                 `json:"session_id,string"                     gorm:"not null;index:idx_sign_in_attempts_session_id"`
 	Method                             SignInMethod                           `json:"method"                                gorm:"not null"`
 	SSOProvider                        SocialConnectionProvider               `json:"sso_provider"`
 	EnterpriseConnectionID             *uint64                                `json:"enterprise_connection_id,string"`

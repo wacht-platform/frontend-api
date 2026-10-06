@@ -44,7 +44,7 @@ type UserEmailAddress struct {
 	Model
 	DeploymentID         uint64               `json:"-"                           gorm:"index:idx_deployment_user_email_address_email,unique"`
 	Deployment           Deployment           `json:"-"                           gorm:"foreignKey:DeploymentID"`
-	UserID               *uint64              `json:"-"                           gorm:"foreignKey:UserID"`
+	UserID               *uint64              `json:"-"                           gorm:"foreignKey:UserID;index:idx_user_email_addresses_user_id"`
 	User                 User                 `json:"-"                           gorm:"foreignKey:UserID"`
 	EmailAddress         string               `json:"email"                       gorm:"index:idx_user_email_address_email;index:idx_deployment_user_email_address_email,unique"`
 	IsPrimary            bool                 `json:"is_primary"                  gorm:"not null"`
@@ -57,5 +57,8 @@ type UserEmailAddress struct {
 // BeforeSave normalizes email address to lowercase before saving
 func (u *UserEmailAddress) BeforeSave(tx *gorm.DB) error {
 	u.EmailAddress = strings.ToLower(strings.TrimSpace(u.EmailAddress))
+	if u.VerificationStrategy == "" {
+		u.VerificationStrategy = Otp
+	}
 	return nil
 }

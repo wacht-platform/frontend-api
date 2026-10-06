@@ -2,7 +2,7 @@ package model
 
 type SocialConnection struct {
 	Model
-	UserID             uint64                   `json:"-"                     gorm:"not null"`
+	UserID             uint64                   `json:"-"                     gorm:"not null;index:idx_social_connections_user_id"`
 	UserEmailAddressID uint64                   `json:"user_email_address_id,string" gorm:"not null"`
 	Provider           SocialConnectionProvider `json:"provider"              gorm:"not null"`
 	EmailAddress       string                   `json:"email_address"         gorm:"not null"`

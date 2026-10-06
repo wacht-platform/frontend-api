@@ -4,7 +4,7 @@ import "time"
 
 type UserPhoneNumber struct {
 	Model
-	UserID                uint64     `json:"-"`
+	UserID                uint64     `json:"-" gorm:"index:idx_user_phone_numbers_user_id"`
 	User                  User       `json:"-"            gorm:"foreignKey:UserID"`
 	PhoneNumber           string     `json:"phone_number" gorm:"not null"`
 	CountryCode           string     `json:"country_code" gorm:"not null;default:''"`

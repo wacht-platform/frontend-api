@@ -96,7 +96,7 @@ func (e *EmailVerificationRecords) Value() (driver.Value, error) {
 type Deployment struct {
 	Model
 	MaintenanceMode           bool                         `json:"maintenance_mode"            gorm:"not null"`
-	BackendHost               string                       `json:"backend_host"                gorm:"not null"`
+	BackendHost               string                       `json:"backend_host"                gorm:"not null;index:idx_deployments_backend_host"`
 	FrontendHost              string                       `json:"frontend_host"               gorm:"not null"`
 	MailFromHost              string                       `json:"mail_from_host"              gorm:"not null"`
 	PublishableKey            string                       `json:"publishable_key"             gorm:"not null"`
